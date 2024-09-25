@@ -7,6 +7,8 @@ import path from "path";
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
+let tray = null;
+let mainWindow: BrowserWindow = null;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -17,19 +19,17 @@ if (require('electron-squirrel-startup')) {
 
 const createWindow = (): void => {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     height: 600,
     width: 800,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      // contextIsolation: true,  // Ensure context isolation
+      // nodeIntegration: false
     },
   });
-
-
-
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
-
   // Open the DevTools.
   // mainWindow.webContents.openDevTools();
 };
@@ -56,37 +56,33 @@ app.on('activate', () => {
   }
 });
 
-let tray = null;
-
-
 app.whenReady().then(() => {
   const trayIconPath = path.join(__dirname, '../../src/assets', 'eltor-tray-icon.png'); // TODO fix path for diff OS
   const trayIcon = nativeImage.createFromPath(trayIconPath);
   trayIcon.setTemplateImage(true);
-
   if (trayIcon.isEmpty()) {
     console.error(`Failed to load tray icon from path: ${trayIconPath}`);
     return;
   }
-
   tray = new Tray(trayIcon);
-
   // Create a context menu
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Status: Active'},
     { label: 'Deactivate'},
     { type: 'separator' },
-    { label: 'Wallet', click: () => console.log('Clicked Item 1') },
+    { label: 'Wallet', click: () => {
+      console.log('Clicked Wallet');
+      mainWindow.webContents.send('navigate-to-wallet'); 
+    }},
     { label: 'Settings', click: () => console.log('Clicked Item 1') },
     { label: 'Quit', click: () => app.quit() }
   ]);
-
+  // Optional: Set a tooltip for the tray icon
+  tray.setToolTip('El Tor');
   // Set the context menu for the tray
   tray.setContextMenu(contextMenu);
-
-  // Optional: Set a tooltip for the tray icon
-  tray.setToolTip('My Electron Tray App');
 });
+
 
 
 // In this file you can include the rest of your app's specific main process
