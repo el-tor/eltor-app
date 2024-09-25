@@ -1,18 +1,19 @@
-/* :root {
+/* put your vars here  */
+:root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-} */
+  --background-start-rgb: 26, 26, 26;
+  --background-end-rgb: 26, 26, 26;  
+}
 
-/* @media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --background-start-rgb: 26, 26, 26;
+    --background-end-rgb: 26, 26, 26;
   }
-} */
+}
 
-/* body {
+body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
       to bottom,
@@ -20,7 +21,7 @@
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
-} */
+}
 
 @layer utilities {
   .text-balance {
@@ -29,88 +30,19 @@
 }
 
 
-.navbar {
-  height: rem(700px);
-  width: rem(300px);
-  padding: var(--mantine-spacing-md);
-  display: flex;
-  flex-direction: column;
-  background-color: var(--mantine-color-black-filled);
+a {
+  color: rgb(245, 54, 245) !important; /* Example color, replace with your desired hex or rgb value */
+  text-decoration: none; /* Optionally remove underline */
 }
 
-.navbarMain {
-  flex: 1;
+a:hover {
+  color: rgb(245, 54, 245); /* Example hover color */
 }
 
-.header {
-  padding-bottom: var(--mantine-spacing-md);
-  margin-bottom: calc(var(--mantine-spacing-md) * 1.5);
-  border-bottom: rem(1px) solid var(--mantine-color-blue-7);
+a:visited {
+  color: purple; /* Example visited color */
 }
 
-.footer {
-  padding-top: var(--mantine-spacing-md);
-  margin-top: var(--mantine-spacing-md);
-  border-top: rem(1px) solid var(--mantine-color-blue-7);
-}
-
-.version {
-  background-color: var(--mantine-color-blue-7);
-  color: var(--mantine-color-white);
-}
-
-.link {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
-  font-size: var(--mantine-font-size-sm);
-  color: var(--mantine-color-white);
-  padding: var(--mantine-spacing-xs) var(--mantine-spacing-sm);
-  border-radius: var(--mantine-radius-sm);
-  font-weight: 500;
-
-  @mixin hover {
-    background-color: var(--mantine-color-blue-7);
-    color: var(--mantine-color-white);
-
-    .linkIcon {
-      color: var(--mantine-color-white);
-    }
-  }
-
-  &[data-active] {
-    &,
-    &:hover {
-      box-shadow: var(--mantine-shadow-sm);
-      background-color: var(--mantine-color-white);
-      color: var(--mantine-color-blue-filled);
-
-      .linkIcon {
-        color: var(--mantine-color-blue-filled);
-      }
-    }
-  }
-}
-
-.linkIcon {
-  color: var(--mantine-color-blue-1);
-  margin-right: var(--mantine-spacing-sm);
-  width: rem(25px);
-  height: rem(25px);
-}
-
-.elTorLogo {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-  }
+.anchor {
+  color: purple; 
 }

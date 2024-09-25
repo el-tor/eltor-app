@@ -30,6 +30,35 @@ export const rules: Required<ModuleOptions>["rules"] = [
   },
   {
     test: /\.(png|jpe?g|gif|svg)$/i,
-    type: 'asset/resource',
+    type: "asset/resource",
+  },
+  {
+    test: /\.scss$/,
+    use: [
+      "style-loader", // Injects styles into DOM
+      "css-loader", // Turns css into commonjs
+      "sass-loader", // Compiles Sass to CSS
+    ],
+  },
+  {
+    test: /\.scss$/,
+    use: [
+      "style-loader",
+      "css-loader",
+      {
+        loader: "postcss-loader",
+        options: {
+          postcssOptions: {
+            plugins: [
+              require("postcss-preset-env")({
+                browsers: "last 2 versions",
+              }),
+              require("autoprefixer"),
+            ],
+          },
+        },
+      },
+      "sass-loader",
+    ],
   },
 ];
