@@ -31,7 +31,7 @@ export default function Nav() {
               height={50}
               style={{ cursor: "pointer" }}
               onClick={() => {
-                navigate("/connect/false");
+                navigate("/connect");
               }}
             />
           </Box>
@@ -49,7 +49,7 @@ export default function Nav() {
                 event.preventDefault();
                 setActive("Connect");
                 try {
-                  navigate("/connect/false");
+                  navigate("/connect");
                 } catch (e) {}
               }}
             >

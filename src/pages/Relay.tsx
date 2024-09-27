@@ -1,9 +1,16 @@
-import { Center } from "@mantine/core";
+import { Stack, Title, Text } from "@mantine/core";
+import { useLocalStorage } from "usehooks-ts";
 
 export const Relay = () => {
+  const [relayActive, setRelayActive, removeRelayActive] = useLocalStorage(
+    "relayActive",
+    "false"
+  );
+
   return (
-    <Center>
-      <h2 style={{ color: "white" }}>Relay</h2>
-    </Center>
+    <Stack>
+      <Title order={2}>Relay</Title>
+      <Text>Relay Active: {relayActive}</Text>
+    </Stack>
   );
 };
