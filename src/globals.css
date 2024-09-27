@@ -1,26 +1,26 @@
 /* put your vars here  */
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 26, 26, 26;
-  --background-end-rgb: 26, 26, 26;  
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 26, 26, 26;
-    --background-end-rgb: 26, 26, 26;
+  }
+}
+
+/* Example CSS for responsiveness */
+@media (max-width: 768px) {
+  .container {
+    width: 100%;
+    padding: 0px;
   }
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 @layer utilities {
@@ -29,9 +29,12 @@ body {
   }
 }
 
-
 a {
-  color: rgb(245, 54, 245) !important; /* Example color, replace with your desired hex or rgb value */
+  color: rgb(
+    245,
+    54,
+    245
+  ) !important; /* Example color, replace with your desired hex or rgb value */
   text-decoration: none; /* Optionally remove underline */
 }
 
@@ -44,5 +47,5 @@ a:visited {
 }
 
 .anchor {
-  color: purple; 
+  color: purple;
 }
