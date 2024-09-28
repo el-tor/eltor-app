@@ -154,7 +154,10 @@ app.whenReady().then(() => {
     }
   });
 
-  startWallet();
+  if (os.platform() === "darwin") { // TODO: enable for windows and linux
+    startWallet();
+  }
+  
 });
 
 // In this file you can include the rest of your app's specific main process
