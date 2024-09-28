@@ -35,12 +35,13 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true, // Ensure context isolation
       nodeIntegration: false,
+      webSecurity: false,
     },
   });
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished
@@ -66,11 +67,7 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
-  const trayIconPath = path.join(
-    __dirname,
-    "../../src/assets",
-    "eltor-tray-icon.png"
-  ); // TODO fix path for diff OS
+  const trayIconPath = getImagePath('eltor-logo-24.png'); // TODO fix path for diff OS
   const trayIcon = nativeImage.createFromPath(trayIconPath);
   trayIcon.setTemplateImage(true);
   if (trayIcon.isEmpty()) {
@@ -186,4 +183,27 @@ function trayNavigate(path: string) {
     mainWindow.focus();
   }
   mainWindow.webContents.send(`navigate-to-${path}`);
+}
+
+
+function getImagePath(filename: string ) {
+  const userDataPath = app.getPath('userData');
+  console.log('userDataPath', userDataPath)
+
+  let basePath;
+
+  if (app.isPackaged) {
+    // When packaged, use this path to navigate outside ASAR but within the app bundle
+    basePath = path.join(app.getAppPath(), '..', 'assets'); // 'app' directory or wherever your assets are placed outside ASAR
+  } else {
+    basePath = path.join(process.cwd(), 'src', 'assets');
+  }
+  const imagePath = path.join(basePath, filename);
+
+  if (fs.existsSync(imagePath)) {
+    return imagePath;
+  } else {
+    console.error('Image not found at:', imagePath);
+    return null;
+  }
 }

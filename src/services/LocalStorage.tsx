@@ -1,7 +1,12 @@
 import { useEffect, ReactNode } from "react";
 import { useLocalStorage } from "usehooks-ts";
 
-export const LocalStorage = ({ children }: { children: ReactNode }) => {
+export {
+  WalletProviderType,
+  LocalStorage
+}
+
+const LocalStorage = ({ children }: { children: ReactNode }) => {
   const [torActive, setTorActive, removeTorActive] = useLocalStorage(
     "torActive",
     "false"
@@ -12,6 +17,10 @@ export const LocalStorage = ({ children }: { children: ReactNode }) => {
     "false"
   );
 
+  
+  const [defaultWallet, setDefaultWallet, removeDefaultWallet] =
+    useLocalStorage("defaultWallet", "None" as WalletProviderType);
+
   useEffect(() => {
     // Initialize the database on load
     setTorActive("false");
@@ -20,3 +29,5 @@ export const LocalStorage = ({ children }: { children: ReactNode }) => {
 
   return <>{children}</>;
 };
+
+type WalletProviderType = "Phoenix" | "Lndk" | "CoreLightning" | "None";

@@ -11,7 +11,11 @@ const theme = createTheme({
   components: {},
 });
 
-const root = createRoot(document.body);
+// Target the specific container, not document.body
+const rootElement = document.getElementById('root');
+// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+const root = createRoot(rootElement!);
+
 root.render(
   <LocalStorage>
     <MantineProvider theme={theme} forceColorScheme="dark">
