@@ -23,6 +23,7 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
     "@electron-forge/plugin-fuses": "^7.5.0",
     "@electron-forge/plugin-webpack": "^7.5.0",
+    "@electron-forge/publisher-bitbucket": "^7.5.0",
     "@electron/fuses": "^1.8.0",
     "@types/react": "^18.3.8",
     "@types/react-dom": "^18.3.0",
