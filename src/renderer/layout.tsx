@@ -1,17 +1,59 @@
 import React, { useEffect, useState } from "react";
 import { Box, Group, Container } from "@mantine/core";
 import { IconCircuitBattery, IconCoinBitcoin } from "@tabler/icons-react";
-import { useLocation } from "wouter";
-import eltorLogo from "./../assets/eltor-logo.png";
-import classes from "../globals.module.css";
+import eltorLogo from "./assets/eltor-logo.png";
+import classes from "./globals.module.css";
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useLocalStorage } from "usehooks-ts";
+const { api } = window
 
-export default function Nav() {
+export function Layout() {
   const [active, setActive] = useState("Connect");
-  const [, navigate] = useLocation();
+  const navigate = useNavigate();
   const [isLoaded, setIsLoaded] = useState(false);
+  const [torActive, setTorActive, removeTorActive] = useLocalStorage(
+    "torActive",
+    "false"
+  );
+  const [relayActive, setRelayActive, removeRelayActive] = useLocalStorage(
+    "relayActive",
+    "false"
+  );
 
   useEffect(() => {
     setIsLoaded(true);
+  }, []);
+
+  
+  useEffect(() => {
+    // Connect
+    api.onNavigateToConnect(() => {
+      navigate("/connect");
+      api.menuActivateConnect(()=>{});
+      setTorActive("true");
+    });
+    api.onNavigateToDeactivateConnect(() => {
+      navigate("/connect");
+      api.menuDeactivateConnect(()=>{});
+      setTorActive("false");
+    });
+
+    // Relay
+    api.onNavigateToRelay(() => {
+      navigate("/relay");
+      api.menuActivateRelay(()=>{});
+      setRelayActive("true");
+    });
+    api.onNavigateToDeactivateRelay(() => {
+      navigate("/relay");
+      api.menuDeactivateRelay(()=>{});
+      setRelayActive("false");
+    });
+
+    // Wallet
+    api.onNavigateToWallet(() => {
+      navigate("/wallet");
+    });
   }, []);
 
   return (
@@ -40,8 +82,8 @@ export default function Nav() {
             <a
               className={classes.link}
               data-active={
-                window.location.pathname.includes("/connect") ||
-                window.location.pathname.includes("/main_window") || undefined
+                window.location.hash.includes("connect") ||
+                window.location.hash.includes("main_window") || undefined
               }
               href=""
               key={"Tor"}
@@ -58,7 +100,7 @@ export default function Nav() {
             </a>
             <a
               className={classes.link}
-              data-active={window.location.pathname.includes("/relay") || undefined}
+              data-active={window.location.hash.includes("relay") || undefined}
               key={"Host"}
               href=""
               onClick={(event) => {
@@ -74,7 +116,7 @@ export default function Nav() {
             </a>
             <a
               className={classes.link}
-              data-active={window.location.pathname.includes("/wallet") || undefined}
+              data-active={window.location.hash.includes("wallet") || undefined}
               href=""
               key={"wallet"}
               onClick={(event) => {
@@ -91,6 +133,11 @@ export default function Nav() {
           </Group>
         </Group>
       )}
+      <Container mt="md">
+        {/* Main Content Renders here in Oulet */}
+        <Outlet />
+      </Container>
+     
     </Container>
   );
 }

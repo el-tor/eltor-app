@@ -3,9 +3,9 @@
 This is the El Tor App that allows a user to connect to the El Tor network. It configures the Tor Browser automatically to point to the network fork by configuring the torrc file with extra BOLT 12 settings and Directory Relays. It also controls the payments like a wallet. This app can be used by a user wanting to get paid for sharing his bandwidth as a Relay. It can also be used as a user wanting to consume bandwidth from the El Tor network.  This code will be ported over to a native "tray app" similar to Wireguard or Orbot and appear in the tray of the operating system. 
 
 <div style="max-width: 480px; height: auto;">
-    <img src="./src/assets/eltor-user.png" alt="Dash" width="480px"/>
-    <img src="./src/assets/eltor-pay-relays.png" alt="Dash" width="480px"/>
-    <img src="./src/assets/eltor-flow.png" alt="Dash" width="480px"/>
+    <img src="./src/renderer/assets/eltor-user.png" alt="Dash" width="480px"/>
+    <img src="./src/renderer/assets/eltor-pay-relays.png" alt="Dash" width="480px"/>
+    <img src="./src/renderer/assets/eltor-flow.png" alt="Dash" width="480px"/>
 </div>
 
 # El Tor Install
@@ -39,7 +39,7 @@ The network is small right now (only 2 relays and counting) so you should see th
 If you click "New Tor Circuit" a few times you might see a canadian ip show up as a middle relay.
 
 <div style="max-width: 480px; height: auto;">
-    <img src="./src/assets/circuit-check.png" alt="Dash" width="480px"/>
+    <img src="./src/renderer/assets/circuit-check.png" alt="Dash" width="480px"/>
 </div>
 
 **hidden service test**
@@ -85,11 +85,12 @@ This is an Electron app
 ## Getting Started
 
 ```
-npm run start
+pnpm i
+pnpm run dev
 ```
 
 ## Build
 
 ```
-npm run make
+pnpm run build:mac
 ```

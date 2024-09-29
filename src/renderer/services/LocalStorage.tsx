@@ -2,7 +2,7 @@ import { useEffect, ReactNode } from "react";
 import { useLocalStorage } from "usehooks-ts";
 
 export {
-  WalletProviderType,
+  type WalletProviderType,
   LocalStorage
 }
 
