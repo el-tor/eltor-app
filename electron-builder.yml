@@ -16,7 +16,6 @@ win:
   executableName: eltor
   target:
     - target: portable
-  identity: null # don't sign the app
   icon: src/renderer/assets/eltor-logo-512.png
 mac:
   target: dmg
@@ -24,8 +23,8 @@ mac:
 linux:
   target:
     - target: deb
-    - target: tar.gz
-    - target: snap
+    # - target: tar.gz
+    # - target: snap
   maintainer: eltordev
   synopsis: El Tor
   category: Utility
