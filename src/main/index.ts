@@ -1,20 +1,31 @@
-import { app, BrowserWindow, Tray, nativeImage, Menu, shell, ipcMain } from 'electron'
-import path from 'node:path'
-import { registerRoute } from 'lib/electron-router-dom'
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  nativeImage,
+  Menu,
+  shell,
+  ipcMain,
+} from "electron";
+import path from "node:path";
+import { registerRoute } from "lib/electron-router-dom";
 import fs from "fs";
 import os from "os";
 import { spawn } from "child_process";
-
+require("dotenv").config({ path: path.join(app.getAppPath(), ".env") });
+import installExtension, {
+  REDUX_DEVTOOLS,
+  REACT_DEVELOPER_TOOLS,
+} from "electron-devtools-installer";
 
 let tray: Tray;
 let mainWindow: BrowserWindow;
 
 async function createMainWindow() {
-
-  const baseSrcPath = getSrcBasePath()
-  console.log('baseSrcPath', baseSrcPath)
-  const userDataPath = app.getPath('userData');
-  console.log('userDataPath', userDataPath)
+  const baseSrcPath = getSrcBasePath();
+  console.log("baseSrcPath", baseSrcPath);
+  const userDataPath = app.getPath("userData");
+  console.log("userDataPath", userDataPath);
 
   mainWindow = new BrowserWindow({
     width: 1600,
@@ -23,39 +34,45 @@ async function createMainWindow() {
     //resizable: false,
     //alwaysOnTop: true,
     webPreferences: {
-      preload: path.join(__dirname, '../preload/index.js'),
+      preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
-    }
-  })
+      webSecurity: false,
+    },
+  });
 
   registerRoute({
-    id: 'main',
+    id: "main",
     browserWindow: mainWindow,
-    htmlFile: path.join(__dirname, '../renderer/index.html'),
-  })
+    htmlFile: path.join(__dirname, "../renderer/index.html"),
+  });
 
-  mainWindow.on('ready-to-show', mainWindow.show)
-  mainWindow.webContents.openDevTools();
+  mainWindow.on("ready-to-show", mainWindow.show);
+  // mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
-  createMainWindow()
+  createMainWindow();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
-  })
-})
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+  });
+});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
   }
-})
-
+});
 
 app.whenReady().then(() => {
-  const trayIconPath = getImagePath('eltor-logo-24.png'); // TODO fix path for diff OS
-  const trayIcon = nativeImage.createFromPath(trayIconPath ?? '');
+  installExtension(REDUX_DEVTOOLS)
+    .then((name) => console.log(`Added Extension:  ${name}`))
+    .catch((err) => console.log("An error occurred: ", err));
+  installExtension(REACT_DEVELOPER_TOOLS)
+    .then((name) => console.log(`Added Extension:  ${name}`))
+    .catch((err) => console.log("An error occurred: ", err));
+  const trayIconPath = getImagePath("eltor-logo-24.png"); // TODO fix path for diff OS
+  const trayIcon = nativeImage.createFromPath(trayIconPath ?? "");
   trayIcon.setTemplateImage(true);
   if (trayIcon.isEmpty()) {
     console.error(`Failed to load tray icon from path: ${trayIconPath}`);
@@ -141,16 +158,19 @@ app.whenReady().then(() => {
     }
   });
 
-  if (os.platform() === "darwin") { // TODO: enable for windows and linux
-    //startWallet();
+  if (os.platform() === "darwin") {
+    // TODO: enable for windows and linux
+    startWallet();
   }
-  
 });
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 function startWallet() {
-  const phoenixd = path.join(app.getAppPath(), "src/renderer/wallets/phoenix/phoenixd"); // or daemon executable
+  const phoenixd = path.join(
+    app.getAppPath(),
+    "src/renderer/drivers/wallets/phoenix/phoenixd"
+  ); // or daemon executable
   const phoenixdProcess = spawn(phoenixd, [], {});
   const phoenixdConfig = path.join(os.homedir(), ".phoenix/phoenix.conf");
   fs.readFile(phoenixdConfig, "utf8", (err, data) => {
@@ -175,21 +195,20 @@ function trayNavigate(path: string) {
   mainWindow.webContents.send(`navigate-to-${path}`);
 }
 
-
-function getImagePath(filename: string ) {
+function getImagePath(filename: string) {
   let basePath;
   if (app.isPackaged) {
     // When packaged, use this path to navigate outside ASAR but within the app bundle
-    basePath = path.join(getSrcBasePath(), 'src', 'renderer', 'assets'); // 'app' directory or wherever your assets are placed outside ASAR
+    basePath = path.join(getSrcBasePath(), "src", "renderer", "assets"); // 'app' directory or wherever your assets are placed outside ASAR
   } else {
-    basePath = path.join(process.cwd(), 'src', 'renderer', 'assets');
+    basePath = path.join(process.cwd(), "src", "renderer", "assets");
   }
   const imagePath = path.join(basePath, filename);
 
   if (fs.existsSync(imagePath)) {
     return imagePath;
   } else {
-    console.error('Image not found at:', imagePath);
+    console.error("Image not found at:", imagePath);
     return null;
   }
 }
@@ -198,10 +217,9 @@ function getSrcBasePath() {
   let basePath;
   if (app.isPackaged) {
     // When packaged, use this path to navigate outside ASAR but within the app bundle
-    basePath = path.join(app.getAppPath(), '..',); // 'app' directory or wherever your assets are placed outside ASAR
+    basePath = path.join(app.getAppPath(), ".."); // 'app' directory or wherever your assets are placed outside ASAR
   } else {
-    basePath = path.join(process.cwd(), 'src');
+    basePath = path.join(process.cwd(), "src");
   }
-  return basePath
+  return basePath;
 }
-

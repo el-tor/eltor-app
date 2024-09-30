@@ -3,7 +3,7 @@ import { Router } from "lib/electron-router-dom";
 import { Layout } from "./layout";
 import { Connect } from "./screens/Connect";
 import { Relay } from "./screens/Relay";
-import { Wallet } from "./screens/Wallet";
+import { WalletPage } from "./screens/WalletPage";
 
 export function Routes() {
   return (
@@ -15,7 +15,7 @@ export function Routes() {
           <Route path="index.html" element={<Connect />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/relay" element={<Relay />} />
-          <Route path="/wallet" element={<Wallet />} />
+          <Route path="/wallet" element={<WalletPage />} />
         </Route>
       }
     />

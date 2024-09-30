@@ -5,9 +5,17 @@
         "clsx",
         "eltor",
         "eltordev",
+        "getbalance",
+        "immer",
         "Lndk",
         "mantine",
+        "persistor",
+        "PHOENIXD",
         "predist",
+        "reduxjs",
+        "Roboto",
+        "tabler",
+        "unenhanced",
         "usehooks"
     ]
 }

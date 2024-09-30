@@ -1,4 +1,4 @@
-import { IWallet } from "../IWallet";
+import { IWallet } from "../../IWallet";
 // TODO: implement lndk api
 
 export const Wallet: IWallet = {
@@ -27,7 +27,7 @@ export const Wallet: IWallet = {
             paymentRequestId: "paymentRequestId"
         }
     },
-    getWalletBalance: async () => {
+    fetchWalletBalance: async () => {
         return {
             balance: 1000
         }

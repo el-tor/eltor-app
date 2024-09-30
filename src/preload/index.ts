@@ -50,10 +50,10 @@ const api = {
      ipcRenderer.send("set-menu-item-state", "menu-deactivate-relay", false);
      ipcRenderer.send("set-menu-item-state", "menu-activate-relay", true);
    },
+   env: process.env, // TODO: only expose env vars from .env file
 } as const
 
 contextBridge.exposeInMainWorld('api', api)
-
 
 declare global {
   interface Window {

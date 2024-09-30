@@ -62,6 +62,7 @@ export function Layout() {
       mt="sm"
       ml="xs"
       mr="xs"
+      maw="768px"
       // bg="gray"
     >
       {isLoaded && (

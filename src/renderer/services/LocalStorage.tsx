@@ -1,8 +1,8 @@
 import { useEffect, ReactNode } from "react";
 import { useLocalStorage } from "usehooks-ts";
+import { type WalletProviderType } from "renderer/drivers/IWallet";
 
 export {
-  type WalletProviderType,
   LocalStorage
 }
 
@@ -30,4 +30,3 @@ const LocalStorage = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
-type WalletProviderType = "Phoenix" | "Lndk" | "CoreLightning" | "None";
