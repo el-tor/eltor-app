@@ -30,7 +30,7 @@ const rootReducer = combineReducers({
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
-const store = configureStore({
+export const store = configureStore({
   reducer: persistedReducer,
   devTools: api.env.NODE_ENV === "development",
   middleware: (getDefaultMiddleware) =>
@@ -41,11 +41,9 @@ const store = configureStore({
     }),
 });
 
-let persistor = persistStore(store);
+export const persistor = persistStore(store);
 
 // Infer the `RootState` and `AppDispatch` types from the store itself
-export type RootState = ReturnType<typeof store.getState>;
+export type RootState = ReturnType<typeof rootReducer>;
 // Inferred type: {posts: PostsState, comments: CommentsState, users: UsersState}
 export type AppDispatch = typeof store.dispatch;
-
-export { store, persistor };

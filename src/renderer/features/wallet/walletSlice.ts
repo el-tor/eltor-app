@@ -4,7 +4,7 @@ import {
   type FetchWalletBalanceResponseType,
   type WalletProviderType,
 } from "renderer/drivers/IWallet";
-import type { PayloadAction } from "@reduxjs/toolkit";
+import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
 import { dynamicWalletImport } from "renderer/utils";
 
 const defaultWallet = "Phoenix"; // TODO: pull from redux or localStorage
@@ -16,13 +16,15 @@ export {
   walletReducer,
   setDefaultWallet,
   fetchWalletBalance,
-};
+}
 
 // 1. State
 interface WalletState {
   balance: number;
   defaultWallet: WalletProviderType;
   requestState: RequestState;
+  loading: boolean;
+  error: SerializedError | null;
 }
 
 type RequestState = "idle" | "pending" | "fulfilled" | "rejected";
@@ -31,7 +33,9 @@ const initialState: WalletState = {
   balance: 0,
   defaultWallet: "None",
   requestState: "idle",
-};
+  loading: false,
+  error: null
+}; // satisfies WalletState as WalletState
 
 // 2. Slice and Reducers
 const walletSlice = createSlice({
@@ -45,19 +49,20 @@ const walletSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchWalletBalance.pending, (state) => {
-        // state.status = 'loading';
-        // state.error = null;
+        state.requestState = 'pending';
+        state.loading = true;
+        state.error = null;
       })
       .addCase(fetchWalletBalance.fulfilled, (state, action) => {
         state.balance = action.payload.balance;
+        state.requestState = 'fulfilled';
+        state.loading = false;
+        state.error = null;
       })
       .addCase(fetchWalletBalance.rejected, (state, action) => {
-        // state.status = 'failed';
-        // if (action.payload) {
-        //   state.error = action.payload;
-        // } else {
-        //   state.error = action.error.message || 'Unknown error';
-        // }
+        state.requestState = 'rejected';
+        state.loading = false;
+        state.error = action.error;
       });
   },
 });

@@ -7,22 +7,20 @@ import {
   Box,
   Loader,
 } from "@mantine/core";
-import { useSelector, useDispatch } from "react-redux";
-import { setDefaultWallet, fetchWalletBalance, walletSlice } from "./walletSlice";
-import { type RootState } from "renderer/store";
+import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
 import { useEffect } from "react";
+import { fetchWalletBalance, setDefaultWallet } from "./walletSlice";
 
 export const Wallet = () => {
-  const { balance, defaultWallet, requestState } = useSelector(
-    (state: RootState) => state.wallet
+  const { balance, defaultWallet, requestState, error, loading } = useSelector(
+    (state) => state.wallet
   );
   const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(fetchWalletBalance(""));
   }, [dispatch]);
-
 
   return (
     <Stack>
@@ -36,15 +34,19 @@ export const Wallet = () => {
         }}
         data={["Phoenix", "Lndk", "CoreLightning", "None"]}
       />
-      <Button
-        onClick={() => {
-          dispatch(fetchWalletBalance(""));
-        }}
-      >
-        Get Balance
-      </Button>
+      <Center>
+        <Loader display={loading ? "block" : "none"} />
+        <Button
+          w="100%"
+          display={loading ? "none" : "block"}
+          onClick={() => {
+            dispatch(fetchWalletBalance(""));
+          }}
+        >
+          Get Balance
+        </Button>
+      </Center>
       <Title order={4}>Balance: {balance}</Title>
-      {requestState !== "idle" && <Loader />}
     </Stack>
   );
 };

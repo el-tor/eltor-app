@@ -1,3 +1,4 @@
+import { useTimeout } from "usehooks-ts";
 import { type FetchWalletBalanceResponseType, IWallet } from "../../IWallet";
 
 export { walletApi };
@@ -5,6 +6,20 @@ export { walletApi };
 type PhoenixTypeBalance = {
   balanceSat: number;
   feeCreditSat: number;
+};
+
+type PhoenixTypeChannel = {
+  state: string;
+  channelId: string;
+  balanceSat: number;
+  inboundLiquiditySat: number;
+  capacitySat: number;
+  fundingTxId: string;
+};
+
+type PhoenixTypeNodeInfo = {
+  nodeId: string;
+  channels: Array<PhoenixTypeChannel>;
 };
 
 const { api } = window;
@@ -68,6 +83,20 @@ const walletApi: IWallet = {
   checkPaymentStatus: async (paymentId: string) => {
     return {
       status: "PAID",
+    };
+  },
+  fetchChannelInfo: async (channelId: string) => {
+    const res = await fetch(`${receiverUrl}/getbalance`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${receiverAuth}`,
+      },
+    });
+    const resp = (await res.json()) as PhoenixTypeNodeInfo;
+    return {
+      send: resp.channels[0]?.capacitySat ?? 0,
+      receive: resp.channels[0]?.inboundLiquiditySat ?? 0,
     };
   },
 };

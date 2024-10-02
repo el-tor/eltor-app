@@ -1,7 +1,6 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import tsconfigPathsPlugin from 'vite-tsconfig-paths'
 import react from '@vitejs/plugin-react'
-// import tailwindcss from 'tailwindcss'
 import { resolve } from 'path'
 
 import { settings } from './src/lib/electron-router-dom'
@@ -24,11 +23,7 @@ export default defineConfig({
 
     css: {
       postcss: {
-        plugins: [
-          // tailwindcss({
-          //   config: './tailwind.config.ts',
-          // }),
-        ],
+        plugins: [],
       },
     },
 
