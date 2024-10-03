@@ -8,13 +8,13 @@ export interface IWallet {
   fetchWalletBalance: () => Promise<FetchWalletBalanceResponseType>;
   decodeInvoice: (invoice: string) => Promise<any>;
   checkPaymentStatus: (paymentId: string) => Promise<any>;
-  fetchChannelInfo?: (channelId: string) => Promise<FetchChannelBalanceResponseType>;
+  fetchChannelInfo: (channelId: string) => Promise<FetchChannelInfoResponseType>;
 }
 
 export type {
   FetchWalletBalanceResponseType,
   WalletProviderType,
-  FetchChannelBalanceResponseType
+  FetchChannelInfoResponseType
 }
 
 
@@ -22,7 +22,7 @@ type FetchWalletBalanceResponseType = {
   balance: number;
 };
 
-type FetchChannelBalanceResponseType = {
+type FetchChannelInfoResponseType = {
   send: number;
   receive: number;
 };

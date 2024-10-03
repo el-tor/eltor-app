@@ -10,17 +10,25 @@ import {
 import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
 import { useEffect } from "react";
-import { fetchWalletBalance, setDefaultWallet } from "./walletSlice";
+import {
+  fetchChannelInfo,
+  fetchWalletBalance,
+  setDefaultWallet,
+} from "./walletSlice";
+import { ChannelBalanceLine } from "renderer/components/ChannelBalanceLine";
 
 export const Wallet = () => {
-  const { balance, defaultWallet, requestState, error, loading } = useSelector(
-    (state) => state.wallet
-  );
+  const { balance, defaultWallet, channelInfo, requestState, error, loading } =
+    useSelector((state) => state.wallet);
   const dispatch = useDispatch();
+
+  fetchChannelInfo("");
+  fetchChannelInfo("");
 
   useEffect(() => {
     dispatch(fetchWalletBalance(""));
-  }, [dispatch]);
+    dispatch(fetchChannelInfo(""));
+  }, []);
 
   return (
     <Stack>
@@ -47,6 +55,10 @@ export const Wallet = () => {
         </Button>
       </Center>
       <Title order={4}>Balance: {balance}</Title>
+      <ChannelBalanceLine
+        send={channelInfo.receive ?? 0}
+        receive={channelInfo.receive ?? 0}
+      />
     </Stack>
   );
 };

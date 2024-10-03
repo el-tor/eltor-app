@@ -1,6 +1,7 @@
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 
+import { startTor } from "main/tor/startTor";
 const { contextBridge, ipcRenderer } = require('electron')
 
 
@@ -9,6 +10,7 @@ const api = {
    navigateToConnect: () => ipcRenderer.send("navigate-to-connect"),
    onNavigateToConnect: (callback: ()=> void) => {
      ipcRenderer.on("navigate-to-connect", callback);
+     // startTor()
    },
    navigateToDeactivateConnect: () =>
      ipcRenderer.send("navigate-to-deactivate-connect"),

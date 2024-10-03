@@ -59,7 +59,7 @@ After the script is ran you can start your el tor relay with this command:
 
 **Run as Daemon**
 To run as a daemon
-`touch /etc/systemd/system/tor.service`
+`sudo nano /etc/systemd/system/tor.service`
 ```
 [Unit]
 Description=ElTorRelay
@@ -77,6 +77,7 @@ WantedBy=multi-user.target
 - `sudo systemctl daemon-reload`
 - `sudo systemctl enable tor`
 - To check that tor is running `sudo apt install nyx` then `nyx -i 127.0.0.1:8061`
+- to kill tor `pgrep tor` and the `kill {pid}`  
 
 # Code
 

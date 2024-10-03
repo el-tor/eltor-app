@@ -31,6 +31,18 @@ TestingTorNetwork 1
 V3AuthNIntervalsValid 2
 UseDefaultFallbackDirs 0
 
-
+ExcludeNodes ""
+MiddleNodes ""
+EntryNodes ""
+# Force this exit node for now since the network is small
+ExitNodes 627E6236D9E980B2C9575E700DA950C374A2568F
+# Set minimal bandwidth rates to allow low-bandwidth relays
+#BandwidthRate 10 KB  # Minimum bandwidth rate
+#BandwidthBurst 10 KB # Minimum burst bandwidth
+# Ignore the bandwidth requirements and allow any relay
+# remove this when the network is large enough
+StrictNodes 1
+UseEntryGuards 0
+NumEntryGuards 1
 
 

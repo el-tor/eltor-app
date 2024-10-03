@@ -86,7 +86,7 @@ const walletApi: IWallet = {
     };
   },
   fetchChannelInfo: async (channelId: string) => {
-    const res = await fetch(`${receiverUrl}/getbalance`, {
+    const res = await fetch(`${receiverUrl}/getinfo`, {
       method: "GET",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

@@ -42,5 +42,11 @@ export const Wallet: IWallet = {
         return {
             status: "PAID"
         }
+    },
+    fetchChannelInfo: async (channelId: string) => {
+        return {
+            send: 100,
+            receive: 50
+        }
     }
 }

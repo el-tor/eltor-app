@@ -3,11 +3,12 @@ import {
   IWallet,
   type FetchWalletBalanceResponseType,
   type WalletProviderType,
+  type FetchChannelInfoResponseType
 } from "renderer/drivers/IWallet";
 import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
 import { dynamicWalletImport } from "renderer/utils";
 
-const defaultWallet = "Phoenix"; // TODO: pull from redux or localStorage
+const defaultWallet = "Phoenix";
 const walletApi = dynamicWalletImport<IWallet>(defaultWallet);
 
 export {
@@ -16,7 +17,8 @@ export {
   walletReducer,
   setDefaultWallet,
   fetchWalletBalance,
-}
+  fetchChannelInfo,
+};
 
 // 1. State
 interface WalletState {
@@ -25,6 +27,7 @@ interface WalletState {
   requestState: RequestState;
   loading: boolean;
   error: SerializedError | null;
+  channelInfo: FetchChannelInfoResponseType;
 }
 
 type RequestState = "idle" | "pending" | "fulfilled" | "rejected";
@@ -34,7 +37,11 @@ const initialState: WalletState = {
   defaultWallet: "None",
   requestState: "idle",
   loading: false,
-  error: null
+  error: null,
+  channelInfo: {
+    send: 0,
+    receive: 0,
+  },  
 }; // satisfies WalletState as WalletState
 
 // 2. Slice and Reducers
@@ -49,21 +56,39 @@ const walletSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchWalletBalance.pending, (state) => {
-        state.requestState = 'pending';
+        state.requestState = "pending";
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchWalletBalance.fulfilled, (state, action) => {
         state.balance = action.payload.balance;
-        state.requestState = 'fulfilled';
+        state.requestState = "fulfilled";
         state.loading = false;
         state.error = null;
       })
       .addCase(fetchWalletBalance.rejected, (state, action) => {
-        state.requestState = 'rejected';
+        state.requestState = "rejected";
         state.loading = false;
         state.error = action.error;
-      });
+      })
+
+      .addCase(fetchChannelInfo.pending, (state) => {
+        state.requestState = "pending";
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchChannelInfo.fulfilled, (state, action) => {
+        state.channelInfo.receive = action.payload.receive;
+        state.channelInfo.send = state.balance;
+        state.requestState = "fulfilled";
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(fetchChannelInfo.rejected, (state, action) => {
+        state.requestState = "rejected";
+        state.loading = false;
+        state.error = action.error;
+      })
   },
 });
 
@@ -77,7 +102,19 @@ const fetchWalletBalance = createAsyncThunk<
   string
 >("wallet/fetchWalletBalance", async (name, { rejectWithValue }) => {
   try {
-    const data = await walletApi?.fetchWalletBalance();
+    const data = await walletApi.fetchWalletBalance();
+    return data;
+  } catch (error) {
+    return rejectWithValue(error);
+  }
+});
+
+const fetchChannelInfo = createAsyncThunk<
+FetchChannelInfoResponseType,
+  string
+>("wallet/fetchChannelInfo", async (name, { rejectWithValue }) => {
+  try {
+    const data = await walletApi.fetchChannelInfo("");
     return data;
   } catch (error) {
     return rejectWithValue(error);
