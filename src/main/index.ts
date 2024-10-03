@@ -17,6 +17,7 @@ import installExtension, {
   REDUX_DEVTOOLS,
   REACT_DEVELOPER_TOOLS,
 } from "electron-devtools-installer";
+import { startTor } from "./tor/startTor";
 
 let tray: Tray;
 let mainWindow: BrowserWindow;
@@ -86,6 +87,7 @@ app.whenReady().then(() => {
       enabled: true,
       id: "menu-activate-connect",
       click: () => {
+        startTor("browser");
         trayNavigate("connect");
       },
     },
@@ -103,6 +105,7 @@ app.whenReady().then(() => {
       enabled: true,
       id: "menu-activate-relay",
       click: () => {
+        startTor("relay");
         trayNavigate("relay");
       },
     },
