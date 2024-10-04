@@ -21,7 +21,7 @@ export const Connect = () => {
     });
     api.onNavigateToDeactivateConnect(() => {
       setCommandOutput("");
-    })
+    });
   }, []);
 
   return (
@@ -43,6 +43,7 @@ export const Connect = () => {
           color: "black",
           padding: 12,
           overflow: "auto",
+          display: commandOutput === "" ? "none" : "block",
         }}
       >
         {commandOutput}
