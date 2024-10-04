@@ -1,8 +1,7 @@
 import { spawn } from "child_process";
-import { ipcMain } from "electron";
+import { BrowserWindow } from "electron";
 
-export function startTor(type: "browser" | "relay") {
-
+export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
   // TODO OS specific commands
 
   if (type === "browser") {
@@ -16,7 +15,7 @@ export function startTor(type: "browser" | "relay") {
         "curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/install.sh | bash",
       ],
       {
-        stdio: "inherit",
+        stdio: "pipe",
       }
     );
 
@@ -24,10 +23,12 @@ export function startTor(type: "browser" | "relay") {
     eltorDownloadProcess?.stdout?.on("data", (data) => {
       output += data.toString();
       console.log(data.toString());
+      mainWindow.webContents.send("tor-stdout", output);
     });
     eltorDownloadProcess?.stderr?.on("data", (data) => {
       output += data.toString();
       console.log(data.toString());
+      mainWindow.webContents.send("tor-stdout", output);
     });
     eltorDownloadProcess.on("close", (code) => {
       // resolve(output);
@@ -54,7 +55,6 @@ export function startTor(type: "browser" | "relay") {
   }
 }
 
-
 function openTerminalWithCommand(command: string) {
   // Use osascript to open Terminal and run the command in a new window
   const script = `
@@ -63,6 +63,5 @@ function openTerminalWithCommand(command: string) {
       activate
     end tell
   `;
-  
-  spawn('osascript', ['-e', script]);
+  spawn("osascript", ["-e", script]);
 }

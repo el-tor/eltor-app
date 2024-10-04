@@ -56,7 +56,7 @@ export const Wallet = () => {
       </Center>
       <Title order={4}>Balance: {balance}</Title>
       <ChannelBalanceLine
-        send={channelInfo.receive ?? 0}
+        send={balance ?? 0}
         receive={channelInfo.receive ?? 0}
       />
     </Stack>

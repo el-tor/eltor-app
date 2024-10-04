@@ -12,17 +12,17 @@ export const Connect = () => {
     "false"
   );
   const [loading, setLoading] = useState(false);
+  const [commandOutput, setCommandOutput] = useState("");
 
-  // const [commandOutput, setCommandOutput] = useState("");
-  // const handleRunCommand = async () => {
-  //   try {
-  //     const output = await api.runCommand();
-  //     setCommandOutput(output);
-  //   } catch (error: any) {
-  //     setCommandOutput(`Error: ${error?.message}`);
-  //   }
-  // };
-
+  useEffect(() => {
+    // Listen for 'tor-stdout' event via the exposed electronAPI
+    api.onTorStdout((event, data) => {
+      setCommandOutput(data);
+    });
+    api.onNavigateToDeactivateConnect(() => {
+      setCommandOutput("");
+    })
+  }, []);
 
   return (
     <Stack>
@@ -33,7 +33,20 @@ export const Connect = () => {
       <Text>Tor Active: {torActive}</Text>
       {loading && <Loader />}
 
-      {/* <pre style={{backgroundColor: "white", width: "100%", height: "400px", borderRadius: 4, fontFamily:"monospace", color:"black"}}>{commandOutput}</pre> */}
+      <pre
+        style={{
+          backgroundColor: "white",
+          width: "860px",
+          height: "600px",
+          borderRadius: 4,
+          fontFamily: "monospace",
+          color: "black",
+          padding: 12,
+          overflow: "auto",
+        }}
+      >
+        {commandOutput}
+      </pre>
     </Stack>
   );
 };

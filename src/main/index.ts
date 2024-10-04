@@ -87,7 +87,7 @@ app.whenReady().then(() => {
       enabled: true,
       id: "menu-activate-connect",
       click: () => {
-        startTor("browser");
+        startTor("browser", mainWindow);
         trayNavigate("connect");
       },
     },
@@ -105,7 +105,7 @@ app.whenReady().then(() => {
       enabled: true,
       id: "menu-activate-relay",
       click: () => {
-        startTor("relay");
+        startTor("relay", mainWindow);
         trayNavigate("relay");
       },
     },
