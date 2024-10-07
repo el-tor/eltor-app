@@ -9,6 +9,7 @@ export interface IWallet {
   decodeInvoice: (invoice: string) => Promise<any>;
   checkPaymentStatus: (paymentId: string) => Promise<any>;
   fetchChannelInfo: (channelId: string) => Promise<FetchChannelInfoResponseType>;
+  onPaymentReceived: (event: any) => void;
 }
 
 export type {

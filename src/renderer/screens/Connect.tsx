@@ -26,11 +26,15 @@ export const Connect = () => {
 
   return (
     <Stack>
-      <Title order={2}>Connect</Title>
       <Title order={3}>
         {torActive === "true" ? "Connected" : "Not Connected"}
       </Title>
-      <Text>Tor Active: {torActive}</Text>
+      <Text
+        color={torActive === "false" ? "red" : "green"}
+        style={{ fontSize: "20px" }}
+      >
+        Tor Active: {torActive}
+      </Text>
       {loading && <Loader />}
 
       <pre

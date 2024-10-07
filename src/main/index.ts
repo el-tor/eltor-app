@@ -178,10 +178,10 @@ function startWallet() {
   const phoenixdConfig = path.join(os.homedir(), ".phoenix/phoenix.conf");
   fs.readFile(phoenixdConfig, "utf8", (err, data) => {
     if (err) {
-      console.error("Error reading conf file:", err);
+      // console.error("Error reading conf file:", err);
       return;
     }
-    console.log("Config file contents:", data);
+    // console.log("Config file contents:", data);
   });
 }
 

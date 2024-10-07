@@ -99,6 +99,11 @@ const walletApi: IWallet = {
       receive: resp.channels[0]?.inboundLiquiditySat ?? 0,
     };
   },
+  onPaymentReceived: (event: any) => {
+    // 1. verify payment
+    // 2. write to payment-received file in tor data directory
+    //    paymentHash | expires(null) | amount
+  },
 };
 
 export default walletApi;
