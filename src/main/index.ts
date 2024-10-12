@@ -18,6 +18,7 @@ import installExtension, {
   REACT_DEVELOPER_TOOLS,
 } from "electron-devtools-installer";
 import { startTor } from "./tor/startTor";
+import { stopTor } from "./tor/stopTor";
 
 let tray: Tray;
 let mainWindow: BrowserWindow;
@@ -96,6 +97,7 @@ app.whenReady().then(() => {
       enabled: false,
       id: "menu-deactivate-connect",
       click: () => {
+        stopTor("browser", mainWindow);
         trayNavigate("deactivate-connect");
       },
     },

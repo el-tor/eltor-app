@@ -1,12 +1,11 @@
 import { spawn } from "child_process";
 import { BrowserWindow } from "electron";
+import { openTerminalWithCommand } from "./utils";
 
 export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
   // TODO OS specific commands
 
   if (type === "browser") {
-    // ipcMain.handle("run-command", async () => {
-    //   return new Promise((resolve, reject) => {
     // Spawn a new shell to run the complex bash command
     const eltorDownloadProcess = spawn(
       "bash",
@@ -48,20 +47,7 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
         console.log(`Tor Browser opened with code ${code}`);
       });
     });
-    //   });
-    // });
   } else if (type === "relay") {
     openTerminalWithCommand("");
   }
-}
-
-function openTerminalWithCommand(command: string) {
-  // Use osascript to open Terminal and run the command in a new window
-  const script = `
-    tell application "Terminal"
-      do script "${command}"
-      activate
-    end tell
-  `;
-  spawn("osascript", ["-e", script]);
 }

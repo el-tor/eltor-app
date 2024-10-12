@@ -16,7 +16,7 @@ export const Connect = () => {
 
   useEffect(() => {
     // Listen for 'tor-stdout' event via the exposed electronAPI
-    api.onTorStdout((event, data) => {
+    api.onTorStdout((event: any, data: any) => {
       setCommandOutput(data);
     });
     api.onNavigateToDeactivateConnect(() => {
