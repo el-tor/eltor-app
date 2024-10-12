@@ -7,7 +7,7 @@ if [ -f ~/tor-browser/Browser/TorBrowser/Tor/tor_orig ]; then
   mv ~/tor-browser/Browser/TorBrowser/Data/Tor/torrc_orig ~/tor-browser/Browser/TorBrowser/Data/Tor/torrc
   cd ~/tor-browser/Browser/TorBrowser/Data/Tor
   rm cached-certs cached-microdesc-consensus cached-microdescs.new lock state
-  echo "Removed El Tor. Tor Browser should world as normal."
+  echo "Removed El Tor. Tor Browser should be connected to the normal Tor network."
 else
   echo "Cannot uninstall. File does not exist ~/tor-browser/Browser/TorBrowser/Tor/tor_orig"
 fi
