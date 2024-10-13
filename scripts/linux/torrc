@@ -35,7 +35,7 @@ ExcludeNodes ""
 MiddleNodes ""
 EntryNodes ""
 # Force this exit node for now since the network is small
-ExitNodes 627E6236D9E980B2C9575E700DA950C374A2568F
+# ExitNodes 627E6236D9E980B2C9575E700DA950C374A2568F
 # Set minimal bandwidth rates to allow low-bandwidth relays
 #BandwidthRate 10 KB  # Minimum bandwidth rate
 #BandwidthBurst 10 KB # Minimum burst bandwidth
@@ -44,5 +44,8 @@ ExitNodes 627E6236D9E980B2C9575E700DA950C374A2568F
 StrictNodes 1
 UseEntryGuards 0
 NumEntryGuards 1
+
+Log info file ~/tor-browser/Browser/TorBrowser/Data/Tor/info.log
+
 
 

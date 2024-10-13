@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { BrowserWindow } from "electron";
 import { openTerminalWithCommand } from "./utils";
+import { startCircuitBuildWatcher } from "./circuitBuildWatcher";
 
 export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
   // TODO OS specific commands
@@ -43,6 +44,7 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
       const torBrowserProcess = spawn("open", [
         "/Applications/Tor Browser.app",
       ]);
+      startCircuitBuildWatcher();
       torBrowserProcess.on("close", (code) => {
         console.log(`Tor Browser opened with code ${code}`);
       });
