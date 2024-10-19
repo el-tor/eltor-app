@@ -16,7 +16,7 @@ import {
 } from "redux-persist";
 import storage from "redux-persist/lib/storage";
 
-const { api } = window;
+const { electronEvents } = window;
 
 const persistConfig = {
   key: "root",
@@ -32,7 +32,7 @@ const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = configureStore({
   reducer: persistedReducer,
-  devTools: api.env.NODE_ENV === "development",
+  devTools: electronEvents.env.NODE_ENV === "development",
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {

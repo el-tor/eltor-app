@@ -5,7 +5,7 @@ import eltorLogo from "./assets/eltor-logo.png";
 import classes from "./globals.module.css";
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useLocalStorage } from "usehooks-ts";
-const { api } = window
+const { electronEvents } = window
 
 export function Layout() {
   const [active, setActive] = useState("Connect");
@@ -27,31 +27,31 @@ export function Layout() {
   
   useEffect(() => {
     // Connect
-    api.onNavigateToConnect(() => {
+    electronEvents.onNavigateToConnect(() => {
       navigate("/connect");
-      api.menuActivateConnect(()=>{});
+      electronEvents.menuActivateConnect(()=>{});
       setTorActive("true");
     });
-    api.onNavigateToDeactivateConnect(() => {
+    electronEvents.onNavigateToDeactivateConnect(() => {
       navigate("/connect");
-      api.menuDeactivateConnect(()=>{});
+      electronEvents.menuDeactivateConnect(()=>{});
       setTorActive("false");
     });
 
     // Relay
-    api.onNavigateToRelay(() => {
+    electronEvents.onNavigateToRelay(() => {
       navigate("/relay");
-      api.menuActivateRelay(()=>{});
+      electronEvents.menuActivateRelay(()=>{});
       setRelayActive("true");
     });
-    api.onNavigateToDeactivateRelay(() => {
+    electronEvents.onNavigateToDeactivateRelay(() => {
       navigate("/relay");
-      api.menuDeactivateRelay(()=>{});
+      electronEvents.menuDeactivateRelay(()=>{});
       setRelayActive("false");
     });
 
     // Wallet
-    api.onNavigateToWallet(() => {
+    electronEvents.onNavigateToWallet(() => {
       navigate("/wallet");
     });
   }, []);

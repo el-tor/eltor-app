@@ -22,17 +22,17 @@ type PhoenixTypeNodeInfo = {
   channels: Array<PhoenixTypeChannel>;
 };
 
-const { api } = window;
+const { electronEvents } = window;
 
 // Client Wallet
-const payerUrl = api.env.TOR_BROWSER_PHOENIXD_URL;
+const payerUrl = electronEvents.env.TOR_BROWSER_PHOENIXD_URL;
 const username = "";
-const payerPassword = api.env.TOR_BROWSER_PHOENIXD_API_PASSWORD;
+const payerPassword = electronEvents.env.TOR_BROWSER_PHOENIXD_API_PASSWORD;
 const payerAuth = btoa(`${username}:${payerPassword}`);
 
 // Relay Wallet
-const receiverUrl = api.env.TOR_RELAY_PHOENIXD_URL;
-const receiverPassword = api.env.TOR_RELAY_PHOENIXD_API_PASSWORD;
+const receiverUrl = electronEvents.env.TOR_RELAY_PHOENIXD_URL;
+const receiverPassword = electronEvents.env.TOR_RELAY_PHOENIXD_API_PASSWORD;
 const receiverAuth = btoa(`${username}:${receiverPassword}`);
 
 const walletApi: IWallet = {

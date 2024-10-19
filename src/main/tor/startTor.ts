@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { BrowserWindow } from "electron";
 import { openTerminalWithCommand } from "./utils";
 import { startCircuitBuildWatcher } from "./circuitBuildWatcher";
+import { ElectronEventsType } from "main/eventEmitter";
 
 export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
   // TODO OS specific commands
@@ -23,12 +24,12 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
     eltorDownloadProcess?.stdout?.on("data", (data) => {
       output += data.toString();
       console.log(data.toString());
-      mainWindow.webContents.send("tor-stdout", output);
+      mainWindow.webContents.send(ElectronEventsType.onTorStdout, output);
     });
     eltorDownloadProcess?.stderr?.on("data", (data) => {
       output += data.toString();
       console.log(data.toString());
-      mainWindow.webContents.send("tor-stdout", output);
+      mainWindow.webContents.send(ElectronEventsType.onTorStdout, output);
     });
     eltorDownloadProcess.on("close", (code) => {
       // resolve(output);
@@ -44,7 +45,7 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
       const torBrowserProcess = spawn("open", [
         "/Applications/Tor Browser.app",
       ]);
-      startCircuitBuildWatcher();
+      startCircuitBuildWatcher(mainWindow);
       torBrowserProcess.on("close", (code) => {
         console.log(`Tor Browser opened with code ${code}`);
       });

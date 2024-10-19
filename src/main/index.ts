@@ -73,6 +73,16 @@ app.whenReady().then(() => {
   installExtension(REACT_DEVELOPER_TOOLS)
     .then((name) => console.log(`Added Extension:  ${name}`))
     .catch((err) => console.log("An error occurred: ", err));
+
+  createTrayMenu();
+
+  if (os.platform() === "darwin") {
+    // TODO: enable for windows and linux
+    startWallet();
+  }
+});
+
+function createTrayMenu() {
   const trayIconPath = getImagePath("eltor-logo-24.png"); // TODO fix path for diff OS
   const trayIcon = nativeImage.createFromPath(trayIconPath ?? "");
   trayIcon.setTemplateImage(true);
@@ -162,12 +172,7 @@ app.whenReady().then(() => {
       console.error(`Menu item with id ${itemId} not found`);
     }
   });
-
-  if (os.platform() === "darwin") {
-    // TODO: enable for windows and linux
-    startWallet();
-  }
-});
+}
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.

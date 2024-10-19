@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Telnet } from "telnet-client";
 
-const { api } = window
+const { electronEvents } = window
 
 type TorConfig = {
   torrcPath: string;
@@ -17,7 +17,7 @@ export async function torTelnetService(
   // Path to the Tor control cookie
   const cookieFullPath = torConfig
     ? path.join(torConfig.torrcPath ?? "", "control_auth_cookie")
-    : path.join(api.env.TOR_BROWSER_TORRC_PATH ?? "", "control_auth_cookie");
+    : path.join(electronEvents.env.TOR_BROWSER_TORRC_PATH ?? "", "control_auth_cookie");
 
   // Read the cookie file
   const cookie = fs.readFileSync(cookieFullPath);
@@ -29,10 +29,10 @@ export async function torTelnetService(
   const params = {
     host: torConfig?.controlHost
       ? torConfig?.controlHost
-      : api.env.TOR_BROWSER_CONTROL_HOST || "127.0.0.1",
+      : electronEvents.env.TOR_BROWSER_CONTROL_HOST || "127.0.0.1",
     port: torConfig?.controlPort
       ? torConfig.controlPort
-      : api.env.TOR_BROWSER_CONTROL_PORT || 9051,
+      : electronEvents.env.TOR_BROWSER_CONTROL_PORT || 9051,
     negotiationMandatory: false,
     timeout: 1500,
   };
