@@ -1,10 +1,6 @@
 .box {
   border: 0.01px solid white;
   border-radius: 4px;
-  padding: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   cursor: pointer;
   transition: all 0.3s ease-in-out;
 }

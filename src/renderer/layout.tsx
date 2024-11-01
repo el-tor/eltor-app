@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Box, Group, Container } from "@mantine/core";
+import { Box, Group, Container, Center } from "@mantine/core";
 import { IconCircuitBattery, IconCoinBitcoin } from "@tabler/icons-react";
 import eltorLogo from "./assets/eltor-logo.png";
 import classes from "./globals.module.css";
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useLocalStorage } from "usehooks-ts";
 const { electronEvents } = window
+import styles from "./globals.module.css";
 
 export function Layout() {
   const [active, setActive] = useState("Connect");
@@ -58,13 +59,16 @@ export function Layout() {
 
   return (
     <Container
-      w="768px"
+      w={styles.maxWidth}
       mt="sm"
       ml="xs"
       mr="xs"
-      maw="768px"
+      maw={styles.maxWidth}
       // bg="gray"
     >
+      <Center>
+
+     
       {isLoaded && (
         <Group align="center">
           <Box>
@@ -134,8 +138,9 @@ export function Layout() {
           </Group>
         </Group>
       )}
+       </Center>
       <Container mt="md">
-        {/* Main Content Renders here in Oulet */}
+        {/* Main Content Renders here in Outlet */}
         <Outlet />
       </Container>
      

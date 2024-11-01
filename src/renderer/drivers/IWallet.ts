@@ -1,10 +1,7 @@
 export interface IWallet {
   getWalletTransactions: (walletId: string) => Promise<any>;
   payInvoice: (invoice: string) => Promise<string>;
-  requestInvoice: (
-    amount: number,
-    memo: string
-  ) => Promise<{ paymentHash: string; paymentRequestId: string }>;
+  getBolt12Offer: () => Promise<string>;
   fetchWalletBalance: () => Promise<FetchWalletBalanceResponseType>;
   decodeInvoice: (invoice: string) => Promise<any>;
   checkPaymentStatus: (paymentId: string) => Promise<any>;

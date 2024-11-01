@@ -3,7 +3,7 @@ import {
   combineReducers,
   configureStore,
 } from "@reduxjs/toolkit";
-import { walletReducer } from "./features/wallet/walletSlice";
+import { walletReducer } from "./features/wallet/walletStore";
 import {
   persistStore,
   persistReducer,

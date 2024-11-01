@@ -24,8 +24,9 @@ export const WalletPlugins = ({ setShowWallet, showWallet }) => {
         <WalletBox
           logo={phoenixDLogo}
           onClick={() => {
-            setShowWallet(!showWallet);
+            // setShowWallet(!showWallet);
           }}
+          isDefault={true}
         />
         <WalletBox
           logo={lndLogo}

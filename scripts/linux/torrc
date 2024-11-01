@@ -47,5 +47,5 @@ NumEntryGuards 1
 
 Log info file ~/tor-browser/Browser/TorBrowser/Data/Tor/info.log
 
-
+AssumeReachable 1
 

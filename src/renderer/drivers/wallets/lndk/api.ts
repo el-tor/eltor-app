@@ -21,11 +21,8 @@ export const Wallet: IWallet = {
   payInvoice: async (invoice: string) => {
     return "Payment successful";
   },
-  requestInvoice: async (amount: number, memo: string) => {
-    return {
-      paymentHash: "paymentHash",
-      paymentRequestId: "paymentRequestId",
-    };
+  getBolt12Offer: async () => {
+    return "lno";
   },
   fetchWalletBalance: async () => {
     return {

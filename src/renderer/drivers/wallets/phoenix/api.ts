@@ -55,11 +55,15 @@ const walletApi: IWallet = {
   payInvoice: async (invoice: string) => {
     return "Payment successful";
   },
-  requestInvoice: async (amount: number, memo: string) => {
-    return {
-      paymentHash: "paymentHash",
-      paymentRequestId: "paymentRequestId",
-    };
+  getBolt12Offer: async () => {
+    const res = await fetch(`${receiverUrl}/getoffer`, {
+      method: "GET",
+      headers: {
+        Authorization: `Basic ${receiverAuth}`,
+      },
+    });
+    const offer = await res.text();
+    return offer
   },
   fetchWalletBalance: async (): Promise<FetchWalletBalanceResponseType> => {
     const res = await fetch(`${receiverUrl}/getbalance`, {
