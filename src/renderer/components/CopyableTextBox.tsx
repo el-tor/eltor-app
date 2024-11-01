@@ -25,7 +25,8 @@ const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
           marginTop: 6,
           marginBottom: 6,
           marginLeft: 6,
-          marginRight: 6
+          marginRight: 6,
+          fontFamily: 'monospace',
         }}
       >
         {text}

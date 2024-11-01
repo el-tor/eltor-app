@@ -1,4 +1,4 @@
-import { Box, Group, Title } from "@mantine/core";
+import { Box, Group, Title, Text } from "@mantine/core";
 
 export function ChannelBalanceLine({
   send,
@@ -20,9 +20,10 @@ export function ChannelBalanceLine({
       ></Box>
       <Group justify="space-between" mt="5">
         <Title order={6}>
-          Can Send: {send} sats
+          Can Send: <span style={{ fontFamily: "monospace" }}>{send}</span>{" "}
+          sats
         </Title>
-        <Title order={6}>Can Receive: {receive} sats</Title>
+        <Title order={6}>Can Receive: <span style={{ fontFamily: "monospace" }}>{receive}</span> sats</Title>
       </Group>
     </Box>
   );

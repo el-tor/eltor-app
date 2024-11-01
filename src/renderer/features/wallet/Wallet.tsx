@@ -53,7 +53,7 @@ export const Wallet = () => {
           </Center>
 
           <Box>
-            <Title order={4}>Balance: {balance}</Title>
+            <Title order={4}>Balance: <span style={{ fontFamily: "monospace" }}>{balance}</span></Title>
             <ChannelBalanceLine
               send={balance ?? 0}
               receive={channelInfo.receive ?? 0}

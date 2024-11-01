@@ -34,7 +34,7 @@ export const Connect = () => {
         {torActive === "true" ? "Connected" : "Not Connected"}
       </Title>
       <Text
-        color={torActive === "false" ? "red" : "green"}
+        color={torActive === "false" ? "#FF6347" : "green"}
         style={{ fontSize: "20px" }}
       >
         Tor Active: {torActive}
@@ -42,14 +42,13 @@ export const Connect = () => {
       {loading && <Loader />}
 
       {circuitsToPay && (
-        <Text style={{ fontSize: "20px" }}>
+        <pre style={{ fontSize: "20px", overflow:"auto" }}>
           {JSON.stringify(circuitsToPay)}
-        </Text>
+        </pre>
       )}
       <pre
         style={{
           backgroundColor: "white",
-          width: "860px",
           height: "600px",
           borderRadius: 4,
           fontFamily: "monospace",
