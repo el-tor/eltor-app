@@ -86,24 +86,21 @@ export const Wallet = () => {
             receive={channelInfo.receive ?? 0}
           />
 
-          <Group
-            mt="lg"
-            bg="white"
-            p="xs"
-            style={{ borderRadius: "6px" }}
-            justify="center"
-            align="flex-start"
-          >
-            <QRCode value={bolt12Offer} size={220} />
-            <Box>
+          <Center mt="lg">
+            <Box
+              bg="white"
+              p="xs"
+              style={{ borderRadius: "6px", width: "300px" }}
+            >
               <Center>
-                <Title order={5} style={{ color: "black" }}>
+                <Title order={5} mb="xs" style={{ color: "black" }}>
                   BOLT 12 Offer
                 </Title>
               </Center>
-              <CopyableTextBox text={bolt12Offer} maxWidth="550px" />
+              <QRCode value={bolt12Offer} size={280} />
+              <CopyableTextBox text={bolt12Offer} limitChars={22} />
             </Box>
-          </Group>
+          </Center>
 
           {/* <Button
             w="100%"

@@ -7,11 +7,13 @@ import styles from "../globals.module.css";
 interface CopyableTextBoxProps {
   text: string;
   maxWidth?: string;
+  limitChars?: number;
 }
 
 const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
   text,
   maxWidth = styles.maxWidth,
+  limitChars,
 }) => {
   const clipboard = useClipboard({ timeout: 500 });
 
@@ -29,8 +31,11 @@ const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
           fontFamily: 'monospace',
         }}
       >
-        {text}
+        {limitChars && text.length > limitChars
+          ? text.slice(0, limitChars / 2) + "..." + text.slice(-limitChars / 2)
+          : text}
       </Text>
+      <br/>
       <Button
         size="xs"
         style={{ position: "absolute", bottom: 4, right: 4, height: 24 }}
