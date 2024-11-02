@@ -179,7 +179,7 @@ function createTrayMenu() {
 function startWallet() {
   const phoenixd = path.join(
     app.getAppPath(),
-    "src/renderer/drivers/wallets/phoenix/phoenixd"
+    "src/renderer/drivers/wallets/phoenixd/phoenixd"
   ); // or daemon executable
   const phoenixdProcess = spawn(phoenixd, [], {});
   const phoenixdConfig = path.join(os.homedir(), ".phoenix/phoenix.conf");

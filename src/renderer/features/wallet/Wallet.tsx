@@ -2,11 +2,10 @@ import {
   Stack,
   Title,
   Center,
-  Select,
-  Button,
   Box,
   Loader,
-  Text,
+  Group,
+  Grid,
 } from "@mantine/core";
 import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
@@ -19,8 +18,9 @@ import {
 } from "./walletStore";
 import { ChannelBalanceLine } from "renderer/components/ChannelBalanceLine";
 import { WalletPlugins } from "./WalletPlugins/WalletPlugins";
-import { get } from "http";
 import CopyableTextBox from "renderer/components/CopyableTextBox";
+import QRCode from "react-qr-code";
+import { IconRefresh } from "@tabler/icons-react";
 
 export const Wallet = () => {
   const {
@@ -48,26 +48,59 @@ export const Wallet = () => {
     <Stack>
       {showWallet && (
         <Box>
-          <Center mb="md">
+          <Group mih="25px" style={{ width: "100%" }} justify="center">
             <Title order={2}>{defaultWallet} Wallet</Title>
-          </Center>
-
-          <Box>
-            <Title order={4}>Balance: <span style={{ fontFamily: "monospace" }}>{balance}</span></Title>
-            <ChannelBalanceLine
-              send={balance ?? 0}
-              receive={channelInfo.receive ?? 0}
+            <Loader
+              style={{
+                visibility: loading ? "visible" : "hidden",
+              }}
+              size={"sm"}
             />
-          </Box>
-          <Box mt="lg">
-            <Title order={5}>BOLT 12 Offer</Title>
-            <CopyableTextBox text={bolt12Offer} />
-          </Box>
+          </Group>
 
-          <Loader display={loading ? "block" : "none"} />
+          <Group mt="md">
+            <Title order={4}>
+              Balance:{" "}
+              <span style={{ fontFamily: "monospace" }}>{balance}</span>
+            </Title>
+            <IconRefresh
+              stroke={1.5}
+              onClick={() => {
+                dispatch(fetchWalletBalance(""));
+              }}
+              style={{ cursor: "pointer" }}
+            />
+          </Group>
+          <ChannelBalanceLine
+            send={balance ?? 0}
+            receive={channelInfo.receive ?? 0}
+          />
+
+
+          <Group
+            mt="lg"
+            bg="white"
+            p="xs"
+            style={{ borderRadius: "6px" }}
+            justify=" center"
+            align="flex-start"
+          >
+            <QRCode value={bolt12Offer} size={220} />
+            <Box>
+              <Center>
+                <Title order={5} style={{ color: "black" }}>
+                  BOLT 12 Offer
+                </Title>
+              </Center>
+              <CopyableTextBox text={bolt12Offer} maxWidth="550px" />
+            </Box>
+          </Group>
+
           {/* <Button
             w="100%"
-            display={loading ? "none" : "block"}
+            style={{
+                visibility: loading ? "hidden" : "visible",
+              }}
             onClick={() => {
               dispatch(fetchWalletBalance(""));
             }}
@@ -89,7 +122,7 @@ export const Wallet = () => {
               onChange={(value) => {
                 dispatch(setDefaultWallet(value as WalletProviderType));
               }}
-              data={["Phoenix", "Lndk", "CoreLightning", "None"]}
+              data={["Phoenixd", "Lndk", "CoreLightning", "None"]}
             /> */}
           </Stack>
         </Box>

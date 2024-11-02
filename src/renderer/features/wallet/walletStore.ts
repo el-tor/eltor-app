@@ -8,7 +8,7 @@ import {
 import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
 import { dynamicWalletImport } from "renderer/utils";
 
-const defaultWallet = "Phoenix";
+const defaultWallet = "Phoenixd";
 const walletApi = dynamicWalletImport<IWallet>(defaultWallet);
 
 export {

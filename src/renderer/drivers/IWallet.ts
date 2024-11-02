@@ -25,4 +25,4 @@ type FetchChannelInfoResponseType = {
   receive: number;
 };
 
-type WalletProviderType = "Phoenix" | "Lndk" | "CoreLightning" | "None";
+type WalletProviderType = "Phoenixd" | "Lndk" | "CoreLightning" | "None";
