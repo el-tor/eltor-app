@@ -12,8 +12,13 @@ import {
 
 import { ChannelBalanceLine } from "renderer/components/ChannelBalanceLine";
 import styles from "./WalletBox.module.css";
+import { Circle } from "renderer/components/Circle";
 
-export const WalletBox = ({ logo, onClick, isDefault }:{
+export const WalletBox = ({
+  logo,
+  onClick,
+  isDefault,
+}: {
   logo: string;
   onClick: () => void;
   isDefault?: boolean;
@@ -30,15 +35,12 @@ export const WalletBox = ({ logo, onClick, isDefault }:{
       style={{ position: "relative" }}
     >
       {isDefault && (
-        <Box
-          style={{
+        <Circle
+          color="lightgreen"
+          styles={{
             position: "absolute",
             top: 6,
             right: 6,
-            width: "10px",
-            height: "10px",
-            backgroundColor: "lightgreen",
-            borderRadius: "50%",
           }}
         />
       )}

@@ -15,6 +15,7 @@ import {
   REGISTER,
 } from "redux-persist";
 import storage from "redux-persist/lib/storage";
+import { globalReducer } from "./globalStore";
 
 const { electronEvents } = window;
 
@@ -26,6 +27,7 @@ const persistConfig = {
 
 const rootReducer = combineReducers({
   wallet: walletReducer,
+  global: globalReducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

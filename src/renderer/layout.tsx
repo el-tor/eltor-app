@@ -1,25 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { Box, Group, Container, Center } from "@mantine/core";
-import { IconCircuitBattery, IconCoinBitcoin } from "@tabler/icons-react";
+import { IconWifi, IconCurrencyBitcoin, IconDeviceDesktop } from "@tabler/icons-react";
 import eltorLogo from "./assets/eltor-logo.png";
 import classes from "./globals.module.css";
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useLocalStorage } from "usehooks-ts";
 const { electronEvents } = window
 import styles from "./globals.module.css";
+import { setTorActive, setRelayActive } from "./globalStore";
+import { useDispatch } from "./hooks";
 
 export function Layout() {
   const [active, setActive] = useState("Connect");
   const navigate = useNavigate();
   const [isLoaded, setIsLoaded] = useState(false);
-  const [torActive, setTorActive, removeTorActive] = useLocalStorage(
-    "torActive",
-    "false"
-  );
-  const [relayActive, setRelayActive, removeRelayActive] = useLocalStorage(
-    "relayActive",
-    "false"
-  );
+  const dispatch = useDispatch();
 
   useEffect(() => {
     setIsLoaded(true);
@@ -31,24 +25,24 @@ export function Layout() {
     electronEvents.onNavigateToConnect(() => {
       navigate("/connect");
       electronEvents.menuActivateConnect(()=>{});
-      setTorActive("true");
+      dispatch(setTorActive(true));
     });
     electronEvents.onNavigateToDeactivateConnect(() => {
       navigate("/connect");
       electronEvents.menuDeactivateConnect(()=>{});
-      setTorActive("false");
+      dispatch(setTorActive(false));
     });
 
     // Relay
     electronEvents.onNavigateToRelay(() => {
       navigate("/relay");
       electronEvents.menuActivateRelay(()=>{});
-      setRelayActive("true");
+      dispatch(setRelayActive(true));
     });
     electronEvents.onNavigateToDeactivateRelay(() => {
       navigate("/relay");
       electronEvents.menuDeactivateRelay(()=>{});
-      setRelayActive("false");
+      dispatch(setRelayActive(false));
     });
 
     // Wallet
@@ -88,7 +82,8 @@ export function Layout() {
               className={classes.link}
               data-active={
                 window.location.hash.includes("connect") ||
-                window.location.hash.includes("main_window") || undefined
+                window.location.hash.includes("main_window") || 
+                window.location.hash === "#/main" || undefined
               }
               href=""
               key={"Tor"}
@@ -100,7 +95,7 @@ export function Layout() {
                 } catch (e) {}
               }}
             >
-              <IconCircuitBattery className={classes.linkIcon} stroke={1.5} />
+              <IconWifi className={classes.linkIcon} stroke={1.5} />
               <span>Connect to El Tor</span>
             </a>
             <a
@@ -116,7 +111,7 @@ export function Layout() {
                 } catch (e) {}
               }}
             >
-              <IconCoinBitcoin className={classes.linkIcon} stroke={1.5} />
+              <IconDeviceDesktop className={classes.linkIcon} stroke={1.5} />
               <span>Host a Relay (get paid)</span>
             </a>
             <a
@@ -132,7 +127,7 @@ export function Layout() {
                 } catch (e) {}
               }}
             >
-              <IconCoinBitcoin className={classes.linkIcon} stroke={1.5} />
+              <IconCurrencyBitcoin className={classes.linkIcon} stroke={1.5} />
               <span>Wallet</span>
             </a>
           </Group>

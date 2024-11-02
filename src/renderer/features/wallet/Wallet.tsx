@@ -6,6 +6,7 @@ import {
   Loader,
   Group,
   Grid,
+  Select,
 } from "@mantine/core";
 import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
@@ -21,6 +22,7 @@ import { WalletPlugins } from "./WalletPlugins/WalletPlugins";
 import CopyableTextBox from "renderer/components/CopyableTextBox";
 import QRCode from "react-qr-code";
 import { IconRefresh } from "@tabler/icons-react";
+import { Circle } from "renderer/components/Circle";
 
 export const Wallet = () => {
   const {
@@ -48,14 +50,22 @@ export const Wallet = () => {
     <Stack>
       {showWallet && (
         <Box>
-          <Group mih="25px" style={{ width: "100%" }} justify="center">
-            <Title order={2}>{defaultWallet} Wallet</Title>
-            <Loader
-              style={{
-                visibility: loading ? "visible" : "hidden",
-              }}
-              size={"sm"}
-            />
+          <Group w="100%">
+            <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
+            <Title order={2}>{defaultWallet}</Title>
+            <Group ml="auto">
+              <Center>
+                {" "}
+                {loading && (
+                  <Loader
+                    size="sm"
+                    style={{
+                      visibility: loading ? "visible" : "hidden",
+                    }}
+                  />
+                )}
+              </Center>
+            </Group>
           </Group>
 
           <Group mt="md">
@@ -76,13 +86,12 @@ export const Wallet = () => {
             receive={channelInfo.receive ?? 0}
           />
 
-
           <Group
             mt="lg"
             bg="white"
             p="xs"
             style={{ borderRadius: "6px" }}
-            justify=" center"
+            justify="center"
             align="flex-start"
           >
             <QRCode value={bolt12Offer} size={220} />
