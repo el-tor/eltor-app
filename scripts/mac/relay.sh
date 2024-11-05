@@ -2,23 +2,23 @@
 
 # 1. Download the tor binary and place it in the Tor Browser directory
 echo "Downloading tor binary..."
-mkdir ~/eltor
-curl -L -o ~/eltor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/tor
+mkdir ~/.eltor
+curl -L -o ~/.eltor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/tor
 if [ $? -ne 0 ]; then
   echo "Failed to download the tor binary."
   exit 1
 fi
-chmod +x ~/eltor/tor
+chmod +x ~/.eltor/tor
 
 # 2. Download the torrc file, rename it, and place it in the appropriate directory
 echo "Downloading torrc..."
-curl -L -o ~/eltor/torrc.tmpl https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/torrc_relay.tmpl
+curl -L -o ~/.eltor/torrc.tmpl https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/torrc_relay.tmpl
 if [ $? -ne 0 ]; then
   echo "Failed to download the torrc file."
   exit 1
 fi
 
-cd ~/eltor
+cd ~/.eltor
 
 # 3. Config replacements in torrc template 
 # Set default values
@@ -29,7 +29,7 @@ DEFAULT_EXITRELAY="0"
 # Prompt the user for input with default values
 read -p "Enter the Nickname [default: $DEFAULT_NICKNAME]: " NICKNAME
 NICKNAME=${NICKNAME:-$DEFAULT_NICKNAME}
-read -p "Enter the Address (Public IP or hostname) [default: $DEFAULT_ADDRESS] find at https://www.whatsmyip.org/ : " ADDRESS
+read -p "Enter the Address (Public IP or hostname) [default: $DEFAULT_ADDRESS] find at https://mullvad.net/check : " ADDRESS
 ADDRESS=${ADDRESS:-$DEFAULT_ADDRESS}
 read -p "Enter the OrPort [default: $DEFAULT_ORPORT]: " ORPORT
 ORPORT=${ORPORT:-$DEFAULT_ORPORT}
@@ -73,6 +73,6 @@ echo ""
 echo "El Tor Relay Configuration complete."
 echo "Run the following command to start the relay (it could take over an hour until the relay is seen by the DA here http://93.127.216.111:7055/tor/status-vote/current/consensus):"
 echo "sudo ufw allow $ORPORT"
-echo "cd ~/eltor"
+echo "cd ~/.eltor"
 echo "./tor -f torrc"
 echo ""
