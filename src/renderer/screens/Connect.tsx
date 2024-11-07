@@ -12,7 +12,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Circle } from "renderer/components/Circle";
-import { setCommandOutput } from "renderer/globalStore";
+import { setCommandOutput, setCircuits } from "renderer/globalStore";
 import { useDispatch, useSelector } from "renderer/hooks";
 import styles from "./../globals.module.css";
 
@@ -24,15 +24,15 @@ export const Connect = () => {
   const dispatch = useDispatch();
   const { commandOutput, torActive } = useSelector((state) => state.global);
   const preRef = useRef<HTMLPreElement>(null);
-  const [circuitsToPay, setCircuitsToPay] = useState<Array<string>>([]);
 
   useEffect(() => {
     // Listen for 'onTorStdout' event via the exposed electronAPI
     electronEvents.onTorStdout((event: any, data: any) => {
       dispatch(setCommandOutput(commandOutput + "\n\n" + data));
     });
-    electronEvents.onPayCircuit((event, circuit) => {
-      setCircuitsToPay(circuit);
+    electronEvents.onPayCircuit((event, circuits) => {
+      dispatch(setCommandOutput(commandOutput + "\n\nPay Circuits: " + JSON.stringify(circuits)));
+      dispatch(setCircuits(circuits));
     });
     electronEvents.onNavigateToDeactivateConnect(() => {
       dispatch(setCommandOutput("Deactivated"));

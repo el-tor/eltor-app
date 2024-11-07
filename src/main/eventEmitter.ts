@@ -1,3 +1,4 @@
+import { type Circuit } from "renderer/globalStore";
 const { ipcRenderer } = require("electron");
 
 export const electronEvents = {
@@ -54,7 +55,7 @@ export const electronEvents = {
   },
 
   // Tor Events
-  onPayCircuit: (callback: (event: any, circuits: Array<string>) => void) =>
+  onPayCircuit: (callback: (event: any, circuits: Array<Circuit>) => void) =>
     ipcRenderer.on(ElectronEventsType.onPayCircuit, callback),
 } as const;
 
