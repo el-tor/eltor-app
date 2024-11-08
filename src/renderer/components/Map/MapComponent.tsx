@@ -6,6 +6,7 @@ import {
   Line,
 } from "react-simple-maps";
 import { IconHome, IconWorld } from "@tabler/icons-react";
+import { Tooltip } from '@mantine/core';
 
 import features from "./countries.json";
 import { type Circuit } from "renderer/globalStore";
@@ -37,7 +38,7 @@ const MapComponent = ({
   scale?: number;
 }) => {
   const [markers, setMarkers] = useState<
-    { name: string; coordinates: [number, number]; markerOffset: number }[]
+    { name: string; coordinates: [number, number]; markerOffset: number; ip: string; fingerprint: string }[]
   >([]);
 
   const fetchMarkers = async () => {
@@ -45,18 +46,21 @@ const MapComponent = ({
     const myLocation = await fetchGeoLocation(myIp);
     await delay(1500);
     const ips = circuits[0]?.relayIps ?? [];
+    const fingerprints = circuits[0]?.relayFingerprints ?? [];
     const ipLocations = [];
-    for (const ip of ips) {
+    for (const [index, ip] of ips.entries()) {
       await delay(1500);
       const location = await fetchGeoLocation(ip);
-      ipLocations.push(location);
+      ipLocations.push({ location, ip, fingerprint: fingerprints[index] });
     }
     const allMarkers = [
-      { name: "My IP", coordinates: myLocation, markerOffset: -20 },
-      ...ipLocations.map((coords, index) => ({
-        name: `IP ${index + 1}`,
-        coordinates: coords,
+      { name: "Me", coordinates: myLocation, markerOffset: -20, ip: myIp, fingerprint: "N/A" },
+      ...ipLocations.map(({ location, ip, fingerprint }, index) => ({
+        name: `Hop ${index + 1}`,
+        coordinates: location,
         markerOffset: -20,
+        ip,
+        fingerprint,
       })),
     ];
     // @ts-ignore
@@ -92,20 +96,22 @@ const MapComponent = ({
           />
         );
       })}
-      {markers.map(({ name, coordinates, markerOffset }, index) => (
-        <Marker key={name} coordinates={coordinates} className="marker-animation">
-          <circle r={9} fill="purple" />
-          {index === 0 && (
-            <g transform="translate(-6, -6)">
-              <IconHome size={12} color="white" stroke={2} />
-            </g>
-          )}
-          {index === markers.length - 1 && (
-            <g transform="translate(-6, -6)">
-              <IconWorld size={12} color="white" stroke={2} />
-            </g>
-          )}
-        </Marker>
+      {markers.map(({ name, coordinates, markerOffset, ip, fingerprint }, index) => (
+        <Tooltip key={name} label={<span>{name}<br />{ip}<br />({fingerprint})</span>} withArrow color="dark">
+          <Marker coordinates={coordinates} className="marker-animation">
+            <circle r={9} fill="purple" />
+            {index === 0 && (
+              <g transform="translate(-6, -6)">
+                <IconHome size={12} color="white" stroke={2} />
+              </g>
+            )}
+            {index === markers.length - 1 && (
+              <g transform="translate(-6, -6)">
+                <IconWorld size={12} color="white" stroke={2} />
+              </g>
+            )}
+          </Marker>
+        </Tooltip>
       ))}
     </ComposableMap>
   );

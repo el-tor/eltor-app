@@ -42,10 +42,6 @@ a:hover {
   color: rgb(245, 54, 245); /* Example hover color */
 }
 
-a:visited {
-  color: purple; /* Example visited color */
-}
-
 .anchor {
   color: purple;
 }

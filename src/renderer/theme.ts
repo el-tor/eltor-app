@@ -52,6 +52,19 @@ export const theme = createTheme({
       "#424e88",
       "#364379",
     ],
+    black: [
+      "#1e1e1e",
+      "#f5f5f5",
+      "#e5e5e5",
+      "#d4d4d4",
+      "#c3c3c3",
+      "#b3b3b3",
+      "#a2a2a2",
+      "#919191",
+      "#818181",
+      "#707070",
+      "#606060",
+    ]
   },
 
   primaryColor: "purple",

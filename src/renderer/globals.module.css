@@ -51,7 +51,7 @@
     &,
     &:hover {
       box-shadow: var(--mantine-shadow-sm);
-      background-color: var(--mantine-color-white);
+      background-color: #1e1e1e;
       color: var(--mantine-color-purple-filled);
 
       .linkIcon {

@@ -96,8 +96,12 @@ export function Layout() {
                   } catch (e) {}
                 }}
               >
-                <IconWifi className={classes.linkIcon} stroke={1.5} />
-                <span>Connect to El Tor</span>
+                <IconWifi
+                  className={classes.linkIcon}
+                  stroke={1.5}
+                  color="rgb(245, 54, 245)"
+                />
+                <span style={{ color: "white" }}>Connect to El Tor</span>
               </a>
               <a
                 className={classes.link}
@@ -114,8 +118,12 @@ export function Layout() {
                   } catch (e) {}
                 }}
               >
-                <IconDeviceDesktop className={classes.linkIcon} stroke={1.5} />
-                <span>Host a Relay (get paid)</span>
+                <IconDeviceDesktop
+                  className={classes.linkIcon}
+                  stroke={1.5}
+                  color="rgb(245, 54, 245)"
+                />
+                <span style={{ color: "white" }}>Host a Relay (get paid)</span>
               </a>
               <a
                 className={classes.link}
@@ -135,8 +143,9 @@ export function Layout() {
                 <IconCurrencyBitcoin
                   className={classes.linkIcon}
                   stroke={1.5}
+                  color="rgb(245, 54, 245)"
                 />
-                <span>Wallet</span>
+                <span style={{ color: "white" }}>Wallet</span>
               </a>
             </Group>
           </Group>
