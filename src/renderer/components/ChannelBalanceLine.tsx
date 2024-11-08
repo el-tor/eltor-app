@@ -14,6 +14,7 @@ export function ChannelBalanceLine({
     <Box>
       <Box
         style={{
+          borderRadius: "12px",
           width: "100%",
           height: "22px",
           background: `linear-gradient(90deg, ${theme.colors.grape[6]} ${sendPercentage}%, ${theme.colors.teal[1]} 0%`,

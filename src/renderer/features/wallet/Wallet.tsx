@@ -7,6 +7,7 @@ import {
   Group,
   Grid,
   Select,
+  Flex,
 } from "@mantine/core";
 import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
@@ -23,6 +24,7 @@ import CopyableTextBox from "renderer/components/CopyableTextBox";
 import QRCode from "react-qr-code";
 import { IconRefresh } from "@tabler/icons-react";
 import { Circle } from "renderer/components/Circle";
+import { Transactions } from "./Transactions";
 
 export const Wallet = () => {
   const {
@@ -86,23 +88,37 @@ export const Wallet = () => {
             receive={channelInfo.receive ?? 0}
           />
 
-          <Center mt="lg">
-            <Box
-              bg="white"
-              p="sm"
-              m="lg"
-              style={{ borderRadius: "6px", width: "300px" }}
-            >
-              <Center>
-                <Title order={5} mb="xs" style={{ color: "black" }}>
-                  BOLT 12 Offer
-                </Title>
-              </Center>
-              <QRCode value={bolt12Offer} size={280} style={{border:2, borderColor:"whitesmoke"}} />
-              <CopyableTextBox text={bolt12Offer} limitChars={22} bg="white" />
-            </Box>
-          </Center>
-
+          <Box h="420px">
+            <Flex mt="lg" justify="flex-start" align="flex-start">
+              <Group justify="space-between" mr="lg">
+                <Box
+                  bg="white"
+                  p="sm"
+                  style={{ borderRadius: "6px" }}
+                  w="300px"
+                >
+                  <Center>
+                    <Title order={5} mb="xs" style={{ color: "black" }}>
+                      BOLT 12 Offer
+                    </Title>
+                  </Center>
+                  <QRCode
+                    value={bolt12Offer}
+                    size={280}
+                    style={{ border: 2, borderColor: "whitesmoke" }}
+                  />
+                  <CopyableTextBox
+                    text={bolt12Offer}
+                    limitChars={22}
+                    bg="white"
+                  />
+                </Box>
+              </Group>
+              <Box w="100%">
+                <Transactions h="420px" />
+              </Box>
+            </Flex>
+          </Box>
           {/* <Button
             w="100%"
             style={{
@@ -115,7 +131,7 @@ export const Wallet = () => {
             Get Balance
           </Button> */}
 
-          <Stack mt="xl">
+          <Box mt="xl">
             <Center>
               <WalletPlugins
                 setShowWallet={setShowWallet}
@@ -131,7 +147,7 @@ export const Wallet = () => {
               }}
               data={["Phoenixd", "Lndk", "CoreLightning", "None"]}
             /> */}
-          </Stack>
+          </Box>
         </Box>
       )}
     </Stack>
