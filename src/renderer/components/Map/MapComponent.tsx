@@ -10,6 +10,7 @@ import { IconHome, IconWorld } from "@tabler/icons-react";
 import features from "./countries.json";
 import { type Circuit } from "renderer/globalStore";
 import { useEffect, useState } from "react";
+import "./MapComponent.css";
 
 const fetchGeoLocation = async (ip: string) => {
   const response = await fetch(`https://ipinfo.io/${ip}/geo`);
@@ -33,7 +34,7 @@ const MapComponent = ({
 }: {
   circuits: Array<Circuit>;
   h: number;
-  scale: number;
+  scale?: number;
 }) => {
   const [markers, setMarkers] = useState<
     { name: string; coordinates: [number, number]; markerOffset: number }[]
@@ -58,12 +59,15 @@ const MapComponent = ({
         markerOffset: -20,
       })),
     ];
+    // @ts-ignore
     setMarkers(allMarkers);
   };
 
   useEffect(() => {
-    fetchMarkers();
-  }, []);
+    if (circuits) {
+      fetchMarkers();
+    }
+  }, [circuits]);
 
   return (
     <ComposableMap projectionConfig={{ scale }} height={h}>
@@ -79,17 +83,18 @@ const MapComponent = ({
         const nextMarker = markers[i + 1];
         return (
           <Line
-            key={`${marker.name}-${nextMarker.name}`}
+            key={`${marker.name}-${nextMarker?.name}`}
             from={marker.coordinates}
-            to={nextMarker.coordinates}
-            stroke="#800080"
+            to={nextMarker?.coordinates}
+            stroke="purple"
             strokeWidth={1.8}
+            className="line-animation"
           />
         );
       })}
       {markers.map(({ name, coordinates, markerOffset }, index) => (
-        <Marker key={name} coordinates={coordinates}>
-          <circle r={9} fill="#800080" />
+        <Marker key={name} coordinates={coordinates} className="marker-animation">
+          <circle r={9} fill="purple" />
           {index === 0 && (
             <g transform="translate(-6, -6)">
               <IconHome size={12} color="white" stroke={2} />

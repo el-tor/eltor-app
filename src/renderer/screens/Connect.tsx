@@ -44,6 +44,7 @@ export const Connect = () => {
     });
     electronEvents.onNavigateToDeactivateConnect(() => {
       dispatch(setCommandOutput("Deactivated"));
+      dispatch(setCircuits([]));
     });
   }, []);
 
@@ -57,19 +58,34 @@ export const Connect = () => {
     <Stack>
       <Group w="100%">
         <Circle color={torActive ? "lightgreen" : "#FF6347"} />
-        <Title order={2}>{torActive ? "Connected" : "Not connected"}</Title>
+        <Title order={3}>{torActive ? "Connected" : "Not connected"}</Title>
+        <Switch
+          checked={torActive}
+          onChange={(checked) => {
+            setLoading(true);
+            if (checked) {
+            electronEvents.menuActivateConnect(()=>{});
+            } else {
+              electronEvents.menuDeactivateConnect(()=>{});
+            }
+            setLoading(false);
+          }}
+          color="purple"
+        />
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
         </Group>
       </Group>
-      <MapComponent circuits={circuits} h={400} scale={180} />
+      <MapComponent circuits={circuits} h={500} />
       <Box
         style={{
           maxWidth: styles.maxWidth,
           position: "relative",
           padding: 4,
           borderRadius: 4,
-          backgroundColor: "#1e1e1e", 
+          backgroundColor: "#1e1e1e",
+          marginTop: -130,
+          zIndex: 1,
         }}
       >
         <pre
