@@ -2,10 +2,10 @@ import { Stack, Title, Text, Group, Center, Loader } from "@mantine/core";
 import { useState } from "react";
 import { Circle } from "renderer/components/Circle";
 import CopyableTextBox from "renderer/components/CopyableTextBox";
-import { useSelector } from "renderer/hooks";
+import { useSelector } from "../hooks";
 
 export const Relay = () => {
-  const { relayActive } = useSelector((state) => state.global);
+  const { global, wallet } = useSelector((state) => state);
   const [loading, setLoading] = useState(false);
 
   return (
@@ -44,8 +44,9 @@ export const Relay = () => {
       </Text>
       <CopyableTextBox text="./tor-fw-helper -p 5061:5061" />
       <Text>
-        <b>4. Get Paid</b> - Monitor your wallet for payments
+        <b>4. Get Paid</b> - Monitor your wallet for payments to your BOLT 12 Offer
       </Text>
+      <CopyableTextBox text={wallet.bolt12Offer} limitChars={80} />
     </Stack>
   );
 };

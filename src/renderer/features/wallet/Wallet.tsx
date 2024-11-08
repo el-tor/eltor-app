@@ -89,7 +89,8 @@ export const Wallet = () => {
           <Center mt="lg">
             <Box
               bg="white"
-              p="xs"
+              p="sm"
+              m="lg"
               style={{ borderRadius: "6px", width: "300px" }}
             >
               <Center>
@@ -97,8 +98,8 @@ export const Wallet = () => {
                   BOLT 12 Offer
                 </Title>
               </Center>
-              <QRCode value={bolt12Offer} size={280} />
-              <CopyableTextBox text={bolt12Offer} limitChars={22} />
+              <QRCode value={bolt12Offer} size={280} style={{border:2, borderColor:"whitesmoke"}} />
+              <CopyableTextBox text={bolt12Offer} limitChars={22} bg="white" />
             </Box>
           </Center>
 

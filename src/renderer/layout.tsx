@@ -123,7 +123,7 @@ export function Layout() {
                   stroke={1.5}
                   color="rgb(245, 54, 245)"
                 />
-                <span style={{ color: "white" }}>Host a Relay (get paid)</span>
+                <span style={{ color: "white" }}>Run a Relay</span>
               </a>
               <a
                 className={classes.link}
