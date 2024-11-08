@@ -15,6 +15,8 @@ import { Circle } from "renderer/components/Circle";
 import { setCommandOutput, setCircuits } from "renderer/globalStore";
 import { useDispatch, useSelector } from "renderer/hooks";
 import styles from "./../globals.module.css";
+import MapComponent from "renderer/components/Map/MapComponent";
+import "./Connect.css";
 
 const { electronEvents } = window;
 
@@ -22,7 +24,9 @@ export const Connect = () => {
   const params: any = useParams();
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
-  const { commandOutput, torActive } = useSelector((state) => state.global);
+  const { commandOutput, torActive, circuits } = useSelector(
+    (state) => state.global
+  );
   const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -31,7 +35,11 @@ export const Connect = () => {
       dispatch(setCommandOutput(commandOutput + "\n\n" + data));
     });
     electronEvents.onPayCircuit((event, circuits) => {
-      dispatch(setCommandOutput(commandOutput + "\n\nPay Circuits: " + JSON.stringify(circuits)));
+      dispatch(
+        setCommandOutput(
+          commandOutput + "\n\nPay Circuits: " + JSON.stringify(circuits)
+        )
+      );
       dispatch(setCircuits(circuits));
     });
     electronEvents.onNavigateToDeactivateConnect(() => {
@@ -54,31 +62,35 @@ export const Connect = () => {
           <Center> {loading && <Loader size="sm" />}</Center>
         </Group>
       </Group>
-
+      <MapComponent circuits={circuits} h={400} scale={180} />
       <Box
         style={{
           maxWidth: styles.maxWidth,
           position: "relative",
-          padding: 6,
+          padding: 4,
           borderRadius: 4,
+          backgroundColor: "#1e1e1e", 
         }}
-        bg="white"
       >
         <pre
           ref={preRef}
           style={{
-            backgroundColor: "white",
-            height: "640px",
+            backgroundColor: "#1e1e1e",
+            height: "220px",
             borderRadius: 4,
             fontFamily: "monospace",
-            color: "black",
-            padding: 12,
+            color: "#d4d4d4",
+            padding: 6,
+            paddingTop: 0,
             overflow: "auto",
             display: "block",
             position: "relative",
           }}
         >
           {commandOutput}
+          <span className="blink-cursor">
+            &nbsp;
+          </span>
         </pre>
         <Button
           size="xs"

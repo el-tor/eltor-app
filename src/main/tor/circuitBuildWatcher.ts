@@ -18,7 +18,7 @@ export function startCircuitBuildWatcher(mainWindow: BrowserWindow) {
     return;
   }
   // TODO: kill interval on tor deactivate
-  setInterval(() => {
+  // setInterval(() => {
     parseCircuits(logFilePath)
       .then((circuits) => {
         const filteredCircuits = circuits.filter(
@@ -33,7 +33,7 @@ export function startCircuitBuildWatcher(mainWindow: BrowserWindow) {
       .catch((error) => {
         console.error("Error:", error);
       });
-  }, 10000);
+  // }, 10000);
 }
 
 async function parseCircuits(logFilePath: string) {
@@ -50,6 +50,7 @@ async function parseCircuits(logFilePath: string) {
   const statusPattern = /Circuit (\d+) (BUILT|EXTENDED|FAILED|CLOSED)/i;
   const originCircuitPattern =
     /origin_circuit_new: Circuit (\d+) chose an idle timeout of (\d+) based on (\d+) seconds/;
+  const relayIpPattern = /(\d{1,3}\.){3}\d{1,3}/;
 
   for await (const line of rl) {
     // Check for circuit ID, fingerprint and status
@@ -72,6 +73,7 @@ async function parseCircuits(logFilePath: string) {
           idleTimeout: null,
           predictiveBuildTime: null,
           createdAt: null,
+          relayIps: [],
         });
       }
 
@@ -98,6 +100,19 @@ async function parseCircuits(logFilePath: string) {
       const circuit = circuits.get(lastCircuitId);
       if (circuit && !circuit.relayFingerprints.includes(fingerprintMatch[1])) {
         circuit.relayFingerprints.push(fingerprintMatch[1]);
+      }
+    }
+
+    // Check for relay IPs
+    const relayIpMatch = line.match(relayIpPattern);
+    if (relayIpMatch && circuits.size > 0) {
+      const lastCircuitId = Array.from(circuits.keys()).pop();
+      const circuit = circuits.get(lastCircuitId);
+      if (circuit && !circuit.relayIps) {
+        circuit.relayIps = [];
+      }
+      if (circuit && !circuit.relayIps.includes(relayIpMatch[0])) {
+        circuit.relayIps.push(relayIpMatch[0]);
       }
     }
   }

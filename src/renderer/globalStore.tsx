@@ -92,6 +92,7 @@ type Circuit = {
   id: string;
   fingerprint: string;
   relayFingerprints: string[];
+  relayIps: string[];
   status: string; // "unknown" | ??
   idleTimeout: number | null;
   predictiveBuildTime: number | null;
