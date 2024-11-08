@@ -27,7 +27,7 @@ export function Transactions({ h }: { h?: number | string }) {
   ));
 
   return (
-    <ScrollArea w="100%" h={h ?? 200}>
+    <ScrollArea w="100%" h={h ?? 200} p="sm" style={{borderRadius:"6px"}} bg="#1e1e1e">
       <Table bg="#1e1e1e" withRowBorders={false} highlightOnHover>
         <Table.Thead>
           <Table.Tr>

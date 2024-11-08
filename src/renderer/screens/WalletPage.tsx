@@ -1,10 +1,11 @@
-import { Stack, Title, Center, Select, Button } from "@mantine/core";
+import { Box } from "@mantine/core";
 import { Wallet } from "renderer/features/wallet/Wallet";
+import styles from "../globals.module.css";
 
 export const WalletPage = () => {
   return (
-    <Stack>
-     <Wallet />
-    </Stack>
+    <Box w="960px">
+      <Wallet />
+    </Box>
   );
 };

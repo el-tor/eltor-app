@@ -51,8 +51,8 @@ export const Wallet = () => {
   return (
     <Stack>
       {showWallet && (
-        <Box>
-          <Group w="100%">
+        <Box w="100%">
+          <Group >
             <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
             <Title order={2}>{defaultWallet}</Title>
             <Group ml="auto">

@@ -33,7 +33,7 @@ async function createMainWindow() {
     width: 1600,
     height: 1440,
     show: false,
-    //resizable: false,
+    resizable: true,
     //alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),

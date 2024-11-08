@@ -55,107 +55,109 @@ export function Layout() {
   }, []);
 
   return (
-    <Container
-      w={styles.maxWidth}
-      mt="sm"
-      ml="xs"
-      mr="xs"
-      maw={styles.maxWidth}
-      // bg="gray"
-    >
-      {isLoaded && (
-        <Group>
-          <Box ml="0">
-            <img
-              src={eltorLogo}
-              alt="Logo"
-              height={50}
-              style={{ cursor: "pointer" }}
-              onClick={() => {
-                navigate("/connect");
-              }}
-            />
-          </Box>
-          <Group align="center" ml="auto">
-            <Group>
-              <a
-                className={classes.link}
-                data-active={
-                  window.location.hash.includes("connect") ||
-                  window.location.hash.includes("main_window") ||
-                  window.location.hash === "#/main" ||
-                  undefined
-                }
-                href=""
-                key={"Tor"}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setActive("Connect");
-                  try {
-                    navigate("/connect");
-                  } catch (e) {}
+    <Center>
+      <Container
+        w={styles.maxWidth}
+        mt="sm"
+        ml="xs"
+        mr="xs"
+        maw={styles.maxWidth}
+        // bg="gray"
+      >
+        {isLoaded && (
+          <Group>
+            <Box ml="0">
+              <img
+                src={eltorLogo}
+                alt="Logo"
+                height={50}
+                style={{ cursor: "pointer" }}
+                onClick={() => {
+                  navigate("/connect");
                 }}
-              >
-                <IconWifi
-                  className={classes.linkIcon}
-                  stroke={1.5}
-                  color="rgb(245, 54, 245)"
-                />
-                <span style={{ color: "white" }}>Connect to El Tor</span>
-              </a>
-              <a
-                className={classes.link}
-                data-active={
-                  window.location.hash.includes("relay") || undefined
-                }
-                key={"Host"}
-                href=""
-                onClick={(event) => {
-                  event.preventDefault();
-                  setActive("Relay");
-                  try {
-                    navigate("/relay");
-                  } catch (e) {}
-                }}
-              >
-                <IconDeviceDesktop
-                  className={classes.linkIcon}
-                  stroke={1.5}
-                  color="rgb(245, 54, 245)"
-                />
-                <span style={{ color: "white" }}>Run a Relay</span>
-              </a>
-              <a
-                className={classes.link}
-                data-active={
-                  window.location.hash.includes("wallet") || undefined
-                }
-                href=""
-                key={"wallet"}
-                onClick={(event) => {
-                  event.preventDefault();
-                  setActive("Wallet");
-                  try {
-                    navigate("/wallet");
-                  } catch (e) {}
-                }}
-              >
-                <IconCurrencyBitcoin
-                  className={classes.linkIcon}
-                  stroke={1.5}
-                  color="rgb(245, 54, 245)"
-                />
-                <span style={{ color: "white" }}>Wallet</span>
-              </a>
+              />
+            </Box>
+            <Group align="center" ml="auto">
+              <Group>
+                <a
+                  className={classes.link}
+                  data-active={
+                    window.location.hash.includes("connect") ||
+                    window.location.hash.includes("main_window") ||
+                    window.location.hash === "#/main" ||
+                    undefined
+                  }
+                  href=""
+                  key={"Tor"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setActive("Connect");
+                    try {
+                      navigate("/connect");
+                    } catch (e) {}
+                  }}
+                >
+                  <IconWifi
+                    className={classes.linkIcon}
+                    stroke={1.5}
+                    color="rgb(245, 54, 245)"
+                  />
+                  <span style={{ color: "white" }}>Connect to El Tor</span>
+                </a>
+                <a
+                  className={classes.link}
+                  data-active={
+                    window.location.hash.includes("relay") || undefined
+                  }
+                  key={"Host"}
+                  href=""
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setActive("Relay");
+                    try {
+                      navigate("/relay");
+                    } catch (e) {}
+                  }}
+                >
+                  <IconDeviceDesktop
+                    className={classes.linkIcon}
+                    stroke={1.5}
+                    color="rgb(245, 54, 245)"
+                  />
+                  <span style={{ color: "white" }}>Run a Relay</span>
+                </a>
+                <a
+                  className={classes.link}
+                  data-active={
+                    window.location.hash.includes("wallet") || undefined
+                  }
+                  href=""
+                  key={"wallet"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setActive("Wallet");
+                    try {
+                      navigate("/wallet");
+                    } catch (e) {}
+                  }}
+                >
+                  <IconCurrencyBitcoin
+                    className={classes.linkIcon}
+                    stroke={1.5}
+                    color="rgb(245, 54, 245)"
+                  />
+                  <span style={{ color: "white" }}>Wallet</span>
+                </a>
+              </Group>
             </Group>
           </Group>
-        </Group>
-      )}
+        )}
 
-      <Container mt="md">
-        {/* Main Content Renders here in Outlet */}
-        <Outlet />
+        <Container mt="md">
+          {/* Main Content Renders here in Outlet */}
+          <Outlet />
+        </Container>
       </Container>
-    </Container>
+    </Center>
   );
 }

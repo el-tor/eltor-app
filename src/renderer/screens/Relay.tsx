@@ -19,7 +19,7 @@ export const Relay = () => {
         </Group>
       </Group> */}
       <Text>
-        <b>1. Run</b> this command in the terminal to start an El Tor Relay
+        <b>1. Run</b> this command in your terminal to start the El Tor Relay
       </Text>
       <CopyableTextBox text='/bin/bash -c "$(curl -fsSL https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/relay.sh)"' />
       <Text>
