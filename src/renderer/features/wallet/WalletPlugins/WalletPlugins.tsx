@@ -19,28 +19,26 @@ import { WalletBox } from "./WalletBox";
 
 export const WalletPlugins = ({ setShowWallet, showWallet }) => {
   return (
-    <Stack>
-      <Group>
-        <WalletBox
-          logo={phoenixDLogo}
-          onClick={() => {
-            // setShowWallet(!showWallet);
-          }}
-          isDefault={true}
-        />
-        <WalletBox
-          logo={lndLogo}
-          onClick={() => {
-            alert("todo implement");
-          }}
-        />
-        <WalletBox
-          logo={clnLogo}
-          onClick={() => {
-            alert("todo implement");
-          }}
-        />
-      </Group>
-    </Stack>
+    <Group>
+      <WalletBox
+        logo={phoenixDLogo}
+        onClick={() => {
+          // setShowWallet(!showWallet);
+        }}
+        isDefault={true}
+      />
+      <WalletBox
+        logo={lndLogo}
+        onClick={() => {
+          alert("todo implement");
+        }}
+      />
+      <WalletBox
+        logo={clnLogo}
+        onClick={() => {
+          alert("todo implement");
+        }}
+      />
+    </Group>
   );
 };

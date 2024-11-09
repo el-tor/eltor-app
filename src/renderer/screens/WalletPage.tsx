@@ -4,7 +4,7 @@ import styles from "../globals.module.css";
 
 export const WalletPage = () => {
   return (
-    <Box w="960px">
+    <Box>
       <Wallet />
     </Box>
   );

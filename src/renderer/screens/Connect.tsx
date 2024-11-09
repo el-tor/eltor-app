@@ -57,8 +57,13 @@ export const Connect = () => {
   return (
     <Stack>
       <Group w="100%">
-        <Circle color={torActive ? "lightgreen" : "#FF6347"} />
-        <Title order={3}>{torActive ? "Connected" : "Not connected"}</Title>
+        {torActive ? (
+          <Text>Click "Deactivate" in the menu to disconnect</Text>
+        ) : (
+          <Text>Click "Activate" in the OS tray menu to connect</Text>
+        )}
+
+        {/* <Title order={3}>{torActive ? "Connected" : "Not connected"}</Title>
         <Switch
           checked={torActive}
           onChange={(checked) => {
@@ -71,9 +76,10 @@ export const Connect = () => {
             setLoading(false);
           }}
           color="purple"
-        />
+        /> */}
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
+          <Circle color={torActive ? "lightgreen" : "#FF6347"} />
         </Group>
       </Group>
       <MapComponent circuits={circuits} h={500} />
@@ -104,9 +110,7 @@ export const Connect = () => {
           }}
         >
           {commandOutput}
-          <span className="blink-cursor">
-            &nbsp;
-          </span>
+          <span className="blink-cursor">&nbsp;</span>
         </pre>
         <Button
           size="xs"

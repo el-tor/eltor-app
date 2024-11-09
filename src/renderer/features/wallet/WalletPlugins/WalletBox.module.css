@@ -1,10 +1,10 @@
 .box {
-  border: 0.01px solid white;
-  border-radius: 4px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.3s ease-in-out;
+  transition: transform 0.2s;
 }
 
 .box:hover {
-  opacity: 0.6; /* Dimming effect */
+  transform: scale(1.05);
 }

@@ -5,9 +5,7 @@ import {
   Box,
   Loader,
   Group,
-  Grid,
-  Select,
-  Flex,
+  SimpleGrid,
 } from "@mantine/core";
 import { useDispatch, useSelector } from "../../hooks";
 import { WalletProviderType } from "renderer/drivers/IWallet";
@@ -49,10 +47,10 @@ export const Wallet = () => {
   }, []);
 
   return (
-    <Stack>
+    <Box>
       {showWallet && (
         <Box w="100%">
-          <Group >
+          <Group>
             <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
             <Title order={2}>{defaultWallet}</Title>
             <Group ml="auto">
@@ -88,15 +86,15 @@ export const Wallet = () => {
             receive={channelInfo.receive ?? 0}
           />
 
-          <Box h="420px">
-            <Flex mt="lg" justify="flex-start" align="flex-start">
-              <Group justify="space-between" mr="lg">
-                <Box
-                  bg="white"
-                  p="sm"
-                  style={{ borderRadius: "6px" }}
-                  w="300px"
-                >
+          <SimpleGrid
+            mt="lg"
+            cols={{ base: 1, sm: 2 }} // Stack vertically on small screens, two columns on larger screens
+            spacing={{ base: "md", sm: "lg" }} // Adjust spacing based on screen size
+            verticalSpacing={{ base: "md", sm: "lg" }} // Adjust vertical spacing based on screen size
+          >
+            <Box bg="white" p="sm" style={{ borderRadius: "6px" }} w="100%">
+              <Center>
+                <Stack>
                   <Center>
                     <Title order={5} mb="xs" style={{ color: "black" }}>
                       BOLT 12 Offer
@@ -112,13 +110,22 @@ export const Wallet = () => {
                     limitChars={22}
                     bg="white"
                   />
-                </Box>
-              </Group>
-              <Box w="100%">
-                <Transactions h="420px" />
-              </Box>
-            </Flex>
-          </Box>
+                </Stack>
+              </Center>
+            </Box>
+
+            <Box w="100%" mt={{ base: "lg", sm: 0 }}>
+              <Transactions h="450px" />
+            </Box>
+          </SimpleGrid>
+
+          <Center mt="lg">
+            <WalletPlugins
+              setShowWallet={setShowWallet}
+              showWallet={showWallet}
+            />
+          </Center>
+
           {/* <Button
             w="100%"
             style={{
@@ -130,15 +137,7 @@ export const Wallet = () => {
           >
             Get Balance
           </Button> */}
-
-          <Box mt="xl">
-            <Center>
-              <WalletPlugins
-                setShowWallet={setShowWallet}
-                showWallet={showWallet}
-              />
-            </Center>
-            {/* <Select
+          {/* <Select
               label="Change your default wallet"
               placeholder=""
               value={defaultWallet}
@@ -147,9 +146,8 @@ export const Wallet = () => {
               }}
               data={["Phoenixd", "Lndk", "CoreLightning", "None"]}
             /> */}
-          </Box>
         </Box>
       )}
-    </Stack>
+    </Box>
   );
 };

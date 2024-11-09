@@ -57,11 +57,12 @@ export function Layout() {
   return (
     <Center>
       <Container
-        w={styles.maxWidth}
+        w="90%"
         mt="sm"
         ml="xs"
         mr="xs"
         maw={styles.maxWidth}
+        
         // bg="gray"
       >
         {isLoaded && (
