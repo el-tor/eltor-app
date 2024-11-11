@@ -12,11 +12,17 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Circle } from "renderer/components/Circle";
-import { setCommandOutput, setCircuits } from "renderer/globalStore";
+import {
+  setCommandOutput,
+  setCircuits,
+  setCircuitInUse,
+  Circuit,
+} from "renderer/globalStore";
 import { useDispatch, useSelector } from "renderer/hooks";
 import styles from "./../globals.module.css";
 import MapComponent from "renderer/components/Map/MapComponent";
 import "./Connect.css";
+import { type CircuitRenew } from "main/tor/circuitRenewWatcher";
 
 const { electronEvents } = window;
 
@@ -24,7 +30,7 @@ export const Connect = () => {
   const params: any = useParams();
   const [loading, setLoading] = useState(false);
   const dispatch = useDispatch();
-  const { commandOutput, torActive, circuits } = useSelector(
+  const { commandOutput, torActive, circuits, circuitInUse } = useSelector(
     (state) => state.global
   );
   const preRef = useRef<HTMLPreElement>(null);
@@ -34,17 +40,43 @@ export const Connect = () => {
     electronEvents.onTorStdout((event: any, data: any) => {
       dispatch(setCommandOutput(commandOutput + "\n\n" + data));
     });
-    electronEvents.onPayCircuit((event, circuits) => {
+    electronEvents.onPayCircuit((event, circuitResp) => {
       dispatch(
         setCommandOutput(
-          commandOutput + "\n\nPay Circuits: " + JSON.stringify(circuits)
+          commandOutput +
+            `
+            \n\nPay Circuits:  ${JSON.stringify(circuitResp.circuits)}
+          `
         )
       );
-      dispatch(setCircuits(circuits));
+      dispatch(setCircuits(circuitResp.circuits));
+    });
+    electronEvents.onCircuitRenew((event, circuitRenew) => {
+      if (circuitRenew.circuit.relays.length >= 3) {
+        dispatch(
+          setCommandOutput(
+            commandOutput +
+              `
+            \n\nRenewed Circuits:  ${JSON.stringify(circuitRenew.circuit)}
+            \nHop 1: ${circuitRenew.circuit.relays[0]?.nickname} - ${
+                circuitRenew.circuit.relays[0]?.ip
+              },
+            \nHop 2: ${circuitRenew.circuit.relays[1]?.nickname} - ${
+                circuitRenew.circuit.relays[1]?.ip
+              },
+            \nHop 3: ${circuitRenew.circuit.relays[2]?.nickname} - ${
+                circuitRenew.circuit.relays[2]?.ip
+              },
+          `
+          )
+        );
+        dispatch(setCircuitInUse(circuitRenew.circuit));
+      }
     });
     electronEvents.onNavigateToDeactivateConnect(() => {
       dispatch(setCommandOutput("Deactivated"));
       dispatch(setCircuits([]));
+      dispatch(setCircuitInUse({} as CircuitRenew));
     });
   }, []);
 
@@ -82,7 +114,7 @@ export const Connect = () => {
           <Circle color={torActive ? "lightgreen" : "#FF6347"} />
         </Group>
       </Group>
-      <MapComponent circuits={circuits} h={500} />
+      <MapComponent circuit={circuitInUse} h={500} />
       <Box
         style={{
           maxWidth: styles.maxWidth,

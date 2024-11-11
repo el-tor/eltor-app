@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
+import { CircuitRenew } from "main/tor/circuitRenewWatcher";
 
 export {
   type GlobalState,
@@ -12,6 +13,7 @@ export {
   setRelayActive,
   setCircuits,
   setRelays,
+  setCircuitInUse,
 };
 
 // 1. State
@@ -19,7 +21,8 @@ interface GlobalState {
   commandOutput: string;
   torActive: boolean;
   relayActive: boolean;
-  circuits: Array<Circuit>;
+  circuits: Array<Circuit> | null;
+  circuitInUse: CircuitRenew;
   relays: Array<Relay>;
 }
 
@@ -51,6 +54,7 @@ Waiting to connect...
   torActive: false,
   relayActive: false,
   circuits: [],
+  circuitInUse: {} as CircuitRenew,
   relays: [],
 };
 
@@ -68,8 +72,11 @@ const globalStore = createSlice({
     setRelayActive: (state, action: PayloadAction<boolean>) => {
       state.relayActive = action.payload;
     },
-    setCircuits: (state, action: PayloadAction<Array<Circuit>>) => {
+    setCircuits: (state, action: PayloadAction<Array<Circuit> | null>) => {
       state.circuits = action.payload;
+    },
+    setCircuitInUse: (state, action: PayloadAction<CircuitRenew>) => {
+      state.circuitInUse = action.payload;
     },
     setRelays: (state, action: PayloadAction<Array<Relay>>) => {
       state.relays = action.payload;
@@ -86,25 +93,28 @@ const {
   setRelayActive,
   setCircuits,
   setRelays,
+  setCircuitInUse,
 } = globalStore.actions;
 
 type Circuit = {
-  id: string;
-  fingerprint: string;
-  relayFingerprints: string[];
-  relayIps: string[];
-  status: string; // "unknown" | ??
-  idleTimeout: number | null;
-  predictiveBuildTime: number | null;
-  createdAt: string | null;
-  expiresAt: string | null;
-  isExpired: boolean;
+  id?: string | null;
+  fingerprint?: string;
+  relayFingerprints?: string[];
+  relayIps?: string[];
+  status?: string; // "unknown" | ??
+  idleTimeout?: number | null | string;
+  predictiveBuildTime?: number | null | string;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  isExpired?: boolean;
+  circuitFingerprint?: string | null;
+  lastUsed?: string | null;
 };
 
 type Relay = {
-  fingerprint: string;
-  preimage: string;
-  payhash: string;
-  lastPaymentStatus: string; // "accepted" | "denied"
-  expiresAt: string;
+  fingerprint?: string;
+  preimage?: string;
+  payhash?: string;
+  lastPaymentStatus?: string; // "accepted" | "denied"
+  expiresAt?: string;
 };

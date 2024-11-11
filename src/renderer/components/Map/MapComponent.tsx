@@ -12,8 +12,10 @@ import features from "./countries.json";
 import { type Circuit } from "renderer/globalStore";
 import { useEffect, useState } from "react";
 import "./MapComponent.css";
+import { type CircuitRenew } from "main/tor/circuitRenewWatcher";
 
 const fetchGeoLocation = async (ip: string) => {
+  // TODO: cache this
   const response = await fetch(`https://ipinfo.io/${ip}/geo`);
   const data = await response.json();
   const [latitude, longitude] = data.loc.split(",");
@@ -21,6 +23,7 @@ const fetchGeoLocation = async (ip: string) => {
 };
 
 const fetchMyIpAddress = async () => {
+  // TODO: cache this
   const response = await fetch("https://api.ipify.org?format=json");
   const data = await response.json();
   return data.ip;
@@ -29,34 +32,36 @@ const fetchMyIpAddress = async () => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const MapComponent = ({
-  circuits,
+  circuit,
   h,
   scale,
 }: {
-  circuits: Array<Circuit>;
+  circuit: CircuitRenew;
   h: number;
   scale?: number;
 }) => {
   const [markers, setMarkers] = useState<
-    { name: string; coordinates: [number, number]; markerOffset: number; ip: string; fingerprint: string }[]
+    { hop: number, name: string; coordinates: [number, number]; markerOffset: number; ip: string; fingerprint: string }[]
   >([]);
 
   const fetchMarkers = async () => {
     const myIp = await fetchMyIpAddress();
     const myLocation = await fetchGeoLocation(myIp);
     await delay(1500);
-    const ips = circuits[0]?.relayIps ?? [];
-    const fingerprints = circuits[0]?.relayFingerprints ?? [];
+    const ips = circuit.relays.map(i=>i.ip) ?? [];
+    const fingerprints = circuit.relays.map(f=>f.fingerprint) ?? [];
+    const relayNames = circuit.relays.map(n=>n.nickname) ?? [];
     const ipLocations = [];
     for (const [index, ip] of ips.entries()) {
       await delay(1500);
       const location = await fetchGeoLocation(ip);
-      ipLocations.push({ location, ip, fingerprint: fingerprints[index] });
+      ipLocations.push({ location, ip, fingerprint: fingerprints[index], name: relayNames[index] });
     }
     const allMarkers = [
       { name: "Me", coordinates: myLocation, markerOffset: -20, ip: myIp, fingerprint: "N/A" },
-      ...ipLocations.map(({ location, ip, fingerprint }, index) => ({
-        name: `Hop ${index + 1}`,
+      ...ipLocations.map(({ location, ip, fingerprint, name }, index) => ({
+        hop: index + 1,
+        name,
         coordinates: location,
         markerOffset: -20,
         ip,
@@ -68,10 +73,10 @@ const MapComponent = ({
   };
 
   useEffect(() => {
-    if (circuits) {
+    if (circuit) {
       fetchMarkers();
     }
-  }, [circuits]);
+  }, [circuit]);
 
   return (
     <ComposableMap projectionConfig={{ scale }} height={h}>
@@ -87,7 +92,7 @@ const MapComponent = ({
         const nextMarker = markers[i + 1];
         return (
           <Line
-            key={`${marker.name}-${nextMarker?.name}`}
+            key={`${marker.name}-${nextMarker?.name}-${Date.now()}`}
             from={marker.coordinates}
             to={nextMarker?.coordinates}
             stroke="purple"
@@ -97,7 +102,7 @@ const MapComponent = ({
         );
       })}
       {markers.map(({ name, coordinates, markerOffset, ip, fingerprint }, index) => (
-        <Tooltip key={name} label={<span>{name}<br />{ip}<br />({fingerprint})</span>} withArrow color="dark">
+        <Tooltip key={`${Date.now()}${Math.random()}`} label={<span>{name}<br />{ip}<br />({fingerprint})</span>} withArrow color="dark">
           <Marker coordinates={coordinates} className="marker-animation">
             <circle r={9} fill="purple" />
             {index === 0 && (

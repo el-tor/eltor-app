@@ -8,6 +8,9 @@ This is the El Tor App that allows a user to connect to the El Tor network. It c
     <img src="./src/renderer/assets/eltor-flow.png" alt="Dash" width="480px"/>
 </div>
 
+# Developers
+This project was developed using `electron-vite`. See the guide here https://electron-vite.org/guide/
+
 # El Tor Install
 
 ### Browser Config

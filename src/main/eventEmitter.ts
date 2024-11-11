@@ -1,4 +1,5 @@
 import { type Circuit } from "renderer/globalStore";
+import { CircuitRenew } from "./tor/circuitRenewWatcher";
 const { ipcRenderer } = require("electron");
 
 export const electronEvents = {
@@ -55,11 +56,23 @@ export const electronEvents = {
   },
 
   // Tor Events
-  onPayCircuit: (callback: (event: any, circuits: Array<Circuit>) => void) =>
-    ipcRenderer.on(ElectronEventsType.onPayCircuit, callback),
+  onPayCircuit: (
+    callback: (
+      event: any,
+      {
+        circuits,
+        circuitInUse,
+      }: { circuits: Array<Circuit>; circuitInUse: Circuit }
+    ) => void
+  ) => ipcRenderer.on(ElectronEventsType.onPayCircuit, callback),
+
+  onCircuitRenew: (
+    callback: (event: any, { circuit }: { circuit: CircuitRenew }) => void
+  ) => ipcRenderer.on(ElectronEventsType.onCircuitRenew, callback),
 } as const;
 
 export enum ElectronEventsType {
   onPayCircuit = "onPayCircuit",
+  onCircuitRenew = "onCircuitRenew",
   onTorStdout = "onTorStdout",
 }
