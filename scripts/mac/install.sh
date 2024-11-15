@@ -42,12 +42,23 @@ chmod +x ~/eltor/chutney/tor-proxy/tor/tor
 brew install haproxy
 curl -L -o ~/eltor/chutney/tor-proxy/tor/haproxy.cfg https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/haproxy.cfg
 
+
 # 6. Start the proxy services
+# Function to kill background processes
+cleanup() {
+  echo "Cleaning up..."
+  kill $TOR1_PID $TOR2_PID $HAPROXY_PID
+}
+# Trap signals and call cleanup
+trap cleanup SIGINT SIGTERM
 cd ~/eltor/chutney/tor-proxy/eltor
 ./tor -f torrc &
+TOR1_PID=$!
 cd ~/eltor/chutney/tor-proxy/tor
 ./tor -f torrc &
+TOR2_PID=$!
 haproxy -f haproxy.cfg &
+HAPROXY_PID=$!
 
 # 7. Open the browser with the tor socks proxy
 # TODO let user choose the browser to proxy tor thru
@@ -85,3 +96,5 @@ echo "You can now open the Tor Browser and check you are connected by viewing th
 echo ""
 
 
+# Wait for background processes to finish
+wait $TOR1_PID $TOR2_PID $HAPROXY_PID
