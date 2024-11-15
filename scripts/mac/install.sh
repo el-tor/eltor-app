@@ -45,26 +45,26 @@ curl -L -o ~/eltor/chutney/tor-proxy/tor/haproxy.cfg https://bitbucket.org/eltor
 
 # 6. Start the proxy services
 # Function to kill background processes
-cleanup() {
-  echo "Cleaning up..."
-  kill $TOR1_PID $TOR2_PID $HAPROXY_PID
-}
-# Trap signals and call cleanup
-trap cleanup SIGINT SIGTERM
-cd ~/eltor/chutney/tor-proxy/eltor
-./tor -f torrc &
-TOR1_PID=$!
-cd ~/eltor/chutney/tor-proxy/tor
-./tor -f torrc &
-TOR2_PID=$!
-haproxy -f haproxy.cfg &
-HAPROXY_PID=$!
+# cleanup() {
+#   echo "Cleaning up..."
+#   kill $TOR1_PID $TOR2_PID $HAPROXY_PID
+# }
+# # Trap signals and call cleanup
+# trap cleanup SIGINT SIGTERM
+# cd ~/eltor/chutney/tor-proxy/eltor
+# ./tor -f torrc &
+# TOR1_PID=$!
+# cd ~/eltor/chutney/tor-proxy/tor
+# ./tor -f torrc &
+# TOR2_PID=$!
+# haproxy -f haproxy.cfg &
+# HAPROXY_PID=$!
 
 # 7. Open the browser with the tor socks proxy
 # TODO let user choose the browser to proxy tor thru
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --proxy-server="socks5://127.0.0.1:1080"
-CHROME_PID=$!
-echo "Started Chrome with PID $CHROME_PID"
+# "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --proxy-server="socks5://127.0.0.1:1080"
+# CHROME_PID=$!
+# echo "Started Chrome with PID $CHROME_PID"
 
 echo ""
 echo ""
@@ -98,10 +98,10 @@ echo "You can now open the Tor Browser and check you are connected by viewing th
 echo ""
 
 
-# Monitor Chrome process
-while kill -0 $CHROME_PID 2> /dev/null; do
-  sleep 1
-done
+# # Monitor Chrome process
+# while kill -0 $CHROME_PID 2> /dev/null; do
+#   sleep 1
+# done
 
-# If Chrome process ends, clean up
-cleanup
+# # If Chrome process ends, clean up
+# cleanup

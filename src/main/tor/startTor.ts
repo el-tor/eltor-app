@@ -49,6 +49,39 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
       // torBrowserProcess.on("close", (code) => {
       //   console.log(`Tor Browser opened with code ${code}`);
       // });
+
+      // 1. start el tor proxy 127.0.0.1:9099
+      spawn(
+        "bash",
+        [
+          "cd ~/eltor/chutney/tor-proxy/eltor && ./tor -f torrc",
+        ],
+        {
+          stdio: "pipe",
+        }
+      );
+
+      // 2. start tor proxy 127.0.0.1:9098
+      spawn(
+        "bash",
+        [
+          "cd ~/eltor/chutney/tor-proxy/tor && ./tor -f torrc",
+        ],
+        {
+          stdio: "pipe",
+        }
+      );
+
+      // 3. start haproxy on port 127.0.0.1:1080
+      spawn(
+        "bash",
+        [
+          "cd ~/eltor/chutney/tor-proxy/tor && haproxy -f haproxy.cfg",
+        ],
+        {
+          stdio: "pipe",
+        }
+      );
     });
   } else if (type === "relay") {
     openTerminalWithCommand("");
