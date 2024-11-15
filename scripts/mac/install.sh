@@ -6,6 +6,7 @@ mv ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc ~/Library/Applicatio
 
 
 # 1. eltor directory
+mkdir ~/eltor
 mkdir ~/eltor/chutney
 mkdir ~/eltor/chutney/tor-proxy
 mkdir ~/eltor/chutney/tor-proxy/tor
