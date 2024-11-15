@@ -63,6 +63,8 @@ HAPROXY_PID=$!
 # 7. Open the browser with the tor socks proxy
 # TODO let user choose the browser to proxy tor thru
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --proxy-server="socks5://127.0.0.1:1080"
+CHROME_PID=$!
+echo "Started Chrome with PID $CHROME_PID"
 
 echo ""
 echo ""
@@ -96,5 +98,10 @@ echo "You can now open the Tor Browser and check you are connected by viewing th
 echo ""
 
 
-# Wait for background processes to finish
-wait $TOR1_PID $TOR2_PID $HAPROXY_PID
+# Monitor Chrome process
+while kill -0 $CHROME_PID 2> /dev/null; do
+  sleep 1
+done
+
+# If Chrome process ends, clean up
+cleanup

@@ -42,13 +42,13 @@ export function startTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
       console.log(`Eltor install script finished with code ${code}`);
 
       // After download, open Tor Browser
-      const torBrowserProcess = spawn("open", [
-        "/Applications/Tor Browser.app",
-      ]);
+      // const torBrowserProcess = spawn("open", [
+      //   "/Applications/Tor Browser.app",
+      // ]);
       startCircuitBuildWatcher(mainWindow);
-      torBrowserProcess.on("close", (code) => {
-        console.log(`Tor Browser opened with code ${code}`);
-      });
+      // torBrowserProcess.on("close", (code) => {
+      //   console.log(`Tor Browser opened with code ${code}`);
+      // });
     });
   } else if (type === "relay") {
     openTerminalWithCommand("");
