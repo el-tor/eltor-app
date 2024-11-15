@@ -3,7 +3,7 @@
 # 1. Download the tor binary and place it in the Tor Browser directory
 echo "Downloading tor binary..."
 mkdir ~/.eltor
-curl -L -o ~/.eltor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/tor
+curl -L -o ~/.eltor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/eltor
 if [ $? -ne 0 ]; then
   echo "Failed to download the tor binary."
   exit 1

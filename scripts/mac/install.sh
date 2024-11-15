@@ -4,22 +4,53 @@
 mv /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor_orig
 mv ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc_orig
 
-# 1. Download the tor binary and place it in the Tor Browser directory
+
+# 1. eltor directory
+mkdir ~/eltor/chutney
+mkdir ~/eltor/chutney/tor-proxy
+mkdir ~/eltor/chutney/tor-proxy/tor
+mkdir ~/eltor/chutney/tor-proxy/eltor
+
+
+# 2. Download the tor binary and place it in the Tor Browser directory
 echo "Downloading tor binary..."
-curl -L -o /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/tor
+curl -L -o /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/eltor
 if [ $? -ne 0 ]; then
   echo "Failed to download the tor binary."
   exit 1
 fi
 chmod +x /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor
+cp /Applications/Tor\ Browser.app/Contents/MacOS/Tor/tor ~/eltor/chutney/tor-proxy/eltor/tor
 
-# 2. Download the torrc file, rename it, and place it in the appropriate directory
+# 3. Download the torrc file, rename it, and place it in the appropriate directory
 echo "Downloading tor-browser-sample-torrc..."
-curl -L -o ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/torrc
+curl -L -o ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/torrc-eltor-proxy
 if [ $? -ne 0 ]; then
   echo "Failed to download the torrc file."
   exit 1
 fi
+cp ~/Library/Application\ Support/TorBrowser-Data/Tor/torrc ~/eltor/chutney/tor-proxy/eltor/torrc
+
+# 4 Download regular tor proxy
+curl -L -o ~/eltor/chutney/tor-proxy/tor/tor https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/tor
+curl -L -o ~/eltor/chutney/tor-proxy/tor/torrc https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/torrc-tor-proxy
+chmod +x ~/eltor/chutney/tor-proxy/tor/tor
+
+# 5. Install haproxy
+# TODO prereq us homebrew
+brew install haproxy
+curl -L -o ~/eltor/chutney/tor-proxy/tor/haproxy.cfg https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/haproxy.cfg
+
+# 6. Start the proxy services
+cd ~/eltor/chutney/tor-proxy/eltor
+./tor -f torrc &
+cd ~/eltor/chutney/tor-proxy/tor
+./tor -f torrc &
+haproxy -f haproxy.cfg &
+
+# 7. Open the browser with the tor socks proxy
+# TODO let user choose the browser to proxy tor thru
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --proxy-server="socks5://127.0.0.1:1080"
 
 echo ""
 echo ""
