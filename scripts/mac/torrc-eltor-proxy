@@ -1,5 +1,5 @@
 AllowNonRFC953Hostnames 1
-ClientOnionAuthDir ~/Library/Application Support/TorBrowser-Data/Tor/onion-auth
+# ClientOnionAuthDir ~/Library/Application Support/TorBrowser-Data/Tor/onion-auth
 ControlPort 9051
 DirAuthority test000a orport=5055 no-v2 v3ident=08E3B412A2F9B7BE30CAC56285EB0A31AD23FD86 93.127.216.111:7055 F9EEDC6ECCC301A1B59122651658AD2476ED3CA1
 DirAuthority test001a orport=5056 no-v2 v3ident=9BECD814BFB4F078FBBEB56D5E51F34A0D364B3A 93.127.216.111:7056 66B7E5A12A585D41256F866B5CC97ACE15CA7AC2
