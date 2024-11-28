@@ -14,6 +14,8 @@ import { ChannelBalanceLine } from "renderer/components/ChannelBalanceLine";
 import phoenixDLogo from "renderer/features/wallet/phoenixDLogo.svg";
 import lndLogo from "renderer/features/wallet/lndLogo.svg";
 import clnLogo from "renderer/features/wallet/clnLogo.svg";
+import strikeLogo from "renderer/features/wallet/strikeLogo.svg";
+
 
 import { WalletBox } from "./WalletBox";
 
@@ -35,6 +37,12 @@ export const WalletPlugins = ({ setShowWallet, showWallet }) => {
       />
       <WalletBox
         logo={clnLogo}
+        onClick={() => {
+          alert("todo implement");
+        }}
+      />
+       <WalletBox
+        logo={strikeLogo}
         onClick={() => {
           alert("todo implement");
         }}
