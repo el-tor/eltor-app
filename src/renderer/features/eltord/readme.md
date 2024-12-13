@@ -7,7 +7,7 @@ Client Flow
 ------------
 A user wants to build a paid circuit:
 
-1. lookup 3 relays and get the bolt12 offers to pay
+1. lookup 3 relays and get the bolt12 offers to pay from the `cached-microdesc-consensus` file
 2. create a payment id hash for each relay and include it in the message of the bolt12 payment.
 3. Call RPC 
 ```
@@ -29,6 +29,12 @@ fingerprint paymentidhash
 
 Relay Flow
 ------------
+A relay submits his bolt12 offer and rate (millisats per minute)
+```
+SETCONF PaymentInvoice="lno***" // bolt12 offer
+SETCONF PaymentRate="1000" // in millisats per minute
+```
+
 A relay receives a cell to extend/create a circuit.
 
 1. Create a ledger to track payments like this:
