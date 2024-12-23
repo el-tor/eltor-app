@@ -16,12 +16,11 @@ import lndLogo from "renderer/features/wallet/lndLogo.svg";
 import clnLogo from "renderer/features/wallet/clnLogo.svg";
 import strikeLogo from "renderer/features/wallet/strikeLogo.svg";
 
-
 import { WalletBox } from "./WalletBox";
 
 export const WalletPlugins = ({ setShowWallet, showWallet }) => {
   return (
-    <Group>
+    <Group gap="0">
       <WalletBox
         logo={phoenixDLogo}
         onClick={() => {
@@ -30,18 +29,18 @@ export const WalletPlugins = ({ setShowWallet, showWallet }) => {
         isDefault={true}
       />
       <WalletBox
+        logo={clnLogo}
+        onClick={() => {
+          alert("todo implement");
+        }}
+      />
+      <WalletBox
         logo={lndLogo}
         onClick={() => {
           alert("todo implement");
         }}
       />
       <WalletBox
-        logo={clnLogo}
-        onClick={() => {
-          alert("todo implement");
-        }}
-      />
-       <WalletBox
         logo={strikeLogo}
         onClick={() => {
           alert("todo implement");

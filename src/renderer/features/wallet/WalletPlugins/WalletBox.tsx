@@ -26,8 +26,8 @@ export const WalletBox = ({
 }) => {
   return (
     <Box
-      w={170}
-      h={100}
+      w={160}
+      h={44}
       m="xs"
       p="sm"
       className={styles.box}
@@ -54,15 +54,15 @@ export const WalletBox = ({
           <Badge
             color="green"
             variant="filled"
-            size="xs"
-            style={{ position: "absolute", top: 6, left: 6 }}
+            size="8"
+            style={{ position: "absolute", bottom: 2, center: 0 }}
           >
             Default
           </Badge>
         </>
       )}
 
-      <Center style={{ width: "100%", height: "100%" }}>
+      <Center style={{ width: "70%", height: "70%" }}>
         <Image bg="white" src={logo} />
       </Center>
     </Box>

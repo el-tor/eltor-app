@@ -11,13 +11,14 @@
       "~/*": [
         "./*"
       ]
-    }
+    },
   },
   "include": [
     "src",
     "electron.vite.config.*",
     "index.d.ts",
     "postcss.config.mjs",
+    "src/types/**/*.d.ts",
   ],
   "exclude": [
     "node_modules"

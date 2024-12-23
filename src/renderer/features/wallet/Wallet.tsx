@@ -51,8 +51,12 @@ export const Wallet = () => {
       {showWallet && (
         <Box w="100%">
           <Group>
-            <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
-            <Title order={2}>{defaultWallet}</Title>
+            <Center>
+              <WalletPlugins
+                setShowWallet={setShowWallet}
+                showWallet={showWallet}
+              />
+            </Center>
             <Group ml="auto">
               <Center>
                 {" "}
@@ -66,9 +70,11 @@ export const Wallet = () => {
                 )}
               </Center>
             </Group>
+            <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
+            {/* <Title order={2}>{defaultWallet}</Title> */}
           </Group>
 
-          <Group mt="md">
+          <Group mt="xl">
             <Title order={4}>
               Balance:{" "}
               <span style={{ fontFamily: "monospace" }}>{balance}</span>
@@ -118,13 +124,6 @@ export const Wallet = () => {
               <Transactions h="450px" />
             </Box>
           </SimpleGrid>
-
-          <Center mt="lg">
-            <WalletPlugins
-              setShowWallet={setShowWallet}
-              showWallet={showWallet}
-            />
-          </Center>
 
           {/* <Button
             w="100%"
