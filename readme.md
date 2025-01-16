@@ -3,7 +3,6 @@
 This is the El Tor App that allows a user to connect to the El Tor network. It configures the Tor Browser automatically to point to the network fork by configuring the torrc file with extra BOLT 12 settings and Directory Relays. It also controls the payments like a wallet. This app can be used by a user wanting to get paid for sharing his bandwidth as a Relay. It can also be used as a user wanting to consume bandwidth from the El Tor network.  This code will be ported over to a native "tray app" similar to Wireguard or Orbot and appear in the tray of the operating system. 
 
 <div style="max-width: 480px; height: auto;">
-    <img src="./src/renderer/assets/eltor-user.png" alt="Dash" width="480px"/>
     <img src="./src/renderer/assets/eltor-pay-relays.png" alt="Dash" width="480px"/>
     <img src="./src/renderer/assets/eltor-flow.png" alt="Dash" width="480px"/>
 </div>
@@ -60,6 +59,10 @@ After the script is ran you can start your el tor relay with this command:
 ./tor -f torrc
 ```
 
+VPN like client
+
+<img src="./src/renderer/assets/eltor-home.png" alt="Dash" width="480px"/>
+
 **Run as Daemon**
 To run as a daemon
 `sudo nano /etc/systemd/system/tor.service`
@@ -98,3 +101,5 @@ pnpm run dev
 ```
 pnpm run build:mac
 ```
+
+<img src="./src/renderer/assets/eltor-user.png" alt="Dash" width="480px"/>
