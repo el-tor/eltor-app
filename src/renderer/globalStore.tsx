@@ -1,6 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
 import type { PayloadAction } from "@reduxjs/toolkit";
-import { CircuitRenew } from "main/tor/circuitRenewWatcher";
 
 export {
   type GlobalState,
@@ -14,6 +13,7 @@ export {
   setCircuits,
   setRelays,
   setCircuitInUse,
+  setMyIp,
 };
 
 // 1. State
@@ -22,8 +22,9 @@ interface GlobalState {
   torActive: boolean;
   relayActive: boolean;
   circuits: Array<Circuit> | null;
-  circuitInUse: CircuitRenew;
+  circuitInUse: Circuit;
   relays: Array<Relay>;
+  myIp: string;
 }
 
 const initialState: GlobalState = {
@@ -54,8 +55,9 @@ Waiting to connect...
   torActive: false,
   relayActive: false,
   circuits: [],
-  circuitInUse: {} as CircuitRenew,
+  circuitInUse: {} as Circuit,
   relays: [],
+  myIp: "166.205.90.66",
 };
 
 // 2. Slice and Reducers
@@ -75,12 +77,15 @@ const globalStore = createSlice({
     setCircuits: (state, action: PayloadAction<Array<Circuit> | null>) => {
       state.circuits = action.payload;
     },
-    setCircuitInUse: (state, action: PayloadAction<CircuitRenew>) => {
+    setCircuitInUse: (state, action: PayloadAction<Circuit>) => {
       state.circuitInUse = action.payload;
     },
     setRelays: (state, action: PayloadAction<Array<Relay>>) => {
       state.relays = action.payload;
     },
+    setMyIp: (state, action: PayloadAction<string>) => {
+      state.myIp = action.payload;
+    }
   },
   extraReducers: (builder) => {},
 });
@@ -94,27 +99,32 @@ const {
   setCircuits,
   setRelays,
   setCircuitInUse,
+  setMyIp,
 } = globalStore.actions;
 
 type Circuit = {
-  id?: string | null;
-  fingerprint?: string;
-  relayFingerprints?: string[];
-  relayIps?: string[];
-  status?: string; // "unknown" | ??
-  idleTimeout?: number | null | string;
-  predictiveBuildTime?: number | null | string;
-  createdAt?: string | null;
-  expiresAt?: string | null;
-  isExpired?: boolean;
-  circuitFingerprint?: string | null;
-  lastUsed?: string | null;
+  id: number;
+  relays: Relay[]; // usually 3 Guard, Middle, Exit
 };
 
 type Relay = {
-  fingerprint?: string;
-  preimage?: string;
-  payhash?: string;
-  lastPaymentStatus?: string; // "accepted" | "denied"
-  expiresAt?: string;
+  bandwidth: number;
+  contact: string | null;
+  fingerprint: string;
+  hop: number;
+  ip: string;
+  nickname: string;
+  payment_bip353: string | null;
+  payment_bolt11_lightning_address: string | null;
+  payment_bolt11_lnurl: string | null;
+  payment_bolt12_offer: string | null;
+  payment_handshake_fee: number | null;
+  payment_handshake_fee_payhash: string;
+  payment_handshake_fee_preimage: string;
+  payment_id_hashes_10: string[];
+  payment_interval_rounds: number;
+  payment_interval_seconds: number;
+  payment_rate_msats: number;
+  port: number;
+  relay_tag: string;
 };

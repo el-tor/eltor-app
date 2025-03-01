@@ -17,8 +17,10 @@ import installExtension, {
   REDUX_DEVTOOLS,
   REACT_DEVELOPER_TOOLS,
 } from "electron-devtools-installer";
-import { startTor } from "./tor/startTor";
-import { stopTor } from "./tor/stopTor";
+import { startTorCargo } from "./tor/startTor";
+import { stopTorCargo } from "./tor/stopTor";
+import  geoip from "geoip-lite";
+
 
 let tray: Tray;
 let mainWindow: BrowserWindow;
@@ -49,7 +51,7 @@ async function createMainWindow() {
   });
 
   mainWindow.on("ready-to-show", mainWindow.show);
-  // mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools();
 }
 
 app.whenReady().then(() => {
@@ -98,7 +100,7 @@ function createTrayMenu() {
       enabled: true,
       id: "menu-activate-connect",
       click: () => {
-        startTor("browser", mainWindow);
+        startTorCargo("browser", mainWindow);
         trayNavigate("connect");
       },
     },
@@ -107,7 +109,7 @@ function createTrayMenu() {
       enabled: false,
       id: "menu-deactivate-connect",
       click: () => {
-        stopTor("browser", mainWindow);
+        stopTorCargo("browser", mainWindow);
         trayNavigate("deactivate-connect");
       },
     },
@@ -117,7 +119,7 @@ function createTrayMenu() {
       enabled: true,
       id: "menu-activate-relay",
       click: () => {
-        startTor("relay", mainWindow);
+        startTorCargo("relay", mainWindow);
         trayNavigate("relay");
       },
     },
@@ -172,6 +174,18 @@ function createTrayMenu() {
       console.error(`Menu item with id ${itemId} not found`);
     }
   });
+
+  // IPC handler to lookup IP
+  ipcMain.handle('lookup-ip', (event, ip) => {
+    try {
+      const result = geoip.lookup(ip);
+      return result;
+    } catch (e) {
+      return null;
+    }
+  });
+
+
 }
 
 // In this file you can include the rest of your app's specific main process
@@ -188,7 +202,7 @@ function startWallet() {
       // console.error("Error reading conf file:", err);
       return;
     }
-    // console.log("Config file contents:", data);
+    console.log("Config file contents:", data);
   });
 }
 

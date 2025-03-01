@@ -52,10 +52,11 @@ export const Wallet = () => {
         <Box w="100%">
           <Group>
             <Center>
-              <WalletPlugins
+              {/* <WalletPlugins
                 setShowWallet={setShowWallet}
                 showWallet={showWallet}
-              />
+              /> */}
+              <WalletPlugins />
             </Center>
             <Group ml="auto">
               <Center>

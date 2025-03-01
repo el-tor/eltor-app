@@ -1,6 +1,9 @@
 import { createTheme, MantineProvider, rem } from "@mantine/core";
 
-export const theme = createTheme({
+
+import { MantineThemeOverride } from "@mantine/core";
+
+export const theme: MantineThemeOverride = createTheme({
   colors: {
     // Add your color
     purple: [

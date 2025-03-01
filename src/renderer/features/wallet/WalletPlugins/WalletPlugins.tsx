@@ -18,7 +18,8 @@ import strikeLogo from "renderer/features/wallet/strikeLogo.svg";
 
 import { WalletBox } from "./WalletBox";
 
-export const WalletPlugins = ({ setShowWallet, showWallet }) => {
+// export const WalletPlugins = ({ setShowWallet, showWallet }) => {
+export const WalletPlugins = ({ }) => {
   return (
     <Group gap="0">
       <WalletBox

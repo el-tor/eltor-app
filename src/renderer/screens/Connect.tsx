@@ -22,7 +22,6 @@ import { useDispatch, useSelector } from "renderer/hooks";
 import styles from "./../globals.module.css";
 import MapComponent from "renderer/components/Map/MapComponent";
 import "./Connect.css";
-import { type CircuitRenew } from "main/tor/circuitRenewWatcher";
 
 const { electronEvents } = window;
 
@@ -50,33 +49,36 @@ export const Connect = () => {
         )
       );
       dispatch(setCircuits(circuitResp.circuits));
-    });
-    electronEvents.onCircuitRenew((event, circuitRenew) => {
-      if (circuitRenew.circuit.relays.length >= 3) {
-        dispatch(
-          setCommandOutput(
-            commandOutput +
-              `
-            \n\nRenewed Circuits:  ${JSON.stringify(circuitRenew.circuit)}
-            \nHop 1: ${circuitRenew.circuit.relays[0]?.nickname} - ${
-                circuitRenew.circuit.relays[0]?.ip
-              },
-            \nHop 2: ${circuitRenew.circuit.relays[1]?.nickname} - ${
-                circuitRenew.circuit.relays[1]?.ip
-              },
-            \nHop 3: ${circuitRenew.circuit.relays[2]?.nickname} - ${
-                circuitRenew.circuit.relays[2]?.ip
-              },
-          `
-          )
-        );
-        dispatch(setCircuitInUse(circuitRenew.circuit));
+      if (circuitInUse.id !== circuitResp.circuitInUse.id) {
+        dispatch(setCircuitInUse(circuitResp.circuitInUse));
       }
     });
+    // electronEvents.onCircuitRenew((event, circuitRenew) => {
+    //   if (circuitRenew.circuit.relays.length >= 3) {
+    //     dispatch(
+    //       setCommandOutput(
+    //         commandOutput +
+    //           `
+    //         \n\nRenewed Circuits:  ${JSON.stringify(circuitRenew.circuit)}
+    //         \nHop 1: ${circuitRenew.circuit.relays[0]?.nickname} - ${
+    //             circuitRenew.circuit.relays[0]?.ip
+    //           },
+    //         \nHop 2: ${circuitRenew.circuit.relays[1]?.nickname} - ${
+    //             circuitRenew.circuit.relays[1]?.ip
+    //           },
+    //         \nHop 3: ${circuitRenew.circuit.relays[2]?.nickname} - ${
+    //             circuitRenew.circuit.relays[2]?.ip
+    //           },
+    //       `
+    //       )
+    //     );
+    //     dispatch(setCircuitInUse(circuitRenew.circuit));
+    //   }
+    // });
     electronEvents.onNavigateToDeactivateConnect(() => {
       dispatch(setCommandOutput("Deactivated"));
       dispatch(setCircuits([]));
-      dispatch(setCircuitInUse({} as CircuitRenew));
+      dispatch(setCircuitInUse({} as Circuit));
     });
   }, []);
 
@@ -114,7 +116,7 @@ export const Connect = () => {
           <Circle color={torActive ? "lightgreen" : "#FF6347"} />
         </Group>
       </Group>
-      <MapComponent circuit={circuitInUse} h={500} />
+      <MapComponent h={500} />
       <Box
         style={{
           maxWidth: styles.maxWidth,

@@ -9,6 +9,7 @@
   }
 }
 
+/* 
 @keyframes lineDraw {
   from {
     stroke-dasharray: 0, 100;
@@ -16,12 +17,12 @@
   to {
     stroke-dasharray: 100, 0;
   }
-}
+} */
 
-.marker-animation {
+/* .marker-animation {
   animation: markerFadeIn 0.5s ease-in-out;
 }
 
 .line-animation {
   animation: lineDraw 1s ease-in-out;
-}
+} */

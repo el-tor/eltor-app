@@ -42,21 +42,55 @@ export function stopTor(type: "browser" | "relay", mainWindow: BrowserWindow) {
       let stopCommand: string;
       let stopArgs: string[];
 
+      // TODO fix when cargo is not being used and the eltord daemon is used
       if (process.platform === "win32") {
         stopCommand = "taskkill";
-        stopArgs = ["/F", "/IM", "tor.exe"];
+        stopArgs = ["/F", "/IM", "cargo.exe"];
       } else if (process.platform === "darwin") {
         stopCommand = "pkill";
-        stopArgs = ["-f", "Tor Browser"];
+        stopArgs = ["cargo"];
       } else {
         stopCommand = "pkill";
-        stopArgs = ["-f", "tor"];
+        stopArgs = ["cargo"];
       }
 
       const stopTorBrowserProcess = spawn(stopCommand, stopArgs);
       stopTorBrowserProcess.on("close", (code) => {
         console.log(`Tor Browser stopped with code ${code}`);
       });
+    });
+  } else if (type === "relay") {
+    openTerminalWithCommand("");
+  }
+}
+
+export function stopTorCargo(
+  type: "browser" | "relay",
+  mainWindow: BrowserWindow
+) {
+  // TODO OS specific commands
+
+  if (type === "browser") {
+    let stopCommand: string;
+    let stopArgs: string[];
+
+    if (process.platform === "win32") {
+      stopCommand = "taskkill";
+      stopArgs = ["/F", "/IM", "eltor.exe"];
+    } else if (process.platform === "darwin") {
+      stopCommand = "pkill";
+      stopArgs = ["eltor"];
+    } else {
+      stopCommand = "pkill";
+      stopArgs = ["eltor"];
+    }
+
+    const stopTorBrowserProcess = spawn(stopCommand, stopArgs, {
+      stdio: "pipe",
+    });
+
+    stopTorBrowserProcess.on("close", (code) => {
+      console.log(`Tor Browser stopped with code ${code}`);
     });
   } else if (type === "relay") {
     openTerminalWithCommand("");

@@ -1,5 +1,4 @@
 import { type Circuit } from "renderer/globalStore";
-import { CircuitRenew } from "./tor/circuitRenewWatcher";
 const { ipcRenderer } = require("electron");
 
 export const electronEvents = {
@@ -67,8 +66,12 @@ export const electronEvents = {
   ) => ipcRenderer.on(ElectronEventsType.onPayCircuit, callback),
 
   onCircuitRenew: (
-    callback: (event: any, { circuit }: { circuit: CircuitRenew }) => void
+    callback: (event: any, { circuit }: { circuit: Circuit }) => void
   ) => ipcRenderer.on(ElectronEventsType.onCircuitRenew, callback),
+
+
+  lookupIP: (ip: string) => ipcRenderer.invoke('lookup-ip', ip)
+
 } as const;
 
 export enum ElectronEventsType {
