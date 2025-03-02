@@ -7,6 +7,8 @@ import {
 } from "renderer/drivers/IWallet";
 import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
 import { dynamicWalletImport } from "renderer/utils";
+import { Transaction } from "main/wallets";
+const { electronEvents } = window;
 
 const defaultWallet = "Phoenixd";
 const walletApi = dynamicWalletImport<IWallet>(defaultWallet);
@@ -19,6 +21,7 @@ export {
   fetchWalletBalance,
   fetchChannelInfo,
   getBolt12Offer,
+  fetchTransactions,
 };
 
 // 1. State
@@ -30,6 +33,7 @@ interface WalletState {
   error: SerializedError | null;
   channelInfo: FetchChannelInfoResponseType;
   bolt12Offer: string;
+  transactions: Array<Transaction>;
 }
 
 type RequestState = "idle" | "pending" | "fulfilled" | "rejected";
@@ -45,6 +49,7 @@ const initialState: WalletState = {
     receive: 0,
   },
   bolt12Offer: "",
+  transactions: [],
 }; // satisfies WalletState as WalletState
 
 // 2. Slice and Reducers
@@ -108,6 +113,23 @@ const walletStore = createSlice({
         state.requestState = "rejected";
         state.loading = false;
         state.error = action.error;
+      })
+
+      .addCase(fetchTransactions.pending, (state) => {
+        state.requestState = "pending";
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchTransactions.fulfilled, (state, action) => {
+        state.transactions = action.payload;
+        state.requestState = "fulfilled";
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(fetchTransactions.rejected, (state, action) => {
+        state.requestState = "rejected";
+        state.loading = false;
+        state.error = action.error;
       });
   },
 });
@@ -135,6 +157,18 @@ const fetchChannelInfo = createAsyncThunk<FetchChannelInfoResponseType, string>(
     try {
       const data = await walletApi.fetchChannelInfo("");
       return data;
+    } catch (error) {
+      return rejectWithValue(error);
+    }
+  }
+);
+
+const fetchTransactions = createAsyncThunk<Array<Transaction>, string>(
+  "wallet/fetchTransactions",
+  async (name, { rejectWithValue }) => {
+    try {
+      const txns = await electronEvents.lni.listTransactions();
+      return txns;
     } catch (error) {
       return rejectWithValue(error);
     }

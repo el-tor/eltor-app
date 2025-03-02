@@ -1,5 +1,6 @@
 import { type Circuit } from "renderer/globalStore";
 const { ipcRenderer } = require("electron");
+import { type Transaction } from "./wallets";
 
 export const electronEvents = {
   env: process.env, // TODO: only expose env vars from .env file
@@ -69,13 +70,23 @@ export const electronEvents = {
     callback: (event: any, { circuit }: { circuit: Circuit }) => void
   ) => ipcRenderer.on(ElectronEventsType.onCircuitRenew, callback),
 
+  lookupIP: (ip: string) => ipcRenderer.invoke(ElectronEventsType.lookupIP, ip),
 
-  lookupIP: (ip: string) => ipcRenderer.invoke('lookup-ip', ip)
+  lni: {
+    listTransactions: () =>
+      ipcRenderer.invoke(ElectronEventsType.listTransactions) as Promise<Array<Transaction>>,
+    getInfo: () =>
+      ipcRenderer.invoke(ElectronEventsType.getInfo) as Promise<any>,
+  },
 
+  
 } as const;
 
 export enum ElectronEventsType {
   onPayCircuit = "onPayCircuit",
   onCircuitRenew = "onCircuitRenew",
   onTorStdout = "onTorStdout",
+  lookupIP = "lookupIP",
+  listTransactions = "lni.listTransactions",
+  getInfo = "lni.getInfo",
 }

@@ -1,4 +1,3 @@
-import { useTimeout } from "usehooks-ts";
 import { type FetchWalletBalanceResponseType, IWallet } from "../../IWallet";
 
 export { walletApi };
@@ -63,7 +62,7 @@ const walletApi: IWallet = {
       },
     });
     const offer = await res.text();
-    return offer
+    return offer;
   },
   fetchWalletBalance: async (): Promise<FetchWalletBalanceResponseType> => {
     const res = await fetch(`${receiverUrl}/getbalance`, {

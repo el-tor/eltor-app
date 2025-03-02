@@ -20,6 +20,8 @@ import installExtension, {
 import { startTorCargo } from "./tor/startTor";
 import { stopTorCargo } from "./tor/stopTor";
 import  geoip from "geoip-lite";
+import { lni } from "./wallets"
+import { ElectronEventsType } from "./eventEmitter";
 
 
 let tray: Tray;
@@ -56,10 +58,10 @@ async function createMainWindow() {
 
 app.whenReady().then(() => {
   createMainWindow();
-
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
+  loadNativeModules();
 });
 
 app.on("window-all-closed", () => {
@@ -176,7 +178,7 @@ function createTrayMenu() {
   });
 
   // IPC handler to lookup IP
-  ipcMain.handle('lookup-ip', (event, ip) => {
+  ipcMain.handle(ElectronEventsType.lookupIP, (event, ip) => {
     try {
       const result = geoip.lookup(ip);
       return result;
@@ -247,3 +249,12 @@ function getSrcBasePath() {
   }
   return basePath;
 }
+
+function loadNativeModules() {
+  ipcMain.handle(ElectronEventsType.listTransactions, async () => {
+    return lni().listTransactions()
+  });
+  ipcMain.handle(ElectronEventsType.getInfo, async () => {
+    return lni().getInfo()
+  });
+};

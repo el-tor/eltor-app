@@ -98,33 +98,33 @@ export const Wallet = () => {
             cols={{ base: 1, sm: 2 }} // Stack vertically on small screens, two columns on larger screens
             spacing={{ base: "md", sm: "lg" }} // Adjust spacing based on screen size
             verticalSpacing={{ base: "md", sm: "lg" }} // Adjust vertical spacing based on screen size
-          >
-            <Box bg="white" p="sm" style={{ borderRadius: "6px" }} w="100%">
-              <Center>
-                <Stack>
-                  <Center>
-                    <Title order={5} mb="xs" style={{ color: "black" }}>
-                      BOLT 12 Offer
-                    </Title>
-                  </Center>
-                  <QRCode
-                    value={bolt12Offer}
-                    size={280}
-                    style={{ border: 2, borderColor: "whitesmoke" }}
-                  />
-                  <CopyableTextBox
-                    text={bolt12Offer}
-                    limitChars={22}
-                    bg="white"
-                  />
-                </Stack>
-              </Center>
-            </Box>
+          ></SimpleGrid>
 
-            <Box w="100%" mt={{ base: "lg", sm: 0 }}>
-              <Transactions h="450px" />
-            </Box>
-          </SimpleGrid>
+          <Box w="100%">
+            <Center>
+              <Stack bg="white" p="md" style={{ borderRadius: "6px" }}>
+                <Center>
+                  <Title order={5} mb="xs" style={{ color: "black" }}>
+                    BOLT 12 Offer
+                  </Title>
+                </Center>
+                <QRCode
+                  value={bolt12Offer}
+                  size={280}
+                  style={{ border: 2, borderColor: "whitesmoke" }}
+                />
+                <CopyableTextBox
+                  text={bolt12Offer}
+                  limitChars={22}
+                  bg="white"
+                />
+              </Stack>
+            </Center>
+          </Box>
+
+          <Box w="100%" mt="lg">
+            <Transactions h="450px" />
+          </Box>
 
           {/* <Button
             w="100%"
