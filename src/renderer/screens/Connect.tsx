@@ -92,7 +92,7 @@ export const Connect = () => {
     <Stack>
       <Group w="100%">
         {torActive ? (
-          <Text>Click "Deactivate" in the menu to disconnect</Text>
+          <Text>Click "Deactivate" in the menu to disconnect. <br/>To Connect to El Tor open a browser and configure it use a socks5 proxy 127.0.0.1:18058</Text>
         ) : (
           <Text>Click "Activate" in the OS tray menu to connect</Text>
         )}
