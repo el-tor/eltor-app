@@ -110,8 +110,8 @@ function createTrayMenu() {
       label: "Deactivate",
       enabled: false,
       id: "menu-deactivate-connect",
-      click: () => {
-        stopTorCargo("browser", mainWindow);
+      click: async () => {
+        await stopTorCargo("browser", mainWindow);
         trayNavigate("deactivate-connect");
       },
     },

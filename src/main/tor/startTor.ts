@@ -83,7 +83,7 @@ export function startTorCargo(
   if (type === "browser") {
     const cargoProcess = spawn(
       "bash",
-      ["-c", 'cd ~/code/eltord && ARGS="eltord client -f torrc.client.dev -pw password1234_" cargo run'],
+      ["-c", 'cd ~/code/eltord && ARGS="eltord client -f torrc.client.prod -pw password1234_" cargo run'],
       {
         stdio: "pipe",
       }
