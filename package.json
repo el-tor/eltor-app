@@ -1,78 +1,23 @@
 {
-  "name": "eltor",
-  "productName": "El Tor App",
-  "description": "El Tor App",
-  "version": "0.0.1",
+  "name": "eltor-app-monorepo",
+  "version": "1.0.0",
   "private": true,
-  "main": "./out/main/index.js",
-  "homepage": "https://eltor.dev",
-  "license": "MIT",
-  "author": {
-    "name": "eltordev",
-    "email": "eltordev@proton.me"
-  },
+  "description": "Monorepo for eltor-app",
   "scripts": {
-    "start": "electron-vite preview",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "dev:web": "cd web && pnpm i && pnpm run build && pnpm run dev",
+    "dev:electron": "cd electron && pnpm run dev",
+    "build:web": "cd web && pnpm run build",
+    "build:electron": "cd electron && pnpm run build",
+    "install:all": "cd shared/eltor-components && pnpm install && cd ../nextjs && pnpm install && cd ../electron && pnpm install",
+    "start:web": "cd web && pnpm run start",
+    "start:electron": "cd electron && pnpm start"
   },
+  "workspaces": [
+    "electron",
+    "web"
+  ],
   "devDependencies": {
-    "@types/geoip-lite": "^1.4.4",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@types/react-redux": "^7.1.34",
-    "@types/react-simple-maps": "^3.0.6",
-    "@vitejs/plugin-react": "^2.2.0",
-    "electron": "^32.1.2",
-    "electron-builder": "^25.0.5",
-    "electron-devtools-installer": "^3.2.0",
-    "electron-vite": "^2.3.0",
-    "eslint": "8.57.0",
-    "postcss": "^8.4.47",
-    "postcss-preset-mantine": "^1.17.0",
-    "postcss-simple-vars": "^7.0.1",
-    "rollup-plugin-inject-process-env": "^1.3.1",
-    "typescript": "^5",
-    "vite": "^3.2.3",
-    "vite-plugin-svgr": "^4.2.0",
-    "vite-tsconfig-paths": "^3.5.2"
+    "concurrently": "^8.0.0"
   },
-  "dependencies": {
-    "@electron-toolkit/preload": "^3.0.1",
-    "@electron-toolkit/utils": "^3.0.0",
-    "@mantine/core": "^7.13.0",
-    "@mantine/hooks": "^7.13.0",
-    "@radix-ui/react-icons": "^1.3.0",
-    "@radix-ui/react-scroll-area": "^1.1.0",
-    "@radix-ui/react-separator": "^1.1.0",
-    "@reduxjs/toolkit": "^2.2.7",
-    "@tabler/icons-react": "^3.19.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.1",
-    "dayjs": "^1.11.13",
-    "dotenv": "^16.4.5",
-    "electron-router-dom": "^2.0.0",
-    "electron-store": "^10.0.0",
-    "geoip-lite": "^1.4.10",
-    "immer": "^10.1.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-qr-code": "^2.0.15",
-    "react-redux": "^9.1.2",
-    "react-router-dom": "^6.22.3",
-    "react-simple-maps": "^3.0.0",
-    "redux-persist": "^6.0.0",
-    "telnet-client": "^2.2.1",
-    "usehooks-ts": "^3.1.0"
-  },
-  "eslintIgnore": [
-    "dist",
-    "out"
-  ]
+  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
 }

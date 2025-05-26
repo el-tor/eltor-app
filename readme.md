@@ -1,72 +1,187 @@
 # El Tor App
 
-This is the El Tor App that allows a user to connect to the El Tor network. It configures the Tor Browser automatically to point to the network fork by configuring the torrc file with extra BOLT 12 settings and Directory Relays. It also controls the payments like a wallet. This app can be used by a user wanting to get paid for sharing his bandwidth as a Relay. It can also be used as a user wanting to consume bandwidth from the El Tor network.  This code will be ported over to a native "tray app" similar to Wireguard or Orbot and appear in the tray of the operating system. 
+A modern desktop and web application for connecting to the El Tor network - a privacy-focused network that allows users to share bandwidth as relays or consume bandwidth as clients, with built-in payment capabilities.
 
-<div style="max-width: 480px; height: auto;">
-    <img src="./src/renderer/assets/eltor-pay-relays.png" alt="Dash" width="480px"/>
-    <img src="./src/renderer/assets/eltor-flow.png" alt="Dash" width="480px"/>
-</div>
+## 🌐 Architecture
 
-# Developers
-This project was developed using `electron-vite`. See the guide here https://electron-vite.org/guide/
+This project supports **dual deployment modes**:
 
-# El Tor Install
+- **🖥️ Desktop App**: Native Tauri application with system tray integration
+- **🌐 Web App**: Browser-based application with standalone Rust backend
 
-### Browser Config
-
-To connect the `Tor Browser` to the El Tor network you need to have a drop in replacement of the `tor binary` and a custom `torrc` config file. If you
-already have the Tor Browser installed on your computer you can run this script to configure it to use El Tor
-
-**mac**
 ```
-bash <(curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/install.sh)
+┌─────────────────┐    ┌─────────────────┐
+│   React Frontend │    │   Rust Backend  │
+│                 │    │                 │
+│ • UI Components │◄──►│ • Tor Control   │
+│ • State Mgmt    │    │ • Eltord Mgmt   │
+│ • Routing       │    │ • Process Ctrl  │
+└─────────────────┘    └─────────────────┘
+        │                       │
+        ▼                       ▼
+┌─────────────┐         ┌─────────────┐
+│   Web App   │         │ Tauri App   │
+│ (HTTP APIs) │         │ (IPC Calls) │
+└─────────────┘         └─────────────┘
 ```
-uninstall
-`bash <(curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/uninstall.sh)`
 
-**linux**
+## 🚀 Quick Start
 
-You must have Tor-Browser installed in the directory `~/tor-browser` for this script to work.
+### Prerequisites
+- **Node.js** 18+ with pnpm
+- **Rust** 1.70+
+- **Eltord** project at `~/code/eltord/`
+
+### 🌐 Web Mode
+```bash
+# Terminal 1: Start Rust backend
+cd backend
+cargo run
+
+# Terminal 2: Start React frontend
+cd frontend
+pnpm dev:web
 ```
-bash <(curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/install.sh)
+Open http://localhost:5173
+
+### 🖥️ Desktop Mode
+```bash
+cd frontend
+pnpm dev:tauri
 ```
-uninstall
-`bash <(curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/uninstall.sh)`
 
-**connectivity test**
+## 📁 Project Structure
 
-You can check that El Tor installed properly by opening the `Tor Browser > Connect > Circuit (icon in the url bar)`
+```
+eltor-app/
+├── frontend/              # React Frontend (Vite + Tauri)
+│   ├── src/
+│   │   ├── components/    # UI Components
+│   │   ├── services/      # API abstraction layer
+│   │   ├── utils/         # Platform detection
+│   │   └── hooks/         # Custom React hooks
+│   ├── src-tauri/         # Tauri desktop app
+│   └── package.json
+├── backend/               # Standalone Rust server
+│   ├── src/
+│   │   └── main.rs        # HTTP API server
+│   └── Cargo.toml
+└── README.md
+```
 
-The network is small right now (only 2 relays and counting) so you should see the IP `93.127.216.111`. 
-If you click "New Tor Circuit" a few times you might see a canadian ip show up as a middle relay.
+## 🔧 Features
 
-<div style="max-width: 480px; height: auto;">
-    <img src="./src/renderer/assets/circuit-check.png" alt="Dash" width="480px"/>
-</div>
+### Core Functionality
+- **Tor Network Control**: Connect/disconnect from Tor
+- **Eltord Process Management**: Start/stop eltord client processes
+- **Dual Mode Support**: Web browser OR native desktop app
+- **System Tray Integration**: (Desktop mode only)
+- **Real-time Status Updates**: Process monitoring and notifications
 
-**hidden service test**
+### Platform Detection
+The app automatically detects whether it's running in web or desktop mode and uses the appropriate API layer:
+- **Desktop**: Direct IPC calls to embedded Rust backend
+- **Web**: HTTP requests to standalone Rust server
 
+## 🛠️ Development
+
+### Available Scripts
+
+```bash
+# Frontend
+cd frontend
+pnpm dev          # Web development mode
+pnpm dev:web      # Web development mode  
+pnpm dev:tauri    # Desktop development mode
+pnpm build:web    # Build web app
+pnpm build:tauri  # Build desktop app
+
+# Backend
+cd backend
+cargo run         # Start HTTP server
+cargo build       # Build binary
+```
+
+### Environment Setup
+
+**Web Development:**
+- Frontend runs on `http://localhost:5173`
+- Backend API on `http://localhost:8080`
+- Supports hot reload for both frontend and backend
+
+**Desktop Development:**
+- Single command starts both frontend and embedded backend
+- System tray integration with menu controls
+- Native file system access
+
+## 📦 Building for Production
+
+### Web App
+```bash
+# Build frontend
+cd frontend && pnpm build:web
+
+# Build backend
+cd backend && cargo build --release
+
+# Deploy frontend to static hosting (Vercel, Netlify)
+# Deploy backend to cloud service (Railway, Fly.io)
+```
+
+### Desktop App
+```bash
+cd frontend
+pnpm build:tauri
+```
+
+Outputs platform-specific installers:
+- **Windows**: `.msi`, `.exe`
+- **macOS**: `.dmg`, `.app`
+- **Linux**: `.deb`, `.rpm`, `.AppImage`
+
+## 🌐 El Tor Network
+
+### Browser Configuration
+
+Configure Tor Browser to use the El Tor network:
+
+**macOS:**
+```bash
+curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/install.sh | bash
+```
+
+**Linux:**
+```bash
+curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/install.sh | bash
+```
+
+### Network Testing
+
+**Connectivity Check:**
+1. Open Tor Browser
+2. Navigate to Circuit info (lock icon in URL bar)
+3. Look for IP `170.75.160.21` in the circuit
+
+**Hidden Service Test:**
+```
 http://3zlcerfvzmmdj2zv5j2lnz32762dwukcznrimbxllve4dzbjhmxkc4id.onion
+```
 
-### Relay Config
-This script will download the `el tor` binary and prompt you to configure the `torrc` config file.
-**linux**
+### Running as Relay
+
+**Linux Relay Setup:**
+```bash
+curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/relay.sh | bash
 ```
-bash <(curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/relay.sh)
-```
-After the script is ran you can start your el tor relay with this command:
-```
+
+**Start Relay:**
+```bash
 ./tor -f torrc
 ```
 
-VPN like client
-
-<img src="./src/renderer/assets/eltor-home.png" alt="Dash" width="480px"/>
-
-**Run as Daemon**
-To run as a daemon
-`sudo nano /etc/systemd/system/tor.service`
-```
+**Run as Systemd Service:**
+```bash
+sudo tee /etc/systemd/system/tor.service << EOF
 [Unit]
 Description=ElTorRelay
 After=network.target
@@ -79,27 +194,47 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-```
-- `sudo systemctl daemon-reload`
-- `sudo systemctl enable tor`
-- To check that tor is running `sudo apt install nyx` then `nyx -i 127.0.0.1:8061`
-- to kill tor `pgrep tor` and the `kill {pid}`  
+EOF
 
-# Code
-
-This is an Electron app
-
-## Getting Started
-
-```
-pnpm i
-pnpm run dev
+sudo systemctl daemon-reload
+sudo systemctl enable tor
+sudo systemctl start tor
 ```
 
-## Build
-
+**Monitor Relay:**
+```bash
+sudo apt install nyx
+nyx -i 127.0.0.1:8061
 ```
-pnpm run build:mac
-```
 
-<img src="./src/renderer/assets/eltor-user.png" alt="Dash" width="480px"/>
+## 🔒 Security & Privacy
+
+- **No data collection**: All processing happens locally
+- **Tor integration**: Built-in privacy protection
+- **Process isolation**: Eltord runs in separate processes
+- **System tray**: Minimal UI footprint
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test in both web and desktop modes
+5. Submit a pull request
+
+## 📜 License
+
+MIT License - see LICENSE file for details
+
+## 🖼️ Screenshots
+
+<div align="center">
+  <img src="./src/renderer/assets/eltor-home.png" alt="Home Screen" width="400"/>
+  <img src="./src/renderer/assets/eltor-pay-relays.png" alt="Relay Payment" width="400"/>
+  <img src="./src/renderer/assets/eltor-flow.png" alt="Network Flow" width="400"/>
+  <img src="./src/renderer/assets/eltor-user.png" alt="User Interface" width="400"/>
+</div>
+
+---
+
+**El Tor**: Privacy-first networking with economic incentives 🚀
