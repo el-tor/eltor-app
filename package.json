@@ -4,17 +4,16 @@
   "private": true,
   "description": "Monorepo for eltor-app",
   "scripts": {
-    "dev:web": "cd web && pnpm i && pnpm run build && pnpm run dev",
-    "dev:electron": "cd electron && pnpm run dev",
+    "tauri": "cd web && pnpm run dev:tauri",
+    "web" : "concurrently \"pnpm run backend\" \"pnpm run frontend\"",
+    "frontend": "cd frontend && pnpm run dev:web",
+    "backend": "cd backend && ./run.sh",
     "build:web": "cd web && pnpm run build",
-    "build:electron": "cd electron && pnpm run build",
-    "install:all": "cd shared/eltor-components && pnpm install && cd ../nextjs && pnpm install && cd ../electron && pnpm install",
-    "start:web": "cd web && pnpm run start",
-    "start:electron": "cd electron && pnpm start"
+    "build:tauri": "cd electron && pnpm run build"
   },
   "workspaces": [
-    "electron",
-    "web"
+    "frontend",
+    "backend"
   ],
   "devDependencies": {
     "concurrently": "^8.0.0"
