@@ -51,3 +51,5 @@ temp/
 # Application specific
 frontend/src-tauri/target/
 backend/target/
+
+**torrc**

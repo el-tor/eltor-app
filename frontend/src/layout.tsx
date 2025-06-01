@@ -84,9 +84,7 @@ export function Layout() {
                 <a
                   className={classes.link}
                   data-active={
-                    window.location.hash.includes("connect") ||
-                    window.location.hash.includes("main_window") ||
-                    window.location.hash === "#/main" ||
+                    window.location.pathname.includes("connect") ||
                     undefined
                   }
                   href=""
@@ -109,7 +107,7 @@ export function Layout() {
                 <a
                   className={classes.link}
                   data-active={
-                    window.location.hash.includes("relay") || undefined
+                    window.location.pathname.includes("relay") || undefined
                   }
                   key={"Host"}
                   href=""
@@ -131,7 +129,7 @@ export function Layout() {
                 <a
                   className={classes.link}
                   data-active={
-                    window.location.hash.includes("wallet") || undefined
+                    window.location.pathname.includes("wallet") || undefined
                   }
                   href=""
                   key={"wallet"}

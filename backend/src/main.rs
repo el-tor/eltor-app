@@ -206,7 +206,7 @@ async fn activate_eltord(
     }
 
     let eltord_path = match dirs::home_dir() {
-        Some(home) => home.join("code/eltord"),
+        Some(home) => home.join("code/eltord"), // todo read from ../bin folder
         None => {
             return ResponseJson(MessageResponse {
                 message: "Error: Could not find home directory".to_string(),
@@ -221,7 +221,7 @@ async fn activate_eltord(
         .arg("--")
         .arg("client")
         .arg("-f")
-        .arg("torrc.client.prod")
+        .arg("torrc.client.prod") // TODO read from ../bin folder and change name to torrc
         .arg("-pw")
         .arg("password1234_")
         .current_dir(&eltord_path)
