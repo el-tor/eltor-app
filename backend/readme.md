@@ -44,7 +44,7 @@ The bin directory contains symbolic links of the
 
 To link
 ```
-ln -s ~/code/eltord/target/debug/eltord ~/code/eltor-app/backend/bin/eltord
+ln -s ~/code/eltord/target/debug/eltor ~/code/eltor-app/backend/bin/eltord
 ln -s ~/code/eltord/torrc.client.prod ~/code/eltor-app/backend/bin/torrc
 # manually copied phoenixd and phoenix-cli to the bin
 ```

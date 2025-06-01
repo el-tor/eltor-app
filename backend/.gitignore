@@ -50,3 +50,6 @@ tmp/
 temp/
 
 **torrc**
+
+payments_sent.json
+payments_received.json

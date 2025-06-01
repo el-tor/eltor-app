@@ -1,0 +1,304 @@
+use axum::{
+    extract::State as AxumState,
+    response::{Json as ResponseJson, Sse, sse::Event},
+    routing::{get, post},
+    Router,
+};
+use chrono::Utc;
+use futures::stream::Stream;
+use std::convert::Infallible;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
+use tokio::process::Command as TokioCommand;
+use tokio_stream::{wrappers::BroadcastStream, StreamExt};
+
+use crate::state::{AppState, LogEntry, EltordStatusResponse, MessageResponse};
+
+// Function to read logs from a process stream
+async fn read_process_logs(
+    mut reader: AsyncBufReader<tokio::process::ChildStdout>,
+    state: AppState,
+    source: &'static str,
+) {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line).await {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    let entry = LogEntry {
+                        timestamp: Utc::now(),
+                        level: "INFO".to_string(), // Could parse this from the log line
+                        message: trimmed.to_string(),
+                        source: source.to_string(),
+                    };
+                    
+                    println!("[{}] {}", source, trimmed);
+                    state.add_log(entry);
+                }
+            }
+            Err(e) => {
+                println!("Error reading {} logs: {}", source, e);
+                break;
+            }
+        }
+    }
+}
+
+// Function to read stderr logs
+async fn read_process_stderr_logs(
+    mut reader: AsyncBufReader<tokio::process::ChildStderr>,
+    state: AppState,
+    source: &'static str,
+) {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line).await {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    let entry = LogEntry {
+                        timestamp: Utc::now(),
+                        level: "ERROR".to_string(), // stderr usually contains errors
+                        message: trimmed.to_string(),
+                        source: source.to_string(),
+                    };
+                    
+                    println!("[{}] {}", source, trimmed);
+                    state.add_log(entry);
+                }
+            }
+            Err(e) => {
+                println!("Error reading {} logs: {}", source, e);
+                break;
+            }
+        }
+    }
+}
+
+#[axum::debug_handler(state = AppState)]
+pub async fn activate_eltord(
+    AxumState(state): AxumState<AppState>,
+) -> ResponseJson<MessageResponse> {
+    // Check if already running
+    {
+        let mut process_guard = state.process.lock().unwrap();
+        if let Some(ref mut child) = *process_guard {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    // Process has exited, clear it
+                    *process_guard = None;
+                }
+                Ok(None) => {
+                    // Process is still running, but continue anyway
+                    println!("⚠️ Eltord process already running, continuing...");
+                }
+                Err(_) => {
+                    // Error checking process, assume it's dead
+                    *process_guard = None;
+                }
+            }
+        }
+    }
+
+    // Get the path to the eltord binary from ./bin folder (relative to backend)
+    let current_dir = std::env::current_dir().map_err(|e| {
+        println!("Error getting current directory: {}", e);
+        e
+    }).unwrap();
+    
+    let bin_dir = current_dir.join("bin");
+    let eltord_binary = bin_dir.join("eltord");
+    let torrc_file = bin_dir.join("torrc");
+    
+    // Check if the eltord binary exists
+    if !eltord_binary.exists() {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: eltord binary not found at {:?}", eltord_binary),
+        });
+    }
+    
+    // Check if the torrc file exists
+    if !torrc_file.exists() {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: torrc file not found at {:?}", torrc_file),
+        });
+    }
+    
+    println!("🚀 Running eltord binary from: {:?}", eltord_binary);
+    println!("📋 Using torrc file: {:?}", torrc_file);
+    
+    let mut child = match TokioCommand::new(&eltord_binary)
+        .arg("client")
+        .arg("-f")
+        .arg(&torrc_file)
+        .arg("-pw")
+        .arg("password1234_")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => {
+            return ResponseJson(MessageResponse {
+                message: format!("Error: Failed to start eltord: {}", e),
+            });
+        }
+    };
+    
+    let pid = child.id().unwrap_or(0);
+    
+    // Set up log readers
+    if let Some(stdout) = child.stdout.take() {
+        let reader = AsyncBufReader::new(stdout);
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            read_process_logs(reader, state_clone, "stdout").await;
+        });
+    }
+    
+    if let Some(stderr) = child.stderr.take() {
+        let reader = AsyncBufReader::new(stderr);
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            read_process_stderr_logs(reader, state_clone, "stderr").await;
+        });
+    }
+    
+    // Store the process
+    {
+        let mut process_guard = state.process.lock().unwrap();
+        *process_guard = Some(child);
+    }
+    
+    println!("✅ Eltord process started with PID: {}", pid);
+    
+    // Add startup log
+    state.add_log(LogEntry {
+        timestamp: Utc::now(),
+        level: "INFO".to_string(),
+        message: format!("Eltord process started with PID: {}", pid),
+        source: "system".to_string(),
+    });
+    
+    ResponseJson(MessageResponse {
+        message: format!("Eltord activated with PID: {}", pid),
+    })
+}
+
+#[axum::debug_handler(state = AppState)]
+pub async fn deactivate_eltord(
+    AxumState(state): AxumState<AppState>,
+) -> ResponseJson<MessageResponse> {
+    // Take the process out of the mutex first to avoid holding the lock across await
+    let mut child = {
+        let mut process_guard = state.process.lock().unwrap();
+        process_guard.take()
+    };
+    
+    if let Some(ref mut child) = child {
+        match child.kill().await {
+            Ok(_) => {
+                println!("🛑 Killing eltord process...");
+                let _ = child.wait().await; // Wait for process to actually terminate
+                println!("✅ Eltord process terminated successfully");
+                
+                // Add shutdown log
+                state.add_log(LogEntry {
+                    timestamp: Utc::now(),
+                    level: "INFO".to_string(),
+                    message: "Eltord process terminated".to_string(),
+                    source: "system".to_string(),
+                });
+                
+                ResponseJson(MessageResponse {
+                    message: "Eltord deactivated successfully".to_string(),
+                })
+            }
+            Err(e) => {
+                ResponseJson(MessageResponse {
+                    message: format!("Error: Failed to kill eltord process: {}", e),
+                })
+            }
+        }
+    } else {
+        ResponseJson(MessageResponse {
+            message: "Error: No eltord process is currently running".to_string(),
+        })
+    }
+}
+
+pub async fn get_eltord_status(
+    AxumState(state): AxumState<AppState>,
+) -> ResponseJson<EltordStatusResponse> {
+    let mut process_guard = state.process.lock().unwrap();
+    
+    let (running, pid) = if let Some(ref mut child) = *process_guard {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                // Process has exited
+                *process_guard = None;
+                (false, None)
+            }
+            Ok(None) => {
+                // Process is still running
+                (true, child.id())
+            }
+            Err(_) => {
+                // Error checking process, assume it's dead
+                *process_guard = None;
+                (false, None)
+            }
+        }
+    } else {
+        (false, None)
+    };
+
+    let recent_logs = state.get_recent_logs();
+
+    ResponseJson(EltordStatusResponse { 
+        running, 
+        pid,
+        recent_logs,
+    })
+}
+
+// SSE endpoint for streaming logs
+pub async fn stream_logs(
+    AxumState(state): AxumState<AppState>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let receiver = state.log_sender.subscribe();
+    let stream = BroadcastStream::new(receiver)
+        .map(|result| {
+            match result {
+                Ok(log_entry) => {
+                    let json = serde_json::to_string(&log_entry).unwrap_or_default();
+                    Ok(Event::default().data(json))
+                }
+                Err(_) => {
+                    // Channel lagged, send error event
+                    Ok(Event::default().data("{\"error\":\"stream_lagged\"}"))
+                }
+            }
+        });
+
+    Sse::new(stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(Duration::from_secs(30))
+            .text("keep-alive"),
+    )
+}
+
+// Create eltord routes
+pub fn create_routes() -> Router<AppState> {
+    Router::new()
+        .route("/api/eltord/activate", post(activate_eltord))
+        .route("/api/eltord/deactivate", post(deactivate_eltord))
+        .route("/api/eltord/status", get(get_eltord_status))
+        .route("/api/eltord/logs", get(stream_logs))
+}
