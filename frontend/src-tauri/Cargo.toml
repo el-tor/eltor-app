@@ -26,6 +26,7 @@ tauri-plugin-shell = "2.0.0"
 tokio = { version = "1", features = ["full"] }
 tauri-plugin-log = "2.0.0" 
 dirs = "5.0.0"
+chrono = { version = "0.4", features = ["serde"] }
 
 
 

@@ -13,6 +13,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
+import LogViewer from '../components/LogViewer'
 import {
   setCommandOutput,
   setCircuits,
@@ -25,6 +26,7 @@ import MapComponent from '../components/Map/MapComponent'
 import './Connect.css'
 import { useEltord } from '../hooks/useEltord'
 import { isTauri } from '../utils/platform'
+import { LogEntry, apiService } from '../services/apiService'
 
 
 const { electronEvents } = window
@@ -38,6 +40,8 @@ export const Connect = () => {
     (state) => state.global,
   )
   const preRef = useRef<HTMLPreElement>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  
 
   useEffect(() => {
     if (!electronEvents?.onTorStdout) return
@@ -128,6 +132,24 @@ export const Connect = () => {
           >
             Deactivate
           </Button>
+          
+          {isTauri() && (
+            <Button
+              onClick={async () => {
+                try {
+                  const result = await apiService.testLogEvent()
+                  console.log('Test log event result:', result)
+                } catch (error) {
+                  console.error('Test log event failed:', error)
+                }
+              }}
+              color="blue"
+              variant="light"
+              size="sm"
+            >
+              Test Event
+            </Button>
+          )}
         </Group>
 
         {/* <Title order={3}>{torActive ? "Connected" : "Not connected"}</Title>
@@ -176,13 +198,18 @@ export const Connect = () => {
             position: 'relative',
           }}
         >
-          {commandOutput}
+          <LogViewer
+            height="250px"
+            className="mt-[-130px] z-10 relative max-w-full"
+            logs={logs}
+            setLogs={setLogs}
+          />
           <span className="blink-cursor">&nbsp;</span>
         </pre>
         <Button
           size="xs"
           style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
-          onClick={() => dispatch(setCommandOutput(''))}
+          onClick={() => setLogs([])}
         >
           Clear
         </Button>
