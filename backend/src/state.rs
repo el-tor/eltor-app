@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
+use crate::lightning::LightningNode;
 
 // Log entry structure
 #[derive(Debug, Clone, Serialize)]
@@ -36,6 +37,7 @@ pub struct AppState {
     pub log_sender: broadcast::Sender<LogEntry>,
     pub recent_logs: Arc<Mutex<VecDeque<LogEntry>>>,
     pub wallet_state: WalletState,
+    pub lightning_node: Option<Arc<LightningNode>>,
 }
 
 impl AppState {
@@ -46,7 +48,12 @@ impl AppState {
             log_sender,
             recent_logs: Arc::new(Mutex::new(VecDeque::with_capacity(100))),
             wallet_state: WalletState::new(use_phoenixd_embedded),
+            lightning_node: None,
         }
+    }
+
+    pub fn set_lightning_node(&mut self, node: LightningNode) {
+        self.lightning_node = Some(Arc::new(node));
     }
 
     pub fn add_log(&self, entry: LogEntry) {

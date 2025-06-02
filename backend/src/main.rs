@@ -1,19 +1,21 @@
 use axum::{
-    http::{HeaderValue, Method, HeaderName},
+    http::{HeaderName, HeaderValue, Method},
     response::Json as ResponseJson,
     routing::{get, post},
     Router,
 };
-use tower_http::cors::CorsLayer;
 use dotenv::dotenv;
 use std::env;
+use tower_http::cors::CorsLayer;
 
-mod state;
-mod routes;
-mod wallet;
+mod lightning;
 mod ports;
+mod routes;
+mod state;
+mod torrc_parser;
+mod wallet;
 
-use state::{AppState, StatusResponse, MessageResponse};
+use state::{AppState, MessageResponse, StatusResponse};
 
 // Tor-related handlers
 async fn connect_tor() -> ResponseJson<StatusResponse> {
@@ -52,24 +54,52 @@ async fn health_check() -> ResponseJson<MessageResponse> {
 async fn main() {
     // Load environment variables from .env file
     dotenv().ok();
-    
+
     // Clean up any processes using our ports
     println!("🧹 Starting port cleanup...");
     if let Err(e) = crate::ports::cleanup_ports().await {
         eprintln!("⚠️  Port cleanup failed: {}", e);
         eprintln!("   Continuing with startup...");
     }
-    
+
     // Read USE_PHOENIXD_EMBEDDED from environment (default to true)
     let use_phoenixd_embedded = env::var("USE_PHOENIXD_EMBEDDED")
         .unwrap_or_else(|_| "true".to_string())
         .parse::<bool>()
         .unwrap_or(true);
 
-    println!("🔧 Wallet configuration: phoenixd embedded = {}", use_phoenixd_embedded);
+    println!(
+        "🔧 Wallet configuration: phoenixd embedded = {}",
+        use_phoenixd_embedded
+    );
 
     // Initialize shared state
-    let state = AppState::new(use_phoenixd_embedded);
+    let mut state = AppState::new(use_phoenixd_embedded);
+
+    // Initialize Lightning node
+    println!("⚡ Initializing Lightning node...");
+
+    // Try to initialize from torrc first, then fall back to environment variables
+    let torrc_path = "bin/torrc";
+    let lightning_node = match crate::lightning::LightningNode::from_torrc(torrc_path) {
+        Ok(node) => {
+            println!(
+                "✅ Lightning node connected from torrc ({})",
+                node.node_type()
+            );
+            Some(node)
+        }
+        Err(e) => {
+            println!("⚠️  Failed to initialize Lightning node from torrc: {}", e);
+            // You can choose to exit or handle the error as needed.
+            // For now, we'll just continue without a Lightning node.
+            None
+        }
+    };
+
+    if let Some(node) = lightning_node {
+        state.set_lightning_node(node);
+    }
 
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {
@@ -119,10 +149,12 @@ async fn main() {
     println!("   POST /api/eltord/deactivate");
     println!("   GET  /api/eltord/status");
     println!("   GET  /api/eltord/logs (SSE)");
+    println!("   GET  /api/wallet/info");
     println!("   GET  /api/wallet/balance");
-    println!("   POST /api/wallet/send");
-    println!("   POST /api/wallet/receive");
+    println!("   POST /api/wallet/invoice");
+    println!("   POST /api/wallet/pay");
     println!("   GET  /api/wallet/status");
-    
+    println!("   GET  /api/wallet/transactions");
+
     axum::serve(listener, app).await.unwrap();
 }

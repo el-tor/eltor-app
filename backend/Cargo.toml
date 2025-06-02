@@ -15,3 +15,5 @@ futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
+lni = { git = "https://github.com/lightning-node-interface/lni.git", branch = "master" }
+uuid = { version = "1.0", features = ["v4"] }
