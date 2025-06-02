@@ -10,6 +10,7 @@ use std::sync::Arc;
 use eltor_backend::{
     AppState as BackendAppState, 
     LogEntry, 
+    ports,
     create_app_state,
     initialize_phoenixd,
     activate_eltord_wrapper,
@@ -284,6 +285,14 @@ fn main() {
             let state_for_init = tauri_state.clone();
             
             tauri::async_runtime::spawn(async move {
+
+                // Clean up any processes using our ports
+                println!("🧹 Starting port cleanup...");
+                if let Err(e) = ports::cleanup_ports().await {
+                    eprintln!("⚠️  Port cleanup failed: {}", e);
+                    eprintln!("   Continuing with startup...");
+                }
+
                 match state_for_init.initialize_phoenixd().await {
                     Ok(_) => {
                         println!("✅ Phoenixd initialization completed successfully");
