@@ -1,17 +1,13 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import type {
-  IWallet,
- FetchWalletBalanceResponseType,
-   WalletProviderType,
-   FetchChannelInfoResponseType,
+  FetchWalletBalanceResponseType,
+  WalletProviderType,
+  FetchChannelInfoResponseType,
 } from  "../../drivers/IWallet";
 import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
-import { dynamicWalletImport } from "../../utils";
-//import { Transaction } from "main/wallets";
-const { electronEvents } = window;
+import { walletApiService } from "../../services/walletApiService";
 
 const defaultWallet = "Phoenixd";
-const walletApi = dynamicWalletImport<IWallet>(defaultWallet);
 
 export {
   type WalletState,
@@ -144,7 +140,7 @@ const fetchWalletBalance = createAsyncThunk<
   string
 >("wallet/fetchWalletBalance", async (name, { rejectWithValue }) => {
   try {
-    const data = await walletApi.fetchWalletBalance();
+    const data = await walletApiService.getWalletBalance();
     return data;
   } catch (error) {
     return rejectWithValue(error);
@@ -155,7 +151,7 @@ const fetchChannelInfo = createAsyncThunk<FetchChannelInfoResponseType, string>(
   "wallet/fetchChannelInfo",
   async (name, { rejectWithValue }) => {
     try {
-      const data = await walletApi.fetchChannelInfo("");
+      const data = await walletApiService.getChannelInfo();
       return data;
     } catch (error) {
       return rejectWithValue(error);
@@ -167,7 +163,7 @@ const fetchTransactions = createAsyncThunk<Array<any>, string>( // Todo type Tra
   "wallet/fetchTransactions",
   async (name, { rejectWithValue }) => {
     try {
-      const txns = await electronEvents.lni.listTransactions();
+      const txns = await walletApiService.getTransactions();
       return txns;
     } catch (error) {
       return rejectWithValue(error);
@@ -179,7 +175,7 @@ const getBolt12Offer = createAsyncThunk<string, string>(
   "wallet/getBolt12Offer",
   async (name, { rejectWithValue }) => {
     try {
-      const offer = await walletApi.getBolt12Offer();
+      const offer = await walletApiService.getBolt12Offer();
       return offer;
     } catch (error) {
       return rejectWithValue(error);

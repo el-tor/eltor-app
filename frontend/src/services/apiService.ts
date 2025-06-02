@@ -35,7 +35,87 @@ export interface TorStatus {
   circuit?: string
 }
 
+// Event subscription management
+interface EventSubscription {
+  id: string
+  callback: (eventName: string, payload: any) => void
+}
+
 class ApiService {
+  private eventSubscriptions: Map<string, EventSubscription> = new Map()
+  private tauriListeners: Array<() => void> = []
+  private isEventSystemSetup = false
+
+  // Create a unique subscription ID
+  private generateSubscriptionId(): string {
+    return Math.random().toString(36).substr(2, 9)
+  }
+
+  // Central event dispatcher that all Tauri events go through
+  private dispatchEvent(eventName: string, payload: any) {
+    console.log(`📡 Dispatching event: ${eventName}`, payload)
+    this.eventSubscriptions.forEach((subscription) => {
+      subscription.callback(eventName, payload)
+    })
+  }
+
+  // Setup the Tauri event system only once
+  private async setupEventSystem() {
+    if (this.isEventSystemSetup || !isTauri()) {
+      return
+    }
+
+    await loadTauriAPIs()
+    
+    if (!tauriListen) {
+      console.error('Tauri listen API not available')
+      return
+    }
+
+    console.log('🔧 Setting up centralized Tauri event system...')
+    
+    // Set up listeners for all events once
+    const events = ['eltord-activated', 'eltord-deactivated', 'eltord-error', 'eltord-log']
+    
+    for (const eventName of events) {
+      const unlisten = await tauriListen(eventName, (event: any) => {
+        this.dispatchEvent(eventName, event.payload)
+      })
+      this.tauriListeners.push(unlisten)
+    }
+
+    this.isEventSystemSetup = true
+    console.log('✅ Centralized Tauri event system setup complete')
+  }
+
+  // Public method to subscribe to events
+  async subscribeToEvents(callback: (eventName: string, payload: any) => void): Promise<() => void> {
+    // Set up the event system if not already done
+    await this.setupEventSystem()
+    
+    const subscriptionId = this.generateSubscriptionId()
+    console.log(`📝 Creating event subscription: ${subscriptionId}`)
+    
+    this.eventSubscriptions.set(subscriptionId, {
+      id: subscriptionId,
+      callback
+    })
+
+    // Return unsubscribe function
+    return () => {
+      console.log(`🗑️ Removing event subscription: ${subscriptionId}`)
+      this.eventSubscriptions.delete(subscriptionId)
+    }
+  }
+
+  // Cleanup all event listeners (useful for app shutdown)
+  private cleanupEventSystem() {
+    console.log('🧹 Cleaning up Tauri event system')
+    this.tauriListeners.forEach(unlisten => unlisten())
+    this.tauriListeners.length = 0
+    this.eventSubscriptions.clear()
+    this.isEventSystemSetup = false
+  }
   // Eltord methods
   async activateEltord(): Promise<string> {
     if (isTauri()) {
@@ -134,57 +214,10 @@ class ApiService {
     }
   }
 
-  // Event listening (only works in Tauri)
+  // Event listening (only works in Tauri) - DEPRECATED: Use subscribeToEvents instead
   async listenToEvents(callback: (eventName: string, payload: any) => void) {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      
-      if (!tauriListen) {
-        console.error('Tauri listen API not available')
-        return () => {}
-      }
-
-      console.log('Setting up Tauri event listeners...')
-      
-      const unlistenActivated = await tauriListen(
-        'eltord-activated',
-        (event: any) => {
-          console.log('Received eltord-activated event:', event)
-          callback('eltord-activated', event.payload)
-        },
-      )
-
-      const unlistenDeactivated = await tauriListen(
-        'eltord-deactivated',
-        (event: any) => {
-          console.log('Received eltord-deactivated event:', event)
-          callback('eltord-deactivated', event.payload)
-        },
-      )
-
-      const unlistenError = await tauriListen('eltord-error', (event: any) => {
-        console.log('Received eltord-error event:', event)
-        callback('eltord-error', event.payload)
-      })
-
-      const unlistenLog = await tauriListen('eltord-log', (event: any) => {
-        console.log('Received eltord-log event:', event)
-        callback('eltord-log', event.payload)
-      })
-
-      console.log('All Tauri event listeners set up successfully')
-
-      return () => {
-        console.log('Cleaning up Tauri event listeners')
-        unlistenActivated()
-        unlistenDeactivated()
-        unlistenError()
-        unlistenLog()
-      }
-    }
-
-    // For web mode, return empty cleanup function
-    return () => {}
+    console.warn('⚠️ listenToEvents is deprecated, using new subscription system')
+    return await this.subscribeToEvents(callback)
   }
 
   // Log streaming for web mode (Server-Sent Events)

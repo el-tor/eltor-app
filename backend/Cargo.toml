@@ -3,6 +3,10 @@ name = "eltor-backend"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "eltor_backend"
+path = "src/lib.rs"
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }

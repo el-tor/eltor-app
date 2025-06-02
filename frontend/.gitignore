@@ -47,3 +47,6 @@ next-env.d.ts
 *.rpm
 *.msi
 *.AppImage
+
+payments_sent.json
+payments_received.json

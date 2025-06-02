@@ -6,7 +6,7 @@ interface LogViewerProps {
   className?: string
   height?: string
   logs: LogEntry[]
-  setLogs: (logs: LogEntry[]) => void
+  setLogs: React.Dispatch<React.SetStateAction<LogEntry[]>>
 }
 
 const LogViewer: React.FC<LogViewerProps> = ({
@@ -38,55 +38,67 @@ const LogViewer: React.FC<LogViewerProps> = ({
 
   useEffect(() => {
     let cleanup: (() => void) | undefined
+    let isEffectActive = true // Flag to prevent stale updates
 
     const setupLogStreaming = async () => {
-      console.log('Setting up log streaming, isTauri:', isTauri())
+      console.log('🔧 LogViewer: Setting up log streaming, isTauri:', isTauri())
       
       if (isTauri()) {
-        // Tauri mode - listen to events
-        cleanup = await apiService.listenToEvents((eventName, payload) => {
-          console.log('Received Tauri event:', eventName, payload)
+        // Tauri mode - use new subscription system to prevent duplicates
+        cleanup = await apiService.subscribeToEvents((eventName, payload) => {
+          // Only process if this effect is still active
+          if (!isEffectActive) return
+          
+          console.log('📡 LogViewer: Received Tauri event:', eventName, payload)
           if (eventName === 'eltord-log') {
-            console.log('LogViewer: Adding new log:', payload)
+            console.log('📝 LogViewer: Adding new log:', payload)
             // Use functional update to avoid stale closure issues
-            setLogs(currentLogs => {
-              const newLogs = [...currentLogs, payload as LogEntry]
-              console.log('Updated logs count:', newLogs.length)
+            setLogs((currentLogs: LogEntry[]) => {
+              const incomingLog = payload as LogEntry
+              // Prevent duplicates by checking for unique timestamp (or use another unique property)
+              if (currentLogs.some(log => log.timestamp === incomingLog.timestamp && log.message === incomingLog.message)) {
+                return currentLogs
+              }
+              const newLogs = [...currentLogs, incomingLog]
+              console.log('📊 Updated logs count:', newLogs.length)
               return newLogs
             })
           }
         })
         setIsConnected(true)
-        console.log('Tauri event listener setup complete')
+        console.log('✅ LogViewer: Tauri event subscription setup complete')
       } else {
         // Web mode - use Server-Sent Events
         cleanup = apiService.createLogStream(
           (log: LogEntry) => {
-            console.log('Received SSE log:', log)
-            console.log('LogViewer: Adding new log:', log)
-            setLogs(currentLogs => {
+            if (!isEffectActive) return // Prevent stale updates
+            
+            console.log('📡 LogViewer: Received SSE log:', log)
+            console.log('📝 LogViewer: Adding new log:', log)
+            setLogs((currentLogs: LogEntry[]) => {
               const newLogs = [...currentLogs, log]
-              console.log('Updated logs count:', newLogs.length)
+              console.log('📊 Updated logs count:', newLogs.length)
               return newLogs
             })
           },
           (error: Error) => {
-            console.error('Log stream error:', error)
+            console.error('❌ Log stream error:', error)
             setIsConnected(false)
           },
         )
         setIsConnected(true)
-        console.log('SSE log stream setup complete')
+        console.log('✅ LogViewer: SSE log stream setup complete')
       }
     }
 
     setupLogStreaming().catch(error => {
-      console.error('Failed to setup log streaming:', error)
+      console.error('❌ Failed to setup log streaming:', error)
       setIsConnected(false)
     })
 
     return () => {
-      console.log('Cleaning up log streaming listeners')
+      console.log('🧹 LogViewer: Cleaning up log streaming listeners')
+      isEffectActive = false // Mark effect as inactive
       cleanup?.()
       setIsConnected(false)
     }

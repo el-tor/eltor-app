@@ -94,18 +94,35 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
         }
     }
 
-    // Get the path to the phoenixd binary from ./bin folder
+    // Get the path to the phoenixd binary
     let current_dir = std::env::current_dir().map_err(|e| {
         format!("Error getting current directory: {}", e)
     })?;
     
-    let bin_dir = current_dir.join("bin");
-    let phoenixd_binary = bin_dir.join("phoenixd");
+    // Check multiple possible locations for the phoenixd binary
+    let possible_paths = vec![
+        current_dir.join("bin").join("phoenixd"),                    // Backend standalone
+        current_dir.join("..").join("..").join("backend").join("bin").join("phoenixd"), // Tauri context
+        current_dir.join("..").join("backend").join("bin").join("phoenixd"), // Alternative Tauri path
+    ];
     
-    // Check if the phoenixd binary exists
-    if !phoenixd_binary.exists() {
-        return Err(format!("Phoenixd binary not found at {:?}", phoenixd_binary));
+    let mut phoenixd_binary = None;
+    for path in possible_paths {
+        if path.exists() {
+            phoenixd_binary = Some(path);
+            break;
+        }
     }
+    
+    let phoenixd_binary = phoenixd_binary.ok_or_else(|| {
+        format!("Phoenixd binary not found. Searched paths: {:?}", 
+            vec![
+                current_dir.join("bin").join("phoenixd"),
+                current_dir.join("..").join("..").join("backend").join("bin").join("phoenixd"),
+                current_dir.join("..").join("backend").join("bin").join("phoenixd"),
+            ]
+        )
+    })?;
     
     println!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
     

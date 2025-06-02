@@ -10,10 +10,6 @@ rust-version = "1.77.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-name = "app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
 tauri-build = { version = "2.2.0", features = [] }
 
@@ -27,6 +23,8 @@ tokio = { version = "1", features = ["full"] }
 tauri-plugin-log = "2.0.0" 
 dirs = "5.0.0"
 chrono = { version = "0.4", features = ["serde"] }
+# Import the backend as a local dependency
+eltor-backend = { path = "../../backend" }
 
 
 

@@ -106,15 +106,44 @@ pub async fn activate_eltord(
         }
     }
 
-    // Get the path to the eltord binary from ./bin folder (relative to backend)
-    let current_dir = std::env::current_dir().map_err(|e| {
-        println!("Error getting current directory: {}", e);
-        e
-    }).unwrap();
+    // Get the path to the eltord binary from ./bin folder (relative to backend crate)
+    // Use the CARGO_MANIFEST_DIR environment variable to find the backend directory
+    let backend_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map(|manifest_dir| {
+            let path = std::path::Path::new(&manifest_dir);
+            // If CARGO_MANIFEST_DIR points to src-tauri, navigate to backend
+            if path.ends_with("src-tauri") {
+                path.parent().unwrap().parent().unwrap().join("backend").to_string_lossy().to_string()
+            } else if path.file_name().unwrap() == "backend" {
+                // Already in backend directory
+                manifest_dir
+            } else {
+                // Try to find backend directory from manifest location
+                path.join("backend").to_string_lossy().to_string()
+            }
+        })
+        .unwrap_or_else(|_| {
+            // Fallback: try to find the backend directory relative to current dir
+            let current_dir = std::env::current_dir().unwrap();
+            println!("🔍 Current working directory: {:?}", current_dir);
+            
+            // If we're in src-tauri, go up to find backend
+            if current_dir.ends_with("src-tauri") {
+                current_dir.parent().unwrap().parent().unwrap().join("backend").to_string_lossy().to_string()
+            } else if current_dir.ends_with("frontend") {
+                current_dir.parent().unwrap().join("backend").to_string_lossy().to_string()
+            } else {
+                // Assume we're in the root project directory
+                current_dir.join("backend").to_string_lossy().to_string()
+            }
+        });
     
-    let bin_dir = current_dir.join("bin");
+    let bin_dir = std::path::Path::new(&backend_dir).join("bin");
     let eltord_binary = bin_dir.join("eltord");
     let torrc_file = bin_dir.join("torrc");
+    
+    println!("🔍 Looking for eltord binary at: {:?}", eltord_binary);
+    println!("🔍 Looking for torrc file at: {:?}", torrc_file);
     
     // Check if the eltord binary exists
     if !eltord_binary.exists() {
