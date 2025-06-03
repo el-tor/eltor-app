@@ -17,12 +17,10 @@ import {
 import storage from "redux-persist/lib/storage";
 import { globalReducer } from "./globalStore";
 
-const { electronEvents } = window;
-
 const persistConfig = {
   key: "root",
   version: 1,
-  storage, // This will use localStorage in a browser context, but for Electron, you might want something like `electron-store`
+  storage, // This will use localStorage in a browser context, but for Tauri not sure TODO
 };
 
 const rootReducer = combineReducers({

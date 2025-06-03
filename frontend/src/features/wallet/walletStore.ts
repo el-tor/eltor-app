@@ -3,7 +3,7 @@ import type {
   FetchWalletBalanceResponseType,
   WalletProviderType,
   FetchChannelInfoResponseType,
-} from  "../../drivers/IWallet";
+} from  "./Wallet";
 import type { PayloadAction, SerializedError } from "@reduxjs/toolkit";
 import { walletApiService } from "../../services/walletApiService";
 

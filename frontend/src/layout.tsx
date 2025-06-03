@@ -8,7 +8,6 @@ import {
 import eltorLogo from "./assets/eltor-logo.png";
 import classes from "./globals.module.css";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-const { electronEvents } = window;
 import styles from "./globals.module.css";
 import { setTorActive, setRelayActive } from "./globalStore";
 import { useDispatch } from "./hooks";
@@ -21,38 +20,6 @@ export function Layout() {
 
   useEffect(() => {
     setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!electronEvents) return;
-    // Connect
-    electronEvents.onNavigateToConnect(() => {
-      navigate("/connect");
-      electronEvents.menuActivateConnect(() => {});
-      dispatch(setTorActive(true));
-    });
-    electronEvents.onNavigateToDeactivateConnect(() => {
-      navigate("/connect");
-      electronEvents.menuDeactivateConnect(() => {});
-      dispatch(setTorActive(false));
-    });
-
-    // Relay
-    electronEvents.onNavigateToRelay(() => {
-      navigate("/relay");
-      electronEvents.menuActivateRelay(() => {});
-      dispatch(setRelayActive(true));
-    });
-    electronEvents.onNavigateToDeactivateRelay(() => {
-      navigate("/relay");
-      electronEvents.menuDeactivateRelay(() => {});
-      dispatch(setRelayActive(false));
-    });
-
-    // Wallet
-    electronEvents.onNavigateToWallet(() => {
-      navigate("/wallet");
-    });
   }, []);
 
   return (

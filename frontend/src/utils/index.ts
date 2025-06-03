@@ -1,5 +1,5 @@
 import { type ClassValue, clsx } from 'clsx'
-import type { WalletProviderType } from '../drivers/IWallet';
+import type { WalletProviderType } from '../features/wallet/Wallet';
 // import { twMerge } from 'tailwind-merge'
 
 export {
@@ -13,7 +13,8 @@ function cn(...inputs: ClassValue[]) {
 
 
 function dynamicWalletImport<T>(defaultWallet: WalletProviderType) {
-  const module = import.meta.glob("../drivers/wallets/**/*.ts", {
+  // @ts-ignore
+  const module = import.meta.glob("../features/wallet/**/*.ts", {
     eager: true,
   });
   let dynImport: any;

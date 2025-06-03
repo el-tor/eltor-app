@@ -41,7 +41,7 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
     // if (ip.startsWith("127")) {
     return getRandomLatLng()
     // }
-    //const geo = await window.electronEvents.lookupIP(ip);
+    // const geo = await lookupIP(ip); // TODO geoip lib does not work in browser, outsource to backend rust
     // return [geo?.ll[1], geo?.ll[0]];
   }
 

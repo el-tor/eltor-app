@@ -2,7 +2,7 @@ import { isTauri } from '../utils/platform'
 import type { 
   FetchWalletBalanceResponseType, 
   FetchChannelInfoResponseType 
-} from '../drivers/IWallet'
+} from '../features/wallet/Wallet'
 
 // Tauri imports (only loaded when in Tauri mode)
 let tauriInvoke: any = null

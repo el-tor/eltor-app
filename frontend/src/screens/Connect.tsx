@@ -21,6 +21,7 @@ import {
   Circuit,
 } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
+// @ts-ignore
 import styles from '../globals.module.css'
 import MapComponent from '../components/Map/MapComponent'
 import './Connect.css'
@@ -28,8 +29,6 @@ import { useEltord } from '../hooks/useEltord'
 import { isTauri } from '../utils/platform'
 import { LogEntry, apiService } from '../services/apiService'
 
-
-const { electronEvents } = window
 
 export const Connect = () => {
   const params: any = useParams()
@@ -42,55 +41,6 @@ export const Connect = () => {
   const preRef = useRef<HTMLPreElement>(null)
   const [logs, setLogs] = useState<LogEntry[]>([])
   
-
-  useEffect(() => {
-    if (!electronEvents?.onTorStdout) return
-    // Listen for 'onTorStdout' event via the exposed electronAPI
-    electronEvents.onTorStdout((event: any, data: any) => {
-      dispatch(setCommandOutput(commandOutput + '\n\n' + data))
-    })
-    electronEvents.onPayCircuit((event, circuitResp) => {
-      dispatch(
-        setCommandOutput(
-          commandOutput +
-            `
-            \n\nPay Circuits:  ${JSON.stringify(circuitResp.circuits)}
-          `,
-        ),
-      )
-      dispatch(setCircuits(circuitResp.circuits))
-      if (circuitInUse.id !== circuitResp.circuitInUse.id) {
-        dispatch(setCircuitInUse(circuitResp.circuitInUse))
-      }
-    })
-    // electronEvents.onCircuitRenew((event, circuitRenew) => {
-    //   if (circuitRenew.circuit.relays.length >= 3) {
-    //     dispatch(
-    //       setCommandOutput(
-    //         commandOutput +
-    //           `
-    //         \n\nRenewed Circuits:  ${JSON.stringify(circuitRenew.circuit)}
-    //         \nHop 1: ${circuitRenew.circuit.relays[0]?.nickname} - ${
-    //             circuitRenew.circuit.relays[0]?.ip
-    //           },
-    //         \nHop 2: ${circuitRenew.circuit.relays[1]?.nickname} - ${
-    //             circuitRenew.circuit.relays[1]?.ip
-    //           },
-    //         \nHop 3: ${circuitRenew.circuit.relays[2]?.nickname} - ${
-    //             circuitRenew.circuit.relays[2]?.ip
-    //           },
-    //       `
-    //       )
-    //     );
-    //     dispatch(setCircuitInUse(circuitRenew.circuit));
-    //   }
-    // });
-    electronEvents.onNavigateToDeactivateConnect(() => {
-      dispatch(setCommandOutput('Deactivated'))
-      dispatch(setCircuits([]))
-      dispatch(setCircuitInUse({} as Circuit))
-    })
-  }, [])
 
   useEffect(() => {
     if (preRef.current) {
@@ -158,9 +108,9 @@ export const Connect = () => {
           onChange={(checked) => {
             setLoading(true);
             if (checked) {
-            electronEvents.menuActivateConnect(()=>{});
+            
             } else {
-              electronEvents.menuDeactivateConnect(()=>{});
+             
             }
             setLoading(false);
           }}

@@ -8,8 +8,7 @@
     "web" : "concurrently \"pnpm run backend\" \"pnpm run frontend\"",
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
-    "build:web": "cd web && pnpm run build",
-    "build:tauri": "cd electron && pnpm run build"
+    "build:web": "cd web && pnpm run build"
   },
   "workspaces": [
     "frontend",

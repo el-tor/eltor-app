@@ -20,6 +20,29 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const eltorLog = `
+%@@@@@@@@@@@@@%%%@@@@%%%%%%%%%@@@@@@@@@@@@@@@@%%%%%@@@@@@%%%%%%%@@@@@@@@@@%%%%%%
+@#***********#%%%****%%%%%%%@%********###**#%%%%@@%#++*#%@@%%%%%#*******##%@@%%%
+@=:::::::::::-%@#::::#@%%%%@@#:::::::::::::-%@%@%+::::::-*%@%%%@+:::::::::-+%@%%
+@=:::::::::::-@@#::::#@%%%%@@%:::::::::::::-%@@*::::::::::-#@%%@+:::::::::::-%%%
+@=:::::::::::-@@#::::#@%%%%%@%:::::::::::::-@@+:::::::::::::#@%@+::::::::::::+@%
+@=::::======-=%@#::::#@%%%%%@#-----::::----=@#::::::::::::::-%@@+::::-=--:::::#%
+@=:::=@@@@@@@@@@#::::#@%%%%%%%@@@@#::::#@@@%%-::::-#%%%+:::::+@@+:::-%@@%+::::*@
+@=:::=@@@@@@@@@@#::::#@%%%%@@@@%%@#::::#@%%@#::::-%@@@@@#::::-%@+:::-%@@@%::::+@
+@=::::------*@@@#::::#@%%@%###%@%@#::::#@%%@+::::#@%%%%@@=::::%@+:::-@@@@*::::*@
+@=::::::::::+@@@#::::#@%@%=--:+@%@#::::#@%%@+::::%@%%%%%@*::::#@+::::+++=:::::#@
+@+::::::::::+@@@#::::#@%%%****#%%@#::::#@%%@+::::%@%%%%%@*::::#@+::::::::::::=%%
+@+::::::::::+@@@#::::#@%%%@@@@@%%@#::::#@%%@+::::#@%%%%%@=::::%@+:::::::::::-%@%
+@+:::=%%%%%%%@@@#::::#@%%%%@@%%%%@*::::#@%%@#::::-%@%%%@*::::-%@+::::::::---%@%%
+@+:--=@%%%%@%%%@#:--:*%%%%%%%%%%%@*:--:#@%%%%-:--:-#%%%+:---:*@@+:---+*----:#@%%
+@+:-----------+@#:-----------%@%%@*:--:#@%%%@#:--------:---:-%%@+:---%@+:----%%%
+@+-----------:+@#:----------:#@%%@*:--:#@%%%%@*:----------:-%@%%+:---%@%----:+@%
+@+------------+@#-----------:#%%%@*:--:#@%%%%%@*-:-------:=%@%%%+:---%%@#:----#@
+@=:::--------:+@#::---:::--::#@%%@*::::#@%%%%%%@%+-------*%@%%%%+:::-%%%@*:--:-%
+@############*#@%**#*********%%%%%#****%%%%%%%%%%@%#***#%@%%%%%%#****%%%%%**##*#
+%@@@@@@@@@@@@@@%%@@%@@@@@%%@@%%%%%%@@@@%%%%%%%%%%%%@@@@%%%%%%%%%%@@@@%%%%%@@@%%%
+`
+
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (autoScroll && logsEndRef.current) {
@@ -42,13 +65,13 @@ const LogViewer: React.FC<LogViewerProps> = ({
 
     const setupLogStreaming = async () => {
       console.log('🔧 LogViewer: Setting up log streaming, isTauri:', isTauri())
-      
+
       if (isTauri()) {
         // Tauri mode - use new subscription system to prevent duplicates
         cleanup = await apiService.subscribeToEvents((eventName, payload) => {
           // Only process if this effect is still active
           if (!isEffectActive) return
-          
+
           console.log('📡 LogViewer: Received Tauri event:', eventName, payload)
           if (eventName === 'eltord-log') {
             console.log('📝 LogViewer: Adding new log:', payload)
@@ -56,7 +79,13 @@ const LogViewer: React.FC<LogViewerProps> = ({
             setLogs((currentLogs: LogEntry[]) => {
               const incomingLog = payload as LogEntry
               // Prevent duplicates by checking for unique timestamp (or use another unique property)
-              if (currentLogs.some(log => log.timestamp === incomingLog.timestamp && log.message === incomingLog.message)) {
+              if (
+                currentLogs.some(
+                  (log) =>
+                    log.timestamp === incomingLog.timestamp &&
+                    log.message === incomingLog.message,
+                )
+              ) {
                 return currentLogs
               }
               const newLogs = [...currentLogs, incomingLog]
@@ -72,7 +101,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
         cleanup = apiService.createLogStream(
           (log: LogEntry) => {
             if (!isEffectActive) return // Prevent stale updates
-            
+
             console.log('📡 LogViewer: Received SSE log:', log)
             console.log('📝 LogViewer: Adding new log:', log)
             setLogs((currentLogs: LogEntry[]) => {
@@ -91,7 +120,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
       }
     }
 
-    setupLogStreaming().catch(error => {
+    setupLogStreaming().catch((error) => {
       console.error('❌ Failed to setup log streaming:', error)
       setIsConnected(false)
     })
@@ -110,7 +139,11 @@ const LogViewer: React.FC<LogViewerProps> = ({
       try {
         console.log('Loading initial logs...')
         const status = await apiService.getEltordStatus()
-        console.log('Initial logs loaded:', status.recent_logs?.length || 0, 'logs')
+        console.log(
+          'Initial logs loaded:',
+          status.recent_logs?.length || 0,
+          'logs',
+        )
         if (status.recent_logs) {
           setLogs(status.recent_logs)
         }
