@@ -81,31 +81,7 @@ async fn read_process_stderr_logs(
     }
 }
 
-#[axum::debug_handler(state = AppState)]
-pub async fn activate_eltord(
-    AxumState(state): AxumState<AppState>,
-) -> ResponseJson<MessageResponse> {
-    // Check if already running
-    {
-        let mut process_guard = state.process.lock().unwrap();
-        if let Some(ref mut child) = *process_guard {
-            match child.try_wait() {
-                Ok(Some(_)) => {
-                    // Process has exited, clear it
-                    *process_guard = None;
-                }
-                Ok(None) => {
-                    // Process is still running, but continue anyway
-                    println!("⚠️ Eltord process already running, continuing...");
-                }
-                Err(_) => {
-                    // Error checking process, assume it's dead
-                    *process_guard = None;
-                }
-            }
-        }
-    }
-
+pub fn get_bin_dir() -> std::path::PathBuf {
     // Get the path to the eltord binary from ./bin folder (relative to backend crate)
     // Use the CARGO_MANIFEST_DIR environment variable to find the backend directory
     let backend_dir = std::env::var("CARGO_MANIFEST_DIR")
@@ -138,7 +114,36 @@ pub async fn activate_eltord(
             }
         });
     
-    let bin_dir = std::path::Path::new(&backend_dir).join("bin");
+    let bin_dir: std::path::PathBuf = std::path::Path::new(&backend_dir).join("bin");
+    bin_dir
+}
+
+#[axum::debug_handler(state = AppState)]
+pub async fn activate_eltord(
+    AxumState(state): AxumState<AppState>,
+) -> ResponseJson<MessageResponse> {
+    // Check if already running
+    {
+        let mut process_guard = state.process.lock().unwrap();
+        if let Some(ref mut child) = *process_guard {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    // Process has exited, clear it
+                    *process_guard = None;
+                }
+                Ok(None) => {
+                    // Process is still running, but continue anyway
+                    println!("⚠️ Eltord process already running, continuing...");
+                }
+                Err(_) => {
+                    // Error checking process, assume it's dead
+                    *process_guard = None;
+                }
+            }
+        }
+    }
+
+    let bin_dir = get_bin_dir();
     let eltord_binary = bin_dir.join("eltord");
     let torrc_file = bin_dir.join("torrc");
     

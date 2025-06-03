@@ -11,7 +11,7 @@ pub mod wallet;
 // Re-export commonly used types for convenience
 pub use lightning::{LightningNode, NodeInfoResponse, WalletBalanceResponse, ListTransactionsResponse};
 pub use state::{AppState, MessageResponse, StatusResponse, LogEntry, EltordStatusResponse};
-pub use routes::eltor::{activate_eltord as backend_activate, deactivate_eltord as backend_deactivate, get_eltord_status as backend_status};
+pub use routes::eltor::{activate_eltord as backend_activate, deactivate_eltord as backend_deactivate, get_eltord_status as backend_status, get_bin_dir};
 use tokio::sync::broadcast;
 
 /// Create a new AppState for Tauri usage

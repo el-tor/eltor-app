@@ -79,7 +79,7 @@ async fn main() {
     // Initialize Lightning node
     println!("⚡ Initializing Lightning node...");
 
-    // Try to initialize from torrc first, then fall back to environment variables
+    // Initialize from torrc
     let torrc_path = "bin/torrc";
     let lightning_node = match crate::lightning::LightningNode::from_torrc(torrc_path) {
         Ok(node) => {

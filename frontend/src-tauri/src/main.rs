@@ -1,22 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{AppHandle, command, generate_context, Builder, Manager, WindowEvent, Emitter, State};
-use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
 use std::sync::Arc;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
 
 // Import backend library
 use eltor_backend::{
-    AppState as BackendAppState, 
-    LogEntry, 
-    ports,
-    create_app_state,
-    initialize_phoenixd,
-    activate_eltord_wrapper,
-    deactivate_eltord_wrapper,
-    get_eltord_status_wrapper,
-    get_log_receiver
+    activate_eltord_wrapper, create_app_state, deactivate_eltord_wrapper, get_bin_dir,
+    get_eltord_status_wrapper, get_log_receiver, initialize_phoenixd, lightning, ports,
+    AppState as BackendAppState, LogEntry,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -44,6 +39,7 @@ impl From<LogEntry> for TauriLogEntry {
 struct TauriState {
     backend_state: Arc<BackendAppState>,
     log_listener_active: Arc<tokio::sync::Mutex<bool>>,
+    lightning_node: Arc<tokio::sync::Mutex<Option<lightning::LightningNode>>>,
 }
 
 impl TauriState {
@@ -52,9 +48,10 @@ impl TauriState {
         Self {
             backend_state: Arc::new(backend_state),
             log_listener_active: Arc::new(tokio::sync::Mutex::new(false)),
+            lightning_node: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
-    
+
     async fn initialize_phoenixd(&self) -> Result<(), String> {
         initialize_phoenixd((*self.backend_state).clone()).await
     }
@@ -63,14 +60,14 @@ impl TauriState {
 #[command]
 async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
     println!("test_log_event command called");
-    
+
     let test_log = TauriLogEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
         level: "INFO".to_string(),
         message: "This is a test log message from Tauri backend".to_string(),
         source: "test".to_string(),
     };
-    
+
     match app_handle.emit("eltord-log", &test_log) {
         Ok(_) => {
             println!("Successfully emitted test eltord-log event");
@@ -109,22 +106,25 @@ async fn activate_eltord(
     app_handle: AppHandle,
 ) -> Result<String, String> {
     println!("🚀 activate_eltord command called");
-    
+
     let backend_state = tauri_state.backend_state.clone();
-    
-    println!("🔧 Current working directory: {:?}", std::env::current_dir());
-    
+
+    println!(
+        "🔧 Current working directory: {:?}",
+        std::env::current_dir()
+    );
+
     // Use backend wrapper function
     match activate_eltord_wrapper((*backend_state).clone()).await {
         Ok(message) => {
             println!("✅ Backend activation successful: {}", message);
-            
+
             // Check if log listener is already active
             let mut listener_active = tauri_state.log_listener_active.lock().await;
             if !*listener_active {
                 *listener_active = true;
                 println!("📡 Starting new log listener task");
-                
+
                 // Set up single log listener for this activation
                 let listener_flag = tauri_state.log_listener_active.clone();
                 let backend_state_clone = (*backend_state).clone();
@@ -137,7 +137,7 @@ async fn activate_eltord(
                             break;
                         }
                     }
-                    
+
                     // Reset flag when listener stops
                     *listener_flag.lock().await = false;
                     println!("📡 Log listener task stopped");
@@ -145,7 +145,7 @@ async fn activate_eltord(
             } else {
                 println!("📡 Log listener already active, skipping spawn");
             }
-            
+
             Ok(message)
         }
         Err(e) => {
@@ -161,28 +161,82 @@ async fn deactivate_eltord(
     _app_handle: AppHandle,
 ) -> Result<String, String> {
     println!("deactivate_eltord command called");
-    
+
     let backend_state = tauri_state.backend_state.clone();
-    
+
     // Use backend wrapper function
     deactivate_eltord_wrapper((*backend_state).clone()).await
 }
 
 #[command]
-async fn get_eltord_status(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
+async fn get_eltord_status(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
     let backend_state = tauri_state.backend_state.clone();
-    
+
     // Use backend wrapper function
     let status = get_eltord_status_wrapper((*backend_state).clone()).await;
-    
+
     // Convert backend logs to Tauri format
-    let tauri_logs: Vec<TauriLogEntry> = status.recent_logs.into_iter().map(|log| log.into()).collect();
-    
+    let tauri_logs: Vec<TauriLogEntry> = status
+        .recent_logs
+        .into_iter()
+        .map(|log| log.into())
+        .collect();
+
     Ok(serde_json::json!({
         "running": status.running,
         "pid": status.pid,
         "recent_logs": tauri_logs
     }))
+}
+
+#[command]
+async fn get_wallet_balance(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    // Get the lightning node from TauriState
+    let lightning_node_guard = tauri_state.lightning_node.lock().await;
+    let lightning_node = lightning_node_guard
+        .as_ref()
+        .ok_or("Lightning node not initialized")?;
+
+    // Get the balance from the lightning node
+    match lightning_node.get_balance().await {
+        Ok(balance) => {
+            println!("✅ Retrieved wallet balance: {} sats", balance.confirmed_balance_sats);
+            Ok(serde_json::json!(balance))
+        }
+        Err(e) => {
+            println!("❌ Failed to get wallet balance: {}", e);
+            Err(format!("Failed to get wallet balance: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn get_wallet_transactions(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    // Get the lightning node from TauriState
+    let lightning_node_guard = tauri_state.lightning_node.lock().await;
+    let lightning_node = lightning_node_guard
+        .as_ref()
+        .ok_or("Lightning node not initialized")?;
+
+    let params = ListTransactionsParams {
+        payment_hash: None, // Get all transactions
+        from: 0,
+        limit: 1000,
+    };
+    
+    match lightning_node.list_transactions(params).await {
+        Ok(transactions) => Ok(serde_json::json!(transactions)),
+        Err(e) => {
+            println!("❌ Failed to get wallet txns: {}", e);
+            Err(format!("Failed to get wallet txns: {}", e))
+        }
+    }
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -191,9 +245,12 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
     let activate_i = MenuItem::with_id(app, "activate", "Activate", true, None::<&str>)?;
     let deactivate_i = MenuItem::with_id(app, "deactivate", "Deactivate", true, None::<&str>)?;
-    
-    let menu = Menu::with_items(app, &[&show_i, &hide_i, &activate_i, &deactivate_i, &quit_i])?;
-    
+
+    let menu = Menu::with_items(
+        app,
+        &[&show_i, &hide_i, &activate_i, &deactivate_i, &quit_i],
+    )?;
+
     let _ = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .icon(app.default_window_icon().unwrap().clone())
@@ -276,16 +333,15 @@ fn main() {
     Builder::default()
         .setup(|app| {
             setup_tray(app.handle())?;
-            
+
             // Initialize the Tauri state
             let tauri_state = TauriState::new();
-            
+
             // Initialize phoenixd asynchronously after the runtime is available
             let app_handle = app.handle().clone();
             let state_for_init = tauri_state.clone();
-            
-            tauri::async_runtime::spawn(async move {
 
+            tauri::async_runtime::spawn(async move {
                 // Clean up any processes using our ports
                 println!("🧹 Starting port cleanup...");
                 if let Err(e) = ports::cleanup_ports().await {
@@ -300,14 +356,34 @@ fn main() {
                     }
                     Err(e) => {
                         println!("❌ Failed to initialize phoenixd: {}", e);
-                        let _ = app_handle.emit("phoenixd-error", format!("Phoenixd initialization failed: {}", e));
+                        let _ = app_handle.emit(
+                            "phoenixd-error",
+                            format!("Phoenixd initialization failed: {}", e),
+                        );
+                    }
+                }
+
+                // Initialize lightning node
+                let torrc_path = get_bin_dir().join("torrc");
+                match lightning::LightningNode::from_torrc(torrc_path) {
+                    Ok(node) => {
+                        println!("✅ Lightning node connected from torrc ({})", node.node_type());
+                        // Store the lightning node in TauriState
+                        let mut lightning_node_guard = state_for_init.lightning_node.lock().await;
+                        *lightning_node_guard = Some(node);
+                        drop(lightning_node_guard); // Release the lock
+                        let _ = app_handle.emit("lightning-ready", "Lightning node ready");
+                    }
+                    Err(e) => {
+                        println!("⚠️  Failed to initialize Lightning node from torrc: {}", e);
+                        let _ = app_handle.emit("lightning-error", format!("Lightning initialization failed: {}", e));
                     }
                 }
             });
-            
+
             // Store the state for Tauri commands
             app.manage(tauri_state);
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -325,7 +401,9 @@ fn main() {
             activate_eltord,
             deactivate_eltord,
             get_eltord_status,
-            test_log_event
+            test_log_event,
+            get_wallet_balance,
+            get_wallet_transactions
         ])
         .run(generate_context!())
         .expect("error while running tauri application");
