@@ -118,7 +118,8 @@ export const Connect = () => {
         /> */}
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
-          <Circle color={torActive ? 'lightgreen' : '#FF6347'} />
+          {circuitInUse.id && isRunning && <Text>Circuit: {circuitInUse.id}</Text>}
+          <Circle color={isRunning ? 'lightgreen' : '#FF6347'} />
         </Group>
       </Group>
       <MapComponent h={500} />
@@ -154,7 +155,6 @@ export const Connect = () => {
             logs={logs}
             setLogs={setLogs}
           />
-          <span className="blink-cursor">&nbsp;</span>
         </pre>
         <Button
           size="xs"

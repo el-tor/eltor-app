@@ -17,6 +17,9 @@ mod wallet;
 
 use state::{AppState, MessageResponse, StatusResponse};
 
+use crate::routes::eltor::get_bin_dir;
+use crate::routes::ip;
+
 // Tor-related handlers
 async fn connect_tor() -> ResponseJson<StatusResponse> {
     println!("🔗 Connecting to Tor...");
@@ -115,6 +118,17 @@ async fn main() {
         println!("🔗 Using external phoenixd instance");
     }
 
+    // Initialize IP database
+    let ip_db_path = get_bin_dir().join("IP2LOCATION-LITE-DB3.BIN");
+    if ip_db_path.exists() {
+        if let Err(e) = ip::init_ip_database(ip_db_path) {
+            eprintln!("⚠️  Failed to initialize IP database: {}", e);
+        }
+    } else {
+        eprintln!("⚠️  IP database not found at: {}", ip_db_path.display());
+        eprintln!("   Download IP2LOCATION-LITE-DB3.BIN to enable IP geolocation");
+    }
+
     // Configure CORS to allow SSE
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
@@ -131,6 +145,8 @@ async fn main() {
         .route("/api/tor/connect", post(connect_tor))
         .route("/api/tor/disconnect", post(disconnect_tor))
         .route("/api/tor/status", get(get_tor_status))
+        .route("/api/ip/:ip", get(ip::get_ip_location))
+        .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
         .merge(routes::eltor::create_routes())
         .merge(routes::wallet::create_routes())
         .layer(cors)

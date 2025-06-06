@@ -52,6 +52,7 @@ export function Layout() {
                   className={classes.link}
                   data-active={
                     window.location.pathname.includes("connect") ||
+                    window.location.pathname === "/" ||
                     undefined
                   }
                   href=""

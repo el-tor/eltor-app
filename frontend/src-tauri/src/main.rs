@@ -11,7 +11,7 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 use eltor_backend::{
     activate_eltord_wrapper, create_app_state, deactivate_eltord_wrapper, get_bin_dir,
     get_eltord_status_wrapper, get_log_receiver, initialize_phoenixd, lightning, ports,
-    AppState as BackendAppState, LogEntry,
+    AppState as BackendAppState, LogEntry, lookup_ip_location, IpLocationResponse
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -204,7 +204,10 @@ async fn get_wallet_balance(
     // Get the balance from the lightning node
     match lightning_node.get_balance().await {
         Ok(balance) => {
-            println!("✅ Retrieved wallet balance: {} sats", balance.confirmed_balance_sats);
+            println!(
+                "✅ Retrieved wallet balance: {} sats",
+                balance.confirmed_balance_sats
+            );
             Ok(serde_json::json!(balance))
         }
         Err(e) => {
@@ -229,7 +232,6 @@ async fn get_wallet_transactions(
         from: 0,
         limit: 1000,
     };
-    
     match lightning_node.list_transactions(params).await {
         Ok(transactions) => Ok(serde_json::json!(transactions)),
         Err(e) => {
@@ -237,6 +239,11 @@ async fn get_wallet_transactions(
             Err(format!("Failed to get wallet txns: {}", e))
         }
     }
+}
+
+#[command]
+async fn lookup_ip_location_tauri(ip: String) -> Result<IpLocationResponse, String> {
+    lookup_ip_location(&ip)
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -367,7 +374,10 @@ fn main() {
                 let torrc_path = get_bin_dir().join("torrc");
                 match lightning::LightningNode::from_torrc(torrc_path) {
                     Ok(node) => {
-                        println!("✅ Lightning node connected from torrc ({})", node.node_type());
+                        println!(
+                            "✅ Lightning node connected from torrc ({})",
+                            node.node_type()
+                        );
                         // Store the lightning node in TauriState
                         let mut lightning_node_guard = state_for_init.lightning_node.lock().await;
                         *lightning_node_guard = Some(node);
@@ -376,8 +386,21 @@ fn main() {
                     }
                     Err(e) => {
                         println!("⚠️  Failed to initialize Lightning node from torrc: {}", e);
-                        let _ = app_handle.emit("lightning-error", format!("Lightning initialization failed: {}", e));
+                        let _ = app_handle.emit(
+                            "lightning-error",
+                            format!("Lightning initialization failed: {}", e),
+                        );
                     }
+                }
+
+                // Initialize IP database for Tauri
+                let ip_db_path = get_bin_dir().join("IP2LOCATION-LITE-DB3.BIN");
+                if ip_db_path.exists() {
+                    if let Err(e) = eltor_backend::init_ip_database(ip_db_path) {
+                        eprintln!("⚠️  Failed to initialize IP database: {}", e);
+                    }
+                } else {
+                    eprintln!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
                 }
             });
 
@@ -403,7 +426,8 @@ fn main() {
             get_eltord_status,
             test_log_event,
             get_wallet_balance,
-            get_wallet_transactions
+            get_wallet_transactions,
+            lookup_ip_location_tauri,
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

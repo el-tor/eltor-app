@@ -19,6 +19,7 @@ import './MapComponent.css'
 import { useDispatch, useSelector } from '../../hooks'
 import { setMyIp } from '../../globalStore'
 // import { useDebounceCallback } from "usehooks-ts";
+import { apiService } from '../../services/apiService'
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -37,12 +38,44 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
     }[]
   >([])
 
-  const fetchGeoLocation = async (ip: string) => {
-    // if (ip.startsWith("127")) {
-    return getRandomLatLng()
-    // }
-    // const geo = await lookupIP(ip); // TODO geoip lib does not work in browser, outsource to backend rust
-    // return [geo?.ll[1], geo?.ll[0]];
+  const fetchGeoLocation = async (ip: string): Promise<[number, number]> => {
+    // Handle local/private IPs with random coordinates
+    if (
+      ip.startsWith('127') ||
+      ip.startsWith('192.168') ||
+      ip.startsWith('10.') ||
+      ip.startsWith('172.')
+    ) {
+      return getRandomLatLng() as [number, number]
+    }
+
+    try {
+      const result = await apiService.lookupIpLocation(ip)
+      console.log(
+        `📍 IP ${ip} located at: ${result.city}, ${result.country} (${result.latitude}, ${result.longitude})`,
+      )
+      return [result.longitude, result.latitude] // [lng, lat] for your map
+    } catch (error) {
+      console.warn(`Failed to lookup IP ${ip}:`, error)
+      return getRandomLatLng() as [number, number] // Fallback to random coordinates
+    }
+  }
+
+  const fetchMultipleGeoLocations = async (ips: string[]) => {
+    try {
+      const results = await apiService.lookupBulkIpLocations(ips)
+      return results.map((result, index) => {
+        if ('error' in result) {
+          console.warn(`Failed to lookup IP ${ips[index]}:`, result.error)
+          return getRandomLatLng()
+        } else {
+          return [result.longitude, result.latitude] as [number, number]
+        }
+      })
+    } catch (error) {
+      console.warn('Bulk IP lookup failed:', error)
+      return ips.map(() => getRandomLatLng())
+    }
   }
 
   const fetchMyIpAddress = async () => {
@@ -88,7 +121,7 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
       {
         name: 'Me',
         coordinates: myLocation,
-        //markerOffset: -20,
+        // markerOffset: -20,
         ip: myIp,
         fingerprint: 'N/A',
       },

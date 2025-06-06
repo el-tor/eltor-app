@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { apiService, LogEntry } from '../services/apiService'
 import { isTauri } from '../utils/platform'
+import { Circuit, setCircuitInUse, setCircuits } from '../globalStore'
+import { useDispatch, useSelector } from '../hooks'
 
 interface LogViewerProps {
   className?: string
@@ -19,6 +21,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const [autoScroll, setAutoScroll] = useState(true)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dispatch = useDispatch()
 
   const eltorLog = `
 %@@@@@@@@@@@@@%%%@@@@%%%%%%%%%@@@@@@@@@@@@@@@@%%%%%@@@@@@%%%%%%%@@@@@@@@@@%%%%%%
@@ -62,6 +65,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
   useEffect(() => {
     let cleanup: (() => void) | undefined
     let isEffectActive = true // Flag to prevent stale updates
+    let lastCircuitId = 0 // Reset lastCircuitId on mount
 
     const setupLogStreaming = async () => {
       console.log('🔧 LogViewer: Setting up log streaming, isTauri:', isTauri())
@@ -90,6 +94,11 @@ const LogViewer: React.FC<LogViewerProps> = ({
               }
               const newLogs = [...currentLogs, incomingLog]
               console.log('📊 Updated logs count:', newLogs.length)
+              lastCircuitId = handleEvent(
+                incomingLog.message,
+                lastCircuitId,
+                dispatch,
+              )
               return newLogs
             })
           }
@@ -101,9 +110,9 @@ const LogViewer: React.FC<LogViewerProps> = ({
         cleanup = apiService.createLogStream(
           (log: LogEntry) => {
             if (!isEffectActive) return // Prevent stale updates
-
             console.log('📡 LogViewer: Received SSE log:', log)
             console.log('📝 LogViewer: Adding new log:', log)
+            lastCircuitId = handleEvent(log.message, lastCircuitId, dispatch)
             setLogs((currentLogs: LogEntry[]) => {
               const newLogs = [...currentLogs, log]
               console.log('📊 Updated logs count:', newLogs.length)
@@ -162,16 +171,16 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const getLevelColor = (level: string) => {
     switch (level.toUpperCase()) {
       case 'ERROR':
-        return 'text-red-400'
+        return 'red'
       case 'WARN':
       case 'WARNING':
-        return 'text-yellow-400'
+        return 'yellow'
       case 'INFO':
-        return 'text-blue-400'
+        return 'white'
       case 'DEBUG':
-        return 'text-gray-400'
+        return 'white'
       default:
-        return 'text-gray-300'
+        return 'white'
     }
   }
 
@@ -204,18 +213,8 @@ const LogViewer: React.FC<LogViewerProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-white">Eltord Logs</h3>
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-green-500' : 'bg-red-500'
-            }`}
-          />
-          <span className="text-xs text-gray-400">
-            {isConnected ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1 text-xs text-gray-400">
+    
+          <label className="flex items-center gap-1 text-xs text-gray-400" style={{float: 'right'}}>
             <input
               type="checkbox"
               checked={autoScroll}
@@ -224,6 +223,12 @@ const LogViewer: React.FC<LogViewerProps> = ({
             />
             Auto-scroll
           </label>
+          <h3 className="font-semibold text-white">Eltord Logs</h3>
+          <div
+            className={`w-2 h-2 rounded-full ${
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            }`}
+          />          
         </div>
       </div>
 
@@ -231,7 +236,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
       <div
         ref={containerRef}
         className="overflow-y-auto p-2 font-mono text-xs"
-        style={{ height }}
+        // style={{ height }}
         onScroll={handleScroll}
       >
         {logs.length === 0 ? (
@@ -252,10 +257,11 @@ const LogViewer: React.FC<LogViewerProps> = ({
               <span className={`shrink-0 ${getSourceColor(log.source)}`}>
                 [{log.source}]
               </span>
-              <span className="text-gray-200 break-all">{log.message}</span>
+              <span className="text-gray-200 break-all" style={{color: getLevelColor(log.level)}}> {log.message}</span>
             </div>
           ))
         )}
+        <span className="blink-cursor">&nbsp;</span>
         <div ref={logsEndRef} />
       </div>
     </div>
@@ -263,3 +269,41 @@ const LogViewer: React.FC<LogViewerProps> = ({
 }
 
 export default LogViewer
+
+export function handleEvent(
+  event: string,
+  lastCircuitId: number,
+  dispatch: any,
+) {
+  // parse the event data EVENT:{event_type, data}:ENDEVENT
+  const eventData = event.match(/EVENT:(.*):ENDEVENT/)
+  if (eventData && eventData[1]) {
+    try {
+      const parsedData = JSON.parse(eventData[1])
+      switch (parsedData.event) {
+        case 'CIRCUIT_BUILT':
+          const circuit: Circuit = {
+            id: parsedData.circuit_id,
+            relays: parsedData.relays,
+          }
+          console.log(JSON.stringify(circuit, null, 2))
+          //if (lastCircuitId !== circuit.id) {
+          console.info('Handle Event', circuit)
+          dispatch(setCircuitInUse(circuit))
+          dispatch(setCircuits([circuit]))
+          // if (circuit.id !== circuit.circuitInUse.id) {
+          //   dispatch(setCircuitInUse(circuitResp.circuitInUse))
+          // }
+          //}
+          //lastCircuitId = circuit.id
+          break
+        default:
+          console.warn(`Unhandled event type: ${parsedData.event}`)
+          break
+      }
+    } catch (error) {
+      console.error('Failed to parse event data:', error)
+    }
+  }
+  return lastCircuitId
+}

@@ -14,6 +14,9 @@ pub use state::{AppState, MessageResponse, StatusResponse, LogEntry, EltordStatu
 pub use routes::eltor::{activate_eltord as backend_activate, deactivate_eltord as backend_deactivate, get_eltord_status as backend_status, get_bin_dir};
 use tokio::sync::broadcast;
 
+// Re-export IP location types and functions
+pub use routes::ip::{IpLocationResponse, lookup_ip_location, init_ip_database};
+
 /// Create a new AppState for Tauri usage
 pub fn create_app_state(use_phoenixd_embedded: bool) -> AppState {
     AppState::new(use_phoenixd_embedded)
