@@ -1,6 +1,7 @@
 use std::fs;
 use std::process::Command;
 use std::env;
+use crate::state::AppState;
 
 /// Default ports used by the application
 const DEFAULT_PHOENIXD_PORT: u16 = 9740;
@@ -11,6 +12,7 @@ const DEFAULT_TOR_CONTROL_PORT: u16 = 9992;
 #[derive(Debug, Clone)]
 pub struct PortInfo {
     pub port: u16,
+    #[allow(dead_code)]
     pub service_name: String,
     pub description: String,
 }
@@ -68,8 +70,13 @@ pub fn get_phoenixd_port() -> u16 {
         .unwrap_or(DEFAULT_PHOENIXD_PORT)
 }
 
-/// Get all ports that need to be checked
-pub fn get_ports_to_check() -> Result<Vec<PortInfo>, String> {
+/// Get all ports that need to be checked using AppState torrc configuration
+pub fn get_ports_to_check(app_state: &AppState) -> Result<Vec<PortInfo>, String> {
+    get_ports_to_check_with_torrc(&app_state.torrc_file_name)
+}
+
+/// Get all ports that need to be checked with a specific torrc filename
+pub fn get_ports_to_check_with_torrc(torrc_filename: &str) -> Result<Vec<PortInfo>, String> {
     let mut ports = Vec::new();
     
     // Add phoenixd port
@@ -81,11 +88,11 @@ pub fn get_ports_to_check() -> Result<Vec<PortInfo>, String> {
     });
     
     // Parse torrc file for Tor ports
-    let torrc_path = "./bin/torrc";
-    match parse_torrc_ports(torrc_path) {
+    let torrc_path = format!("./bin/{}", torrc_filename);
+    match parse_torrc_ports(&torrc_path) {
         Ok(mut tor_ports) => ports.append(&mut tor_ports),
         Err(e) => {
-            eprintln!("⚠️  Warning: Could not parse torrc file: {}", e);
+            eprintln!("⚠️  Warning: Could not parse torrc file {}: {}", torrc_path, e);
             eprintln!("   Using default Tor ports instead");
             
             // Use default ports if torrc parsing fails
@@ -108,7 +115,7 @@ pub fn get_ports_to_check() -> Result<Vec<PortInfo>, String> {
 /// Check if a port is in use on macOS
 pub fn is_port_in_use(port: u16) -> Result<bool, String> {
     let output = Command::new("lsof")
-        .args(&["-i", &format!(":{}", port), "-t"])
+        .args(["-i", &format!(":{}", port), "-t"])
         .output()
         .map_err(|e| format!("Failed to run lsof: {}", e))?;
     
@@ -118,7 +125,7 @@ pub fn is_port_in_use(port: u16) -> Result<bool, String> {
 /// Get the PID of the process using a specific port
 pub fn get_pid_using_port(port: u16) -> Result<Option<u32>, String> {
     let output = Command::new("lsof")
-        .args(&["-i", &format!(":{}", port), "-t"])
+        .args(["-i", &format!(":{}", port), "-t"])
         .output()
         .map_err(|e| format!("Failed to run lsof: {}", e))?;
     
@@ -139,7 +146,7 @@ pub fn get_pid_using_port(port: u16) -> Result<Option<u32>, String> {
 /// Get process information for a given PID
 pub fn get_process_info(pid: u32) -> Result<String, String> {
     let output = Command::new("ps")
-        .args(&["-p", &pid.to_string(), "-o", "comm="])
+        .args(["-p", &pid.to_string(), "-o", "comm="])
         .output()
         .map_err(|e| format!("Failed to run ps: {}", e))?;
     
@@ -150,7 +157,7 @@ pub fn get_process_info(pid: u32) -> Result<String, String> {
 /// Kill a process by PID
 pub fn kill_process(pid: u32) -> Result<(), String> {
     let output = Command::new("kill")
-        .args(&["-TERM", &pid.to_string()])
+        .args(["-TERM", &pid.to_string()])
         .output()
         .map_err(|e| format!("Failed to kill process {}: {}", pid, e))?;
     
@@ -164,7 +171,7 @@ pub fn kill_process(pid: u32) -> Result<(), String> {
     
     if is_port_in_use_by_pid(pid)? {
         let output = Command::new("kill")
-            .args(&["-KILL", &pid.to_string()])
+            .args(["-KILL", &pid.to_string()])
             .output()
             .map_err(|e| format!("Failed to force kill process {}: {}", pid, e))?;
         
@@ -180,18 +187,28 @@ pub fn kill_process(pid: u32) -> Result<(), String> {
 /// Check if a specific PID is still running
 fn is_port_in_use_by_pid(pid: u32) -> Result<bool, String> {
     let output = Command::new("ps")
-        .args(&["-p", &pid.to_string()])
+        .args(["-p", &pid.to_string()])
         .output()
         .map_err(|e| format!("Failed to check if PID {} exists: {}", pid, e))?;
     
     Ok(output.status.success())
 }
 
-/// Clean up ports used by the application
-pub async fn cleanup_ports() -> Result<(), String> {
-    println!("🔍 Checking for processes using application ports...");
+/// Clean up ports used by the application using AppState torrc configuration
+pub async fn cleanup_ports(app_state: &AppState) -> Result<(), String> {
+    cleanup_ports_with_torrc(&app_state.torrc_file_name).await
+}
+
+/// Clean up ports during startup using default torrc file
+pub async fn cleanup_ports_startup() -> Result<(), String> {
+    cleanup_ports_with_torrc("torrc").await
+}
+
+/// Clean up ports used by the application for a specific torrc file
+pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String> {
+    println!("🔍 Checking for processes using application ports (torrc: {})...", torrc_filename);
     
-    let ports = get_ports_to_check()?;
+    let ports = get_ports_to_check_with_torrc(torrc_filename)?;
     let mut killed_processes = 0;
     
     for port_info in ports {
@@ -247,4 +264,97 @@ pub async fn cleanup_ports() -> Result<(), String> {
     }
     
     Ok(())
+}
+
+/// Clean up only Tor-related ports, leaving phoenixd running
+pub async fn cleanup_tor_ports_only(torrc_filename: &str) -> Result<(), String> {
+    println!("🔍 Checking for Tor processes only (torrc: {}, preserving phoenixd)...", torrc_filename);
+    
+    // Get only Tor ports, excluding phoenixd
+    let tor_ports = get_tor_ports_only(torrc_filename)?;
+    let mut killed_processes = 0;
+    
+    for port_info in tor_ports {
+        match is_port_in_use(port_info.port) {
+            Ok(true) => {
+                match get_pid_using_port(port_info.port) {
+                    Ok(Some(pid)) => {
+                        match get_process_info(pid) {
+                            Ok(process_name) => {
+                                println!("🔥 Port {} ({}) is in use by PID {} ({})", 
+                                        port_info.port, port_info.description, pid, process_name);
+                                
+                                print!("   Killing process... ");
+                                match kill_process(pid) {
+                                    Ok(()) => {
+                                        println!("✅ Killed successfully");
+                                        killed_processes += 1;
+                                    }
+                                    Err(e) => {
+                                        println!("❌ Failed: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("⚠️  Port {} is in use by PID {} but couldn't get process info: {}", 
+                                        port_info.port, pid, e);
+                            }
+                        }
+                    }
+                    Ok(None) => {
+                        println!("⚠️  Port {} appears to be in use but no PID found", port_info.port);
+                    }
+                    Err(e) => {
+                        println!("❌ Error checking PID for port {}: {}", port_info.port, e);
+                    }
+                }
+            }
+            Ok(false) => {
+                println!("✅ Port {} ({}) is available", port_info.port, port_info.description);
+            }
+            Err(e) => {
+                println!("❌ Error checking port {}: {}", port_info.port, e);
+            }
+        }
+    }
+    
+    if killed_processes > 0 {
+        println!("🧹 Killed {} Tor processes", killed_processes);
+        
+        // Wait a moment for processes to clean up
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    } else {
+        println!("ℹ️  No Tor processes needed to be killed");
+    }
+    
+    Ok(())
+}
+
+/// Get only Tor ports from torrc, excluding phoenixd
+pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String> {
+    let mut ports = Vec::new();
+    
+    // Parse torrc file for Tor ports only (no phoenixd)
+    let torrc_path = format!("./bin/{}", torrc_filename);
+    match parse_torrc_ports(&torrc_path) {
+        Ok(mut tor_ports) => ports.append(&mut tor_ports),
+        Err(e) => {
+            eprintln!("⚠️  Warning: Could not parse torrc file {}: {}", torrc_path, e);
+            eprintln!("   Using default Tor ports instead");
+            
+            // Use default ports if torrc parsing fails
+            ports.push(PortInfo {
+                port: DEFAULT_TOR_SOCKS_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor SOCKS Port (default)".to_string(),
+            });
+            ports.push(PortInfo {
+                port: DEFAULT_TOR_CONTROL_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor Control Port (default)".to_string(),
+            });
+        }
+    }
+    
+    Ok(ports)
 }

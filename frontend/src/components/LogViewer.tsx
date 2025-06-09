@@ -1,50 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { apiService, LogEntry } from '../services/apiService'
-import { isTauri } from '../utils/platform'
-import { Circuit, setCircuitInUse, setCircuits } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
 
 interface LogViewerProps {
   className?: string
   height?: string
-  logs: LogEntry[]
-  setLogs: React.Dispatch<React.SetStateAction<LogEntry[]>>
+  mode?: 'client' | 'relay' // Determines which log state to use
+  scroll?: boolean
 }
 
 const LogViewer: React.FC<LogViewerProps> = ({
   className = '',
   height = '400px',
-  logs,
-  setLogs,
+  mode = 'client',
+  scroll = true,
 }) => {
-  const [isConnected, setIsConnected] = useState(false)
-  const [autoScroll, setAutoScroll] = useState(true)
+  const [autoScroll, setAutoScroll] = useState(scroll)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dispatch = useDispatch()
-
-  const eltorLog = `
-%@@@@@@@@@@@@@%%%@@@@%%%%%%%%%@@@@@@@@@@@@@@@@%%%%%@@@@@@%%%%%%%@@@@@@@@@@%%%%%%
-@#***********#%%%****%%%%%%%@%********###**#%%%%@@%#++*#%@@%%%%%#*******##%@@%%%
-@=:::::::::::-%@#::::#@%%%%@@#:::::::::::::-%@%@%+::::::-*%@%%%@+:::::::::-+%@%%
-@=:::::::::::-@@#::::#@%%%%@@%:::::::::::::-%@@*::::::::::-#@%%@+:::::::::::-%%%
-@=:::::::::::-@@#::::#@%%%%%@%:::::::::::::-@@+:::::::::::::#@%@+::::::::::::+@%
-@=::::======-=%@#::::#@%%%%%@#-----::::----=@#::::::::::::::-%@@+::::-=--:::::#%
-@=:::=@@@@@@@@@@#::::#@%%%%%%%@@@@#::::#@@@%%-::::-#%%%+:::::+@@+:::-%@@%+::::*@
-@=:::=@@@@@@@@@@#::::#@%%%%@@@@%%@#::::#@%%@#::::-%@@@@@#::::-%@+:::-%@@@%::::+@
-@=::::------*@@@#::::#@%%@%###%@%@#::::#@%%@+::::#@%%%%@@=::::%@+:::-@@@@*::::*@
-@=::::::::::+@@@#::::#@%@%=--:+@%@#::::#@%%@+::::%@%%%%%@*::::#@+::::+++=:::::#@
-@+::::::::::+@@@#::::#@%%%****#%%@#::::#@%%@+::::%@%%%%%@*::::#@+::::::::::::=%%
-@+::::::::::+@@@#::::#@%%%@@@@@%%@#::::#@%%@+::::#@%%%%%@=::::%@+:::::::::::-%@%
-@+:::=%%%%%%%@@@#::::#@%%%%@@%%%%@*::::#@%%@#::::-%@%%%@*::::-%@+::::::::---%@%%
-@+:--=@%%%%@%%%@#:--:*%%%%%%%%%%%@*:--:#@%%%%-:--:-#%%%+:---:*@@+:---+*----:#@%%
-@+:-----------+@#:-----------%@%%@*:--:#@%%%@#:--------:---:-%%@+:---%@+:----%%%
-@+-----------:+@#:----------:#@%%@*:--:#@%%%%@*:----------:-%@%%+:---%@%----:+@%
-@+------------+@#-----------:#%%%@*:--:#@%%%%%@*-:-------:=%@%%%+:---%%@#:----#@
-@=:::--------:+@#::---:::--::#@%%@*::::#@%%%%%%@%+-------*%@%%%%+:::-%%%@*:--:-%
-@############*#@%**#*********%%%%%#****%%%%%%%%%%@%#***#%@%%%%%%#****%%%%%**##*#
-%@@@@@@@@@@@@@@%%@@%@@@@@%%@@%%%%%%@@@@%%%%%%%%%%%%@@@@%%%%%%%%%%@@@@%%%%%@@@%%%
-`
+  
+  // Get logs from Redux based on mode
+  const { logsClient, logsRelay } = useSelector((state) => state.global)
+  const logs = mode === 'client' ? logsClient : logsRelay
+  
+  console.log(`📊 LogViewer (${mode}): Displaying ${logs?.length || 0} logs`)
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -62,111 +42,45 @@ const LogViewer: React.FC<LogViewerProps> = ({
     }
   }
 
-  useEffect(() => {
-    let cleanup: (() => void) | undefined
-    let isEffectActive = true // Flag to prevent stale updates
-    let lastCircuitId = 0 // Reset lastCircuitId on mount
-
-    const setupLogStreaming = async () => {
-      console.log('🔧 LogViewer: Setting up log streaming, isTauri:', isTauri())
-
-      if (isTauri()) {
-        // Tauri mode - use new subscription system to prevent duplicates
-        cleanup = await apiService.subscribeToEvents((eventName, payload) => {
-          // Only process if this effect is still active
-          if (!isEffectActive) return
-
-          console.log('📡 LogViewer: Received Tauri event:', eventName, payload)
-          if (eventName === 'eltord-log') {
-            console.log('📝 LogViewer: Adding new log:', payload)
-            // Use functional update to avoid stale closure issues
-            setLogs((currentLogs: LogEntry[]) => {
-              const incomingLog = payload as LogEntry
-              // Prevent duplicates by checking for unique timestamp (or use another unique property)
-              if (
-                currentLogs.some(
-                  (log) =>
-                    log.timestamp === incomingLog.timestamp &&
-                    log.message === incomingLog.message,
-                )
-              ) {
-                return currentLogs
-              }
-              const newLogs = [...currentLogs, incomingLog]
-              console.log('📊 Updated logs count:', newLogs.length)
-              lastCircuitId = handleEvent(
-                incomingLog.message,
-                lastCircuitId,
-                dispatch,
-              )
-              return newLogs
-            })
-          }
-        })
-        setIsConnected(true)
-        console.log('✅ LogViewer: Tauri event subscription setup complete')
-      } else {
-        // Web mode - use Server-Sent Events
-        cleanup = apiService.createLogStream(
-          (log: LogEntry) => {
-            if (!isEffectActive) return // Prevent stale updates
-            console.log('📡 LogViewer: Received SSE log:', log)
-            console.log('📝 LogViewer: Adding new log:', log)
-            lastCircuitId = handleEvent(log.message, lastCircuitId, dispatch)
-            setLogs((currentLogs: LogEntry[]) => {
-              const newLogs = [...currentLogs, log]
-              console.log('📊 Updated logs count:', newLogs.length)
-              return newLogs
-            })
-          },
-          (error: Error) => {
-            console.error('❌ Log stream error:', error)
-            setIsConnected(false)
-          },
-        )
-        setIsConnected(true)
-        console.log('✅ LogViewer: SSE log stream setup complete')
-      }
-    }
-
-    setupLogStreaming().catch((error) => {
-      console.error('❌ Failed to setup log streaming:', error)
-      setIsConnected(false)
-    })
-
-    return () => {
-      console.log('🧹 LogViewer: Cleaning up log streaming listeners')
-      isEffectActive = false // Mark effect as inactive
-      cleanup?.()
-      setIsConnected(false)
-    }
-  }, [])
-
-  // Load initial logs from status endpoint
+  // Load initial logs from status endpoint (only once per mode)
   useEffect(() => {
     const loadInitialLogs = async () => {
       try {
-        console.log('Loading initial logs...')
+        console.log(`📥 LogViewer (${mode}): Loading initial logs...`)
         const status = await apiService.getEltordStatus()
         console.log(
-          'Initial logs loaded:',
+          `📥 LogViewer (${mode}): Initial logs loaded:`,
           status.recent_logs?.length || 0,
           'logs',
         )
-        if (status.recent_logs) {
-          setLogs(status.recent_logs)
+        
+        // Only load initial logs if we don't have any logs yet
+        if (status.recent_logs && logs?.length === 0) {
+          // Filter initial logs by mode
+          const filteredLogs = status.recent_logs.filter(log => {
+            if (mode === 'client') {
+              return log.mode === 'client' || !log.mode
+            } else {
+              return log.mode === 'relay'
+            }
+          })
+          
+          console.log(`📥 LogViewer (${mode}): Filtered initial logs:`, filteredLogs?.length)
+          
+          // Dispatch to appropriate store based on mode
+          if (mode === 'client') {
+            dispatch({ type: 'global/setLogsClient', payload: filteredLogs })
+          } else {
+            dispatch({ type: 'global/setLogsRelay', payload: filteredLogs })
+          }
         }
       } catch (error) {
-        console.error('Failed to load initial logs:', error)
+        console.error(`❌ LogViewer (${mode}): Failed to load initial logs:`, error)
       }
     }
 
     loadInitialLogs()
-  }, [setLogs])
-
-  const clearLogs = () => {
-    setLogs([])
-  }
+  }, [mode, dispatch]) // Remove logs dependency to prevent infinite loops
 
   const getLevelColor = (level: string) => {
     switch (level.toUpperCase()) {
@@ -213,8 +127,10 @@ const LogViewer: React.FC<LogViewerProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700">
         <div className="flex items-center gap-2">
-    
-          <label className="flex items-center gap-1 text-xs text-gray-400" style={{float: 'right'}}>
+          <span className="text-xs text-gray-400">
+            {mode.charAt(0).toUpperCase() + mode.slice(1)} Logs ({logs?.length || 0})
+          </span>
+          <label className="flex items-center gap-1 text-xs text-gray-400">
             <input
               type="checkbox"
               checked={autoScroll}
@@ -223,12 +139,6 @@ const LogViewer: React.FC<LogViewerProps> = ({
             />
             Auto-scroll
           </label>
-          <h3 className="font-semibold text-white">Eltord Logs</h3>
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? 'bg-green-500' : 'bg-red-500'
-            }`}
-          />          
         </div>
       </div>
 
@@ -236,15 +146,15 @@ const LogViewer: React.FC<LogViewerProps> = ({
       <div
         ref={containerRef}
         className="overflow-y-auto p-2 font-mono text-xs"
-        // style={{ height }}
+        style={{ height }}
         onScroll={handleScroll}
       >
-        {logs.length === 0 ? (
+        {logs?.length === 0 ? (
           <div className="text-gray-500 text-center py-8">
-            No logs yet. Start the eltord process to see logs here.
+            No {mode} logs yet. Start the eltord {mode} process to see logs here.
           </div>
         ) : (
-          logs.map((log, index) => (
+          logs?.map((log, index) => (
             <div key={index} className="flex gap-2 py-1 hover:bg-gray-800">
               <span className="text-gray-500 shrink-0">
                 {formatTimestamp(log.timestamp)}
@@ -257,6 +167,11 @@ const LogViewer: React.FC<LogViewerProps> = ({
               <span className={`shrink-0 ${getSourceColor(log.source)}`}>
                 [{log.source}]
               </span>
+              {log.mode && (
+                <span className="shrink-0 text-blue-400 text-xs">
+                  [{log.mode}]
+                </span>
+              )}
               <span className="text-gray-200 break-all" style={{color: getLevelColor(log.level)}}> {log.message}</span>
             </div>
           ))
@@ -269,41 +184,3 @@ const LogViewer: React.FC<LogViewerProps> = ({
 }
 
 export default LogViewer
-
-export function handleEvent(
-  event: string,
-  lastCircuitId: number,
-  dispatch: any,
-) {
-  // parse the event data EVENT:{event_type, data}:ENDEVENT
-  const eventData = event.match(/EVENT:(.*):ENDEVENT/)
-  if (eventData && eventData[1]) {
-    try {
-      const parsedData = JSON.parse(eventData[1])
-      switch (parsedData.event) {
-        case 'CIRCUIT_BUILT':
-          const circuit: Circuit = {
-            id: parsedData.circuit_id,
-            relays: parsedData.relays,
-          }
-          console.log(JSON.stringify(circuit, null, 2))
-          //if (lastCircuitId !== circuit.id) {
-          console.info('Handle Event', circuit)
-          dispatch(setCircuitInUse(circuit))
-          dispatch(setCircuits([circuit]))
-          // if (circuit.id !== circuit.circuitInUse.id) {
-          //   dispatch(setCircuitInUse(circuitResp.circuitInUse))
-          // }
-          //}
-          //lastCircuitId = circuit.id
-          break
-        default:
-          console.warn(`Unhandled event type: ${parsedData.event}`)
-          break
-      }
-    } catch (error) {
-      console.error('Failed to parse event data:', error)
-    }
-  }
-  return lastCircuitId
-}

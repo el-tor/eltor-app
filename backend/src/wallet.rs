@@ -24,6 +24,7 @@ async fn read_phoenixd_logs(
                         level: "INFO".to_string(),
                         message: trimmed.to_string(),
                         source: source.to_string(),
+                        mode: None, // Wallet logs are system-wide
                     };
                     
                     println!("[phoenixd-{}] {}", source, trimmed);
@@ -57,6 +58,7 @@ async fn read_phoenixd_stderr_logs(
                         level: "WARN".to_string(), // phoenixd stderr might be warnings
                         message: trimmed.to_string(),
                         source: source.to_string(),
+                        mode: None, // Wallet logs are system-wide
                     };
                     
                     println!("[phoenixd-{}] {}", source, trimmed);
@@ -165,6 +167,7 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
         level: "INFO".to_string(),
         message: format!("Phoenixd wallet process started with PID: {}", pid),
         source: "system".to_string(),
+        mode: None, // Wallet logs are system-wide
     });
     
     Ok(())
@@ -190,6 +193,7 @@ pub async fn stop_phoenixd(state: AppState) -> Result<(), String> {
                     level: "INFO".to_string(),
                     message: "Phoenixd wallet process terminated".to_string(),
                     source: "system".to_string(),
+                    mode: None, // Wallet logs are system-wide
                 });
                 
                 Ok(())

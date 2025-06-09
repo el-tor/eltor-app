@@ -96,6 +96,7 @@ async fn get_wallet_transactions(State(state): State<AppState>) -> Result<Respon
                 payment_hash: None, // Get all transactions
                 from: 0,
                 limit: 1000,
+                search: None,
             };
             
             match node.list_transactions(params).await {

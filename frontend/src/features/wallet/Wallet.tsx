@@ -6,51 +6,56 @@ import {
   Loader,
   Group,
   SimpleGrid,
-} from "@mantine/core";
-import { useDispatch, useSelector } from "../../hooks";
-import { useEffect, useState } from "react";
+  Checkbox,
+} from '@mantine/core'
+import { useDispatch, useSelector } from '../../hooks'
+import { useEffect, useState } from 'react'
 import {
   fetchChannelInfo,
   fetchWalletBalance,
   setDefaultWallet,
   getBolt12Offer,
-} from "./walletStore";
-import { ChannelBalanceLine } from "../../components/ChannelBalanceLine";
-import { WalletPlugins } from "./WalletPlugins/WalletPlugins";
-import CopyableTextBox from "../../components/CopyableTextBox";
-import QRCode from "react-qr-code";
-import { IconRefresh } from "@tabler/icons-react";
-import { Circle } from "../../components/Circle";
-import { Transactions } from "./Transactions";
+} from './walletStore'
+import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
+import { WalletPlugins } from './WalletPlugins/WalletPlugins'
+import CopyableTextBox from '../../components/CopyableTextBox'
+import QRCode from 'react-qr-code'
+import { IconRefresh } from '@tabler/icons-react'
+import { Circle } from '../../components/Circle'
+import { Transactions } from './Transactions'
 
 export interface IWallet {
-  getWalletTransactions: (walletId: string) => Promise<any>;
-  payInvoice: (invoice: string) => Promise<string>;
-  getBolt12Offer: () => Promise<string>;
-  fetchWalletBalance: () => Promise<FetchWalletBalanceResponseType>;
-  decodeInvoice: (invoice: string) => Promise<any>;
-  checkPaymentStatus: (paymentId: string) => Promise<any>;
-  fetchChannelInfo: (channelId: string) => Promise<FetchChannelInfoResponseType>;
-  onPaymentReceived: (event: any) => void;
+  getWalletTransactions: (walletId: string) => Promise<any>
+  payInvoice: (invoice: string) => Promise<string>
+  getBolt12Offer: () => Promise<string>
+  fetchWalletBalance: () => Promise<FetchWalletBalanceResponseType>
+  decodeInvoice: (invoice: string) => Promise<any>
+  checkPaymentStatus: (paymentId: string) => Promise<any>
+  fetchChannelInfo: (channelId: string) => Promise<FetchChannelInfoResponseType>
+  onPaymentReceived: (event: any) => void
 }
 
 export type {
   FetchWalletBalanceResponseType,
   WalletProviderType,
-  FetchChannelInfoResponseType
+  FetchChannelInfoResponseType,
 }
 
-
 type FetchWalletBalanceResponseType = {
-  balance: number;
-};
+  balance: number
+}
 
 type FetchChannelInfoResponseType = {
-  send: number;
-  receive: number;
-};
+  send: number
+  receive: number
+}
 
-type WalletProviderType = "Phoenixd" | "Lndk" | "CoreLightning" | "Strike" | "None";
+type WalletProviderType =
+  | 'Phoenixd'
+  | 'Lndk'
+  | 'CoreLightning'
+  | 'Strike'
+  | 'None'
 
 export const Wallet = () => {
   const {
@@ -61,18 +66,18 @@ export const Wallet = () => {
     requestState,
     error,
     loading,
-  } = useSelector((state) => state.wallet);
-  const dispatch = useDispatch();
-  const [showWallet, setShowWallet] = useState(true);
+  } = useSelector((state) => state.wallet)
+  const dispatch = useDispatch()
+  const [showWallet, setShowWallet] = useState(true)
 
-  fetchChannelInfo("");
-  fetchChannelInfo("");
+  fetchChannelInfo('')
+  fetchChannelInfo('')
 
   useEffect(() => {
-    dispatch(fetchWalletBalance(""));
-    dispatch(fetchChannelInfo(""));
-    dispatch(getBolt12Offer(""));
-  }, []);
+    dispatch(fetchWalletBalance(''))
+    dispatch(fetchChannelInfo(''))
+    dispatch(getBolt12Offer(''))
+  }, [])
 
   return (
     <Box>
@@ -88,32 +93,32 @@ export const Wallet = () => {
             </Center>
             <Group ml="auto">
               <Center>
-                {" "}
+                {' '}
                 {loading && (
                   <Loader
                     size="sm"
                     style={{
-                      visibility: loading ? "visible" : "hidden",
+                      visibility: loading ? 'visible' : 'hidden',
                     }}
                   />
                 )}
               </Center>
             </Group>
-            <Circle color={defaultWallet ? "lightgreen" : "#FF6347"} />
+            <Circle color={defaultWallet ? 'lightgreen' : '#FF6347'} />
             {/* <Title order={2}>{defaultWallet}</Title> */}
           </Group>
 
           <Group mt="xl">
             <Title order={4}>
-              Balance:{" "}
-              <span style={{ fontFamily: "monospace" }}>{balance}</span>
+              Balance:{' '}
+              <span style={{ fontFamily: 'monospace' }}>{balance}</span>
             </Title>
             <IconRefresh
               stroke={1.5}
               onClick={() => {
-                dispatch(fetchWalletBalance(""));
+                dispatch(fetchWalletBalance(''))
               }}
-              style={{ cursor: "pointer" }}
+              style={{ cursor: 'pointer' }}
             />
           </Group>
           <ChannelBalanceLine
@@ -124,58 +129,30 @@ export const Wallet = () => {
           <SimpleGrid
             mt="lg"
             cols={{ base: 1, sm: 2 }} // Stack vertically on small screens, two columns on larger screens
-            spacing={{ base: "md", sm: "lg" }} // Adjust spacing based on screen size
-            verticalSpacing={{ base: "md", sm: "lg" }} // Adjust vertical spacing based on screen size
-          ></SimpleGrid>
-
-          <Box w="100%">
-            <Center>
-              <Stack bg="white" p="md" style={{ borderRadius: "6px" }}>
-                <Center>
-                  <Title order={5} mb="xs" style={{ color: "black" }}>
-                    BOLT 12 Offer
-                  </Title>
-                </Center>
+            spacing={{ base: 'md', sm: 'lg' }} // Adjust spacing based on screen size
+            verticalSpacing={{ base: 'md', sm: 'lg' }} // Adjust vertical spacing based on screen size
+          >
+            <Box bg="white" p="md" style={{ borderRadius: '6px' }}>
+              <Center>
+                <Title order={5} mb="xs" style={{ color: 'black' }}>
+                  BOLT 12 Offer
+                </Title>
+              </Center>
+              <Center>
                 <QRCode
                   value={bolt12Offer}
                   size={280}
-                  style={{ border: 2, borderColor: "whitesmoke" }}
+                  style={{ border: 2, borderColor: 'whitesmoke' }}
                 />
-                <CopyableTextBox
-                  text={bolt12Offer}
-                  limitChars={22}
-                  bg="white"
-                />
-              </Stack>
-            </Center>
-          </Box>
+              </Center>
+              <CopyableTextBox text={bolt12Offer} limitChars={36} bg="white" />
+            </Box>
 
-          <Box w="100%" mt="lg">
             <Transactions h="450px" />
-          </Box>
-
-          {/* <Button
-            w="100%"
-            style={{
-                visibility: loading ? "hidden" : "visible",
-              }}
-            onClick={() => {
-              dispatch(fetchWalletBalance(""));
-            }}
-          >
-            Get Balance
-          </Button> */}
-          {/* <Select
-              label="Change your default wallet"
-              placeholder=""
-              value={defaultWallet}
-              onChange={(value) => {
-                dispatch(setDefaultWallet(value as WalletProviderType));
-              }}
-              data={["Phoenixd", "Lndk", "CoreLightning", "None"]}
-            /> */}
+          </SimpleGrid>
+          <Checkbox mt="xl" defaultChecked label="Default Wallet" />
         </Box>
       )}
     </Box>
-  );
-};
+  )
+}

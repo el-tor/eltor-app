@@ -9,9 +9,9 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord_wrapper, create_app_state, deactivate_eltord_wrapper, get_bin_dir,
+    activate_eltord_wrapper_with_mode, create_app_state, deactivate_eltord_wrapper, deactivate_eltord_wrapper_with_mode, get_bin_dir,
     get_eltord_status_wrapper, get_log_receiver, initialize_phoenixd, lightning, ports,
-    AppState as BackendAppState, LogEntry, lookup_ip_location, IpLocationResponse
+    AppState as BackendAppState, LogEntry, lookup_ip_location, IpLocationResponse, shutdown_cleanup
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -21,6 +21,7 @@ struct TauriLogEntry {
     level: String,
     message: String,
     source: String,
+    mode: Option<String>,
 }
 
 impl From<LogEntry> for TauriLogEntry {
@@ -30,6 +31,7 @@ impl From<LogEntry> for TauriLogEntry {
             level: log.level,
             message: log.message,
             source: log.source,
+            mode: log.mode,
         }
     }
 }
@@ -66,6 +68,7 @@ async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
         level: "INFO".to_string(),
         message: "This is a test log message from Tauri backend".to_string(),
         source: "test".to_string(),
+        mode: Some("client".to_string()),
     };
 
     match app_handle.emit("eltord-log", &test_log) {
@@ -104,8 +107,10 @@ async fn get_tor_status() -> Result<serde_json::Value, String> {
 async fn activate_eltord(
     tauri_state: State<'_, TauriState>,
     app_handle: AppHandle,
+    torrc_file_name: Option<String>,
+    mode: Option<String>,
 ) -> Result<String, String> {
-    println!("🚀 activate_eltord command called");
+    println!("🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}", torrc_file_name, mode);
 
     let backend_state = tauri_state.backend_state.clone();
 
@@ -114,8 +119,9 @@ async fn activate_eltord(
         std::env::current_dir()
     );
 
-    // Use backend wrapper function
-    match activate_eltord_wrapper((*backend_state).clone()).await {
+    // Use backend wrapper function with mode parameter
+    let mode = mode.unwrap_or_else(|| "client".to_string());
+    match activate_eltord_wrapper_with_mode((*backend_state).clone(), torrc_file_name, mode).await {
         Ok(message) => {
             println!("✅ Backend activation successful: {}", message);
 
@@ -166,6 +172,19 @@ async fn deactivate_eltord(
 
     // Use backend wrapper function
     deactivate_eltord_wrapper((*backend_state).clone()).await
+}
+
+#[command]
+async fn deactivate_eltord_with_mode(
+    tauri_state: State<'_, TauriState>,
+    mode: String,
+) -> Result<String, String> {
+    println!("deactivate_eltord_with_mode command called with mode: {}", mode);
+
+    let backend_state = tauri_state.backend_state.clone();
+
+    // Use backend wrapper function with mode support
+    deactivate_eltord_wrapper_with_mode((*backend_state).clone(), mode).await
 }
 
 #[command]
@@ -231,6 +250,7 @@ async fn get_wallet_transactions(
         payment_hash: None, // Get all transactions
         from: 0,
         limit: 1000,
+        search: None, // No search filter
     };
     match lightning_node.list_transactions(params).await {
         Ok(transactions) => Ok(serde_json::json!(transactions)),
@@ -244,6 +264,20 @@ async fn get_wallet_transactions(
 #[command]
 async fn lookup_ip_location_tauri(ip: String) -> Result<IpLocationResponse, String> {
     lookup_ip_location(&ip)
+}
+
+#[command]
+async fn app_shutdown(
+    tauri_state: State<'_, TauriState>,
+) -> Result<String, String> {
+    println!("🛑 App shutdown command called");
+
+    let backend_state = tauri_state.backend_state.clone();
+
+    // Perform comprehensive cleanup
+    shutdown_cleanup((*backend_state).clone()).await?;
+    
+    Ok("App shutdown cleanup completed".to_string())
 }
 
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -263,7 +297,23 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         .icon(app.default_window_icon().unwrap().clone())
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "quit" => {
-                app.exit(0);
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let tauri_state = app_handle.state::<TauriState>();
+                    println!("🛑 App quit requested - performing cleanup...");
+                    
+                    match app_shutdown(tauri_state).await {
+                        Ok(msg) => {
+                            println!("✅ {}", msg);
+                        }
+                        Err(e) => {
+                            println!("⚠️  Shutdown warning: {}", e);
+                        }
+                    }
+                    
+                    // Exit after cleanup
+                    app_handle.exit(0);
+                });
             }
             "hide" => {
                 let windows = app.webview_windows();
@@ -287,7 +337,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
-                    match activate_eltord(tauri_state, app_handle.clone()).await {
+                    match activate_eltord(tauri_state, app_handle.clone(), None, Some("client".to_string())).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-activated", &msg);
@@ -347,11 +397,12 @@ fn main() {
             // Initialize phoenixd asynchronously after the runtime is available
             let app_handle = app.handle().clone();
             let state_for_init = tauri_state.clone();
+            let backend_state = tauri_state.backend_state.clone();
 
             tauri::async_runtime::spawn(async move {
                 // Clean up any processes using our ports
                 println!("🧹 Starting port cleanup...");
-                if let Err(e) = ports::cleanup_ports().await {
+                if let Err(e) = ports::cleanup_ports(&*backend_state).await {
                     eprintln!("⚠️  Port cleanup failed: {}", e);
                     eprintln!("   Continuing with startup...");
                 }
@@ -423,11 +474,13 @@ fn main() {
             get_tor_status,
             activate_eltord,
             deactivate_eltord,
+            deactivate_eltord_with_mode,
             get_eltord_status,
             test_log_event,
             get_wallet_balance,
             get_wallet_transactions,
             lookup_ip_location_tauri,
+            app_shutdown,
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

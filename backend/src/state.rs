@@ -12,6 +12,7 @@ pub struct LogEntry {
     pub level: String,
     pub message: String,
     pub source: String, // "stdout" or "stderr"
+    pub mode: Option<String>, // "client", "relay", or None for system logs
 }
 
 // Wallet state for tracking phoenixd process and configuration
@@ -30,25 +31,29 @@ impl WalletState {
     }
 }
 
-// Shared state for tracking eltord process and logs
+// Shared state for tracking eltord processes and logs
 #[derive(Clone)]
 pub struct AppState {
-    pub process: Arc<Mutex<Option<tokio::process::Child>>>,
+    pub client_process: Arc<Mutex<Option<tokio::process::Child>>>,
+    pub relay_process: Arc<Mutex<Option<tokio::process::Child>>>,
     pub log_sender: broadcast::Sender<LogEntry>,
     pub recent_logs: Arc<Mutex<VecDeque<LogEntry>>>,
     pub wallet_state: WalletState,
     pub lightning_node: Option<Arc<LightningNode>>,
+    pub torrc_file_name: String,
 }
 
 impl AppState {
     pub fn new(use_phoenixd_embedded: bool) -> Self {
         let (log_sender, _) = broadcast::channel(1000);
         Self {
-            process: Arc::new(Mutex::new(None)),
+            client_process: Arc::new(Mutex::new(None)),
+            relay_process: Arc::new(Mutex::new(None)),
             log_sender,
             recent_logs: Arc::new(Mutex::new(VecDeque::with_capacity(100))),
             wallet_state: WalletState::new(use_phoenixd_embedded),
             lightning_node: None,
+            torrc_file_name: "torrc".to_string(),
         }
     }
 

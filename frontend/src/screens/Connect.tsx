@@ -15,10 +15,12 @@ import { useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
 import {
-  setCommandOutput,
+  setLogsClient,
   setCircuits,
   setCircuitInUse,
   Circuit,
+  clearLogsClient,
+  clearAllLogs,
 } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
 // @ts-ignore
@@ -34,19 +36,29 @@ export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
   const dispatch = useDispatch()
-  const { isRunning, activate, deactivate } = useEltord()
-  const { commandOutput, torActive, circuits, circuitInUse } = useSelector(
+  const { isRunning, isAnyModeRunning, activate, deactivate } = useEltord()
+  const { logsClient, logsRelay, clientActive, relayActive, circuits, circuitInUse, activeMode } = useSelector(
     (state) => state.global,
   )
   const preRef = useRef<HTMLPreElement>(null)
-  const [logs, setLogs] = useState<LogEntry[]>([])
+  // const [logs, setLogs] = useState<LogEntry[]>([])
   
 
   useEffect(() => {
     if (preRef.current) {
       preRef.current.scrollTop = preRef.current.scrollHeight
     }
-  }, [commandOutput])
+  }, [logsClient])
+
+  // Add debug effect to log frontend state
+  useEffect(() => {
+    console.log('🔍 Connect Page - Current Redux State:')
+    console.log('  - Client logs count:', logsClient?.length)
+    console.log('  - Relay logs count:', logsRelay?.length)
+    console.log('  - Client active:', clientActive)
+    console.log('  - Relay active:', relayActive)
+    console.log('  - Active mode:', activeMode)
+  }, [logsClient, logsRelay, clientActive, relayActive, activeMode])
 
   return (
     <Stack>
@@ -57,12 +69,11 @@ export const Connect = () => {
           <Text>Click "Activate" in the OS tray menu to connect</Text>
         )} */}
 
-        <Group mb="md">
+        {/* <Group mb="md">
           <Badge color={isTauri() ? 'blue' : 'green'}>
             {isTauri() ? '🖥️ Desktop Mode' : '🌐 Web Mode'}
           </Badge>
-          <Text>Eltord Status: {isRunning ? '🟢 Running' : '🔴 Stopped'}</Text>
-        </Group>
+        </Group> */}
 
         <Group>
           <Button
@@ -71,40 +82,71 @@ export const Connect = () => {
             color="green"
             loading={loading}
           >
-            Activate
+            {isRunning ? 'Client Active' : 'Activate Client'}
           </Button>
 
           <Button
-            onClick={deactivate}
+            onClick={async () => {
+              try {
+                await deactivate()
+              } catch (error) {
+                console.error('❌ [Connect] Deactivate error:', error)
+                // Handle the case where backend says "No eltord client process is currently running"
+                // This means the frontend state is out of sync with backend
+                if (error instanceof Error && error.message.includes('No eltord client process is currently running')) {
+                  console.log('🔄 [Connect] Backend says client not running, syncing frontend state')
+                  // The useEltord hook should handle state updates through the 'eltord-error' event
+                  // But in case it doesn't, we can dispatch the state change here if needed
+                }
+              }
+            }}
             disabled={!isRunning || loading}
             color="red"
             loading={loading}
           >
-            Deactivate
+            Deactivate Client
           </Button>
+         
           
           {isTauri() && (
             <Button
               onClick={async () => {
                 try {
+                  console.log('🧪 Testing Tauri log event...')
                   const result = await apiService.testLogEvent()
-                  console.log('Test log event result:', result)
+                  console.log('✅ Test log event result:', result)
                 } catch (error) {
-                  console.error('Test log event failed:', error)
+                  console.error('❌ Test log event failed:', error)
                 }
               }}
               color="blue"
               variant="light"
               size="sm"
             >
-              Test Event
+              Test Tauri Event
             </Button>
           )}
+          
+          <Button
+            onClick={() => {
+              console.log('🧪 Debug: Current Redux state:')
+              console.log('  - Client logs:', logsClient?.length)
+              console.log('  - Relay logs:', logsRelay?.length)
+              console.log('  - Client active:', clientActive)
+              console.log('  - Relay active:', relayActive)
+              dispatch(clearAllLogs())
+            }}
+            color="orange"
+            variant="light"
+            size="sm"
+          >
+            Debug Clear All
+          </Button>
         </Group>
 
-        {/* <Title order={3}>{torActive ? "Connected" : "Not connected"}</Title>
+        {/* <Title order={3}>{clientActive ? "Connected" : "Not connected"}</Title>
         <Switch
-          checked={torActive}
+          checked={clientActive}
           onChange={(checked) => {
             setLoading(true);
             if (checked) {
@@ -119,6 +161,9 @@ export const Connect = () => {
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
           {circuitInUse.id && isRunning && <Text>Circuit: {circuitInUse.id}</Text>}
+           <Text>
+            Client Status: {isRunning ? 'Running' : 'Stopped'}
+          </Text>
           <Circle color={isRunning ? 'lightgreen' : '#FF6347'} />
         </Group>
       </Group>
@@ -152,14 +197,14 @@ export const Connect = () => {
           <LogViewer
             height="250px"
             className="mt-[-130px] z-10 relative max-w-full"
-            logs={logs}
-            setLogs={setLogs}
+            mode="client"
+            scroll={false}
           />
         </pre>
         <Button
           size="xs"
           style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
-          onClick={() => setLogs([])}
+          onClick={() => dispatch(clearLogsClient())}
         >
           Clear
         </Button>

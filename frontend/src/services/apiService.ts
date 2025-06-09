@@ -28,6 +28,7 @@ export interface LogEntry {
   level: string
   message: string
   source: string
+  mode?: string // "client", "relay", or undefined for system logs
 }
 
 export interface TorStatus {
@@ -133,12 +134,30 @@ class ApiService {
     this.isEventSystemSetup = false
   }
   // Eltord methods
-  async activateEltord(): Promise<string> {
+  async activateEltord(torrcFile?: string, mode?: 'client' | 'relay'): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
-      return await tauriInvoke('activate_eltord')
+      return await tauriInvoke('activate_eltord', { 
+        torrcFileName: torrcFile,
+        mode: mode || 'client'
+      })
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/eltord/activate`, {
+      // Build endpoint based on provided parameters
+      let endpoint = `${WEB_API_BASE}/api/eltord/activate`
+      
+      if (mode && torrcFile) {
+        // Both mode and torrc file specified
+        endpoint = `${WEB_API_BASE}/api/eltord/activate/${encodeURIComponent(mode)}/${encodeURIComponent(torrcFile)}`
+      } else if (mode) {
+        // Only mode specified
+        endpoint = `${WEB_API_BASE}/api/eltord/activate/${encodeURIComponent(mode)}`
+      } else if (torrcFile) {
+        // Only torrc file specified (use default client mode)
+        endpoint = `${WEB_API_BASE}/api/eltord/activate/client/${encodeURIComponent(torrcFile)}`
+      }
+      // If neither specified, use default endpoint
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -153,12 +172,41 @@ class ApiService {
     }
   }
 
+  // Enhanced Eltord activation with explicit mode support
+  async activateEltordWithMode(options: {
+    mode: 'client' | 'relay'
+    torrcFile?: string
+  }): Promise<string> {
+    return this.activateEltord(options.torrcFile, options.mode)
+  }
+
   async deactivateEltord(): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
       return await tauriInvoke('deactivate_eltord')
     } else {
       const response = await fetch(`${WEB_API_BASE}/api/eltord/deactivate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      const data = await response.json()
+      return data.message
+    }
+  }
+
+  async deactivateEltordWithMode(mode: 'client' | 'relay'): Promise<string> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      console.log(`📡 [API] Calling deactivate_eltord_with_mode for mode: ${mode}`)
+      return await tauriInvoke('deactivate_eltord_with_mode', { mode })
+    } else {
+      const response = await fetch(`${WEB_API_BASE}/api/eltord/deactivate/${mode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })

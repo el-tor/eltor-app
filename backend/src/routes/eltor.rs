@@ -20,6 +20,7 @@ async fn read_process_logs(
     mut reader: AsyncBufReader<tokio::process::ChildStdout>,
     state: AppState,
     source: &'static str,
+    mode: String,
 ) {
     let mut line = String::new();
     loop {
@@ -34,14 +35,15 @@ async fn read_process_logs(
                         level: "INFO".to_string(), // Could parse this from the log line
                         message: trimmed.to_string(),
                         source: source.to_string(),
+                        mode: Some(mode.clone()),
                     };
                     
-                    println!("[{}] {}", source, trimmed);
+                    println!("[{}-{}] {}", mode, source, trimmed);
                     state.add_log(entry);
                 }
             }
             Err(e) => {
-                println!("Error reading {} logs: {}", source, e);
+                println!("Error reading {}-{} logs: {}", mode, source, e);
                 break;
             }
         }
@@ -53,6 +55,7 @@ async fn read_process_stderr_logs(
     mut reader: AsyncBufReader<tokio::process::ChildStderr>,
     state: AppState,
     source: &'static str,
+    mode: String,
 ) {
     let mut line = String::new();
     loop {
@@ -67,14 +70,15 @@ async fn read_process_stderr_logs(
                         level: "ERROR".to_string(), // stderr usually contains errors
                         message: trimmed.to_string(),
                         source: source.to_string(),
+                        mode: Some(mode.clone()),
                     };
                     
-                    println!("[{}] {}", source, trimmed);
+                    println!("[{}-{}] {}", mode, source, trimmed);
                     state.add_log(entry);
                 }
             }
             Err(e) => {
-                println!("Error reading {} logs: {}", source, e);
+                println!("Error reading {}-{} logs: {}", mode, source, e);
                 break;
             }
         }
@@ -122,9 +126,9 @@ pub fn get_bin_dir() -> std::path::PathBuf {
 pub async fn activate_eltord(
     AxumState(state): AxumState<AppState>,
 ) -> ResponseJson<MessageResponse> {
-    // Check if already running
+    // Check if already running (using client process for legacy compatibility)
     {
-        let mut process_guard = state.process.lock().unwrap();
+        let mut process_guard = state.client_process.lock().unwrap();
         if let Some(ref mut child) = *process_guard {
             match child.try_wait() {
                 Ok(Some(_)) => {
@@ -192,7 +196,7 @@ pub async fn activate_eltord(
         let reader = AsyncBufReader::new(stdout);
         let state_clone = state.clone();
         tokio::spawn(async move {
-            read_process_logs(reader, state_clone, "stdout").await;
+            read_process_logs(reader, state_clone, "stdout", "client".to_string()).await;
         });
     }
     
@@ -200,13 +204,13 @@ pub async fn activate_eltord(
         let reader = AsyncBufReader::new(stderr);
         let state_clone = state.clone();
         tokio::spawn(async move {
-            read_process_stderr_logs(reader, state_clone, "stderr").await;
+            read_process_stderr_logs(reader, state_clone, "stderr", "client".to_string()).await;
         });
     }
     
-    // Store the process
+    // Store the process (using client process for legacy compatibility)
     {
-        let mut process_guard = state.process.lock().unwrap();
+        let mut process_guard = state.client_process.lock().unwrap();
         *process_guard = Some(child);
     }
     
@@ -218,6 +222,7 @@ pub async fn activate_eltord(
         level: "INFO".to_string(),
         message: format!("Eltord process started with PID: {}", pid),
         source: "system".to_string(),
+        mode: Some("client".to_string()),
     });
     
     ResponseJson(MessageResponse {
@@ -225,13 +230,161 @@ pub async fn activate_eltord(
     })
 }
 
+// Mode-aware activation function - supports both client and relay modes
+pub async fn activate_eltord_internal(
+    state: AppState,
+    mode: String,
+    torrc_file_name: Option<String>,
+) -> ResponseJson<MessageResponse> {
+    // Validate mode parameter first
+    if mode != "client" && mode != "relay" {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: Invalid mode '{}'. Must be 'client' or 'relay'", mode),
+        });
+    }
+
+    // Check if already running for this specific mode
+    {
+        let process_mutex = if mode == "client" {
+            &state.client_process
+        } else {
+            &state.relay_process
+        };
+
+        let mut process_guard = process_mutex.lock().unwrap();
+        if let Some(ref mut child) = *process_guard {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    // Process has exited, clear it
+                    *process_guard = None;
+                }
+                Ok(None) => {
+                    // Process is still running for this mode
+                    println!("⚠️ Eltord {} process already running, continuing...", mode);
+                }
+                Err(_) => {
+                    // Error checking process, assume it's dead
+                    *process_guard = None;
+                }
+            }
+        }
+    }
+
+    let bin_dir = get_bin_dir();
+    let eltord_binary = bin_dir.join("eltord");
+    
+    // Use provided torrc_file_name or default to state's torrc_file_name
+    let torrc_file_name = torrc_file_name.unwrap_or_else(|| state.torrc_file_name.clone());
+    let torrc_file = bin_dir.join(&torrc_file_name);
+    
+    println!("🔍 Looking for eltord binary at: {:?}", eltord_binary);
+    println!("🔍 Looking for torrc file at: {:?}", torrc_file);
+    
+    // Check if the eltord binary exists
+    if !eltord_binary.exists() {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: eltord binary not found at {:?}", eltord_binary),
+        });
+    }
+    
+    // Check if the torrc file exists
+    if !torrc_file.exists() {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: torrc file not found at {:?}", torrc_file),
+        });
+    }
+    
+    println!("🚀 Running eltord binary from: {:?}", eltord_binary);
+    println!("📋 Using torrc file: {:?}", torrc_file);
+    
+    // Clean up any Tor processes using ports from this specific torrc file (preserve phoenixd)
+    println!("🧹 Cleaning up Tor ports for torrc: {} (preserving phoenixd)", torrc_file_name);
+    if let Err(e) = crate::ports::cleanup_tor_ports_only(&torrc_file_name).await {
+        println!("⚠️  Tor port cleanup failed: {}", e);
+        println!("   Continuing with eltord startup...");
+    }
+    
+    // Validate mode parameter
+    if mode != "client" && mode != "relay" {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: Invalid mode '{}'. Must be 'client' or 'relay'", mode),
+        });
+    }
+
+    let mut child = match TokioCommand::new(&eltord_binary)
+        .arg(&mode)
+        .arg("-f")
+        .arg(&torrc_file)
+        .arg("-pw")
+        .arg("password1234_")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => {
+            return ResponseJson(MessageResponse {
+                message: format!("Error: Failed to start eltord: {}", e),
+            });
+        }
+    };
+    
+    let pid = child.id().unwrap_or(0);
+    
+    // Set up log readers with mode information
+    if let Some(stdout) = child.stdout.take() {
+        let reader = AsyncBufReader::new(stdout);
+        let state_clone = state.clone();
+        let mode_clone = mode.clone();
+        tokio::spawn(async move {
+            read_process_logs(reader, state_clone, "stdout", mode_clone).await;
+        });
+    }
+    
+    if let Some(stderr) = child.stderr.take() {
+        let reader = AsyncBufReader::new(stderr);
+        let state_clone = state.clone();
+        let mode_clone = mode.clone();
+        tokio::spawn(async move {
+            read_process_stderr_logs(reader, state_clone, "stderr", mode_clone).await;
+        });
+    }
+    
+    // Store the process in the appropriate field based on mode
+    {
+        let process_mutex = if mode == "client" {
+            &state.client_process
+        } else {
+            &state.relay_process
+        };
+
+        let mut process_guard = process_mutex.lock().unwrap();
+        *process_guard = Some(child);
+    }
+    
+    println!("✅ Eltord process started with PID: {} using mode: {} and torrc: {}", pid, mode, torrc_file_name);
+    
+    // Add startup log
+    state.add_log(LogEntry {
+        timestamp: Utc::now(),
+        level: "INFO".to_string(),
+        message: format!("Eltord process started with PID: {} using mode: {} and torrc: {}", pid, mode, torrc_file_name),
+        source: "system".to_string(),
+        mode: Some(mode.clone()),
+    });
+    
+    ResponseJson(MessageResponse {
+        message: format!("Eltord activated with PID: {} using mode: {} and torrc: {}", pid, mode, torrc_file_name),
+    })
+}
+
 #[axum::debug_handler(state = AppState)]
 pub async fn deactivate_eltord(
     AxumState(state): AxumState<AppState>,
 ) -> ResponseJson<MessageResponse> {
-    // Take the process out of the mutex first to avoid holding the lock across await
+    // Take the process out of the mutex first to avoid holding the lock across await (legacy client compatibility)
     let mut child = {
-        let mut process_guard = state.process.lock().unwrap();
+        let mut process_guard = state.client_process.lock().unwrap();
         process_guard.take()
     };
     
@@ -248,6 +401,7 @@ pub async fn deactivate_eltord(
                     level: "INFO".to_string(),
                     message: "Eltord process terminated".to_string(),
                     source: "system".to_string(),
+                    mode: Some("client".to_string()),
                 });
                 
                 ResponseJson(MessageResponse {
@@ -270,7 +424,7 @@ pub async fn deactivate_eltord(
 pub async fn get_eltord_status(
     AxumState(state): AxumState<AppState>,
 ) -> ResponseJson<EltordStatusResponse> {
-    let mut process_guard = state.process.lock().unwrap();
+    let mut process_guard = state.client_process.lock().unwrap();
     
     let (running, pid) = if let Some(ref mut child) = *process_guard {
         match child.try_wait() {
@@ -300,6 +454,92 @@ pub async fn get_eltord_status(
         pid,
         recent_logs,
     })
+}
+
+// Mode-aware deactivation function
+pub async fn deactivate_eltord_internal(
+    state: AppState,
+    mode: Option<String>,
+) -> ResponseJson<MessageResponse> {
+    let mode = mode.unwrap_or_else(|| "client".to_string());
+    
+    // Validate mode parameter
+    if mode != "client" && mode != "relay" {
+        return ResponseJson(MessageResponse {
+            message: format!("Error: Invalid mode '{}'. Must be 'client' or 'relay'", mode),
+        });
+    }
+
+    // Take the process out of the mutex first to avoid holding the lock across await
+    let mut child = {
+        let process_mutex = if mode == "client" {
+            &state.client_process
+        } else {
+            &state.relay_process
+        };
+
+        let mut process_guard = process_mutex.lock().unwrap();
+        process_guard.take()
+    };
+    
+    if let Some(ref mut child) = child {
+        match child.kill().await {
+            Ok(_) => {
+                println!("🛑 Killing eltord {} process...", mode);
+                let _ = child.wait().await; // Wait for process to actually terminate
+                println!("✅ Eltord {} process terminated successfully", mode);
+                
+                // Add shutdown log
+                state.add_log(LogEntry {
+                    timestamp: Utc::now(),
+                    level: "INFO".to_string(),
+                    message: format!("Eltord {} process terminated", mode),
+                    source: "system".to_string(),
+                    mode: Some(mode.clone()),
+                });
+                
+                ResponseJson(MessageResponse {
+                    message: format!("Eltord {} deactivated successfully", mode),
+                })
+            }
+            Err(e) => {
+                ResponseJson(MessageResponse {
+                    message: format!("Error: Failed to kill eltord {} process: {}", mode, e),
+                })
+            }
+        }
+    } else {
+        ResponseJson(MessageResponse {
+            message: format!("Error: No eltord {} process is currently running", mode),
+        })
+    }
+}
+
+// Mode-aware activation endpoint
+#[axum::debug_handler(state = AppState)]
+pub async fn activate_eltord_with_mode(
+    AxumState(state): AxumState<AppState>,
+    axum::extract::Path(mode): axum::extract::Path<String>,
+) -> ResponseJson<MessageResponse> {
+    activate_eltord_internal(state, mode, None).await
+}
+
+// Mode-aware activation endpoint with torrc file
+#[axum::debug_handler(state = AppState)]
+pub async fn activate_eltord_with_mode_and_torrc(
+    AxumState(state): AxumState<AppState>,
+    axum::extract::Path((mode, torrc_file_name)): axum::extract::Path<(String, String)>,
+) -> ResponseJson<MessageResponse> {
+    activate_eltord_internal(state, mode, Some(torrc_file_name)).await
+}
+
+// Mode-aware deactivation endpoint
+#[axum::debug_handler(state = AppState)]
+pub async fn deactivate_eltord_with_mode(
+    AxumState(state): AxumState<AppState>,
+    axum::extract::Path(mode): axum::extract::Path<String>,
+) -> ResponseJson<MessageResponse> {
+    deactivate_eltord_internal(state, Some(mode)).await
 }
 
 // SSE endpoint for streaming logs
@@ -332,7 +572,10 @@ pub async fn stream_logs(
 pub fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/api/eltord/activate", post(activate_eltord))
+        .route("/api/eltord/activate/:mode", post(activate_eltord_with_mode))
+        .route("/api/eltord/activate/:mode/:torrc_file_name", post(activate_eltord_with_mode_and_torrc))
         .route("/api/eltord/deactivate", post(deactivate_eltord))
+        .route("/api/eltord/deactivate/:mode", post(deactivate_eltord_with_mode))
         .route("/api/eltord/status", get(get_eltord_status))
         .route("/api/eltord/logs", get(stream_logs))
 }

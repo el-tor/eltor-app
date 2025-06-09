@@ -60,7 +60,7 @@ async fn main() {
 
     // Clean up any processes using our ports
     println!("🧹 Starting port cleanup...");
-    if let Err(e) = crate::ports::cleanup_ports().await {
+    if let Err(e) = crate::ports::cleanup_ports_startup().await {
         eprintln!("⚠️  Port cleanup failed: {}", e);
         eprintln!("   Continuing with startup...");
     }
@@ -162,6 +162,8 @@ async fn main() {
     println!("   POST /api/tor/disconnect");
     println!("   GET  /api/tor/status");
     println!("   POST /api/eltord/activate");
+    println!("   POST /api/eltord/activate/:mode");
+    println!("   POST /api/eltord/activate/:mode/:torrc_file_name");
     println!("   POST /api/eltord/deactivate");
     println!("   GET  /api/eltord/status");
     println!("   GET  /api/eltord/logs (SSE)");
