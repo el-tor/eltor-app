@@ -100,7 +100,7 @@ const walletStore = createSlice({
         state.error = null;
       })
       .addCase(getBolt12Offer.fulfilled, (state, action) => {
-        state.bolt12Offer = action.payload;
+        state.bolt12Offer = action.payload.payment_request;
         state.requestState = "fulfilled";
         state.loading = false;
         state.error = null;
@@ -171,10 +171,15 @@ const fetchTransactions = createAsyncThunk<Array<any>, string>( // Todo type Tra
   }
 );
 
-const getBolt12Offer = createAsyncThunk<string, string>(
+const getBolt12Offer = createAsyncThunk<any, string, { state: { wallet: WalletState } }>(
   "wallet/getBolt12Offer",
-  async (name, { rejectWithValue }) => {
+  async (name, { rejectWithValue, getState }) => {
     try {
+      const state = getState().wallet;
+      if (state.bolt12Offer) {
+        console.info("Using cached Bolt12 offer");
+        return { payment_request: state.bolt12Offer };
+      }
       const offer = await walletApiService.getBolt12Offer();
       return offer;
     } catch (error) {

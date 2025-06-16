@@ -262,6 +262,29 @@ async fn get_wallet_transactions(
 }
 
 #[command]
+async fn get_offer(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    // Get the lightning node from TauriState
+    let lightning_node_guard = tauri_state.lightning_node.lock().await;
+    let lightning_node = lightning_node_guard
+        .as_ref()
+        .ok_or("Lightning node not initialized")?;
+
+    // Get the offer from the lightning node
+    match lightning_node.get_offer().await {
+        Ok(offer) => {
+            println!("✅ Retrieved BOLT12 offer: {}", offer.payment_request);
+            Ok(serde_json::json!(offer))
+        }
+        Err(e) => {
+            println!("❌ Failed to get BOLT12 offer: {}", e);
+            Err(format!("Failed to get BOLT12 offer: {}", e))
+        }
+    }
+}
+
+#[command]
 async fn lookup_ip_location_tauri(ip: String) -> Result<IpLocationResponse, String> {
     lookup_ip_location(&ip)
 }
@@ -479,6 +502,7 @@ fn main() {
             test_log_event,
             get_wallet_balance,
             get_wallet_transactions,
+            get_offer,
             lookup_ip_location_tauri,
             app_shutdown,
         ])

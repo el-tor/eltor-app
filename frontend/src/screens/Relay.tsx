@@ -184,7 +184,7 @@ export const Relay = () => {
         </a>
       </Text>
       {/* TODO read ports and IP from config */}
-      <CopyableTextBox text="upnpc -a 172.16.227.112 9996 9996 TCP" />
+      <CopyableTextBox text="upnpc -a X.X.X.X 9996 9996 TCP" />
       <Text>
         <b>4. Get Paid</b> - Monitor your wallet for payments to your BOLT 12
         Offer

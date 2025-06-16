@@ -1,7 +1,7 @@
 import { isTauri } from '../utils/platform'
-import type { 
-  FetchWalletBalanceResponseType, 
-  FetchChannelInfoResponseType 
+import type {
+  FetchWalletBalanceResponseType,
+  FetchChannelInfoResponseType,
 } from '../features/wallet/Wallet'
 
 // Tauri imports (only loaded when in Tauri mode)
@@ -55,7 +55,9 @@ class WalletApiService {
     if (isTauri()) {
       await loadTauriAPIs()
       try {
-        const data: WalletBalanceResponse = await tauriInvoke('get_wallet_balance')
+        const data: WalletBalanceResponse = await tauriInvoke(
+          'get_wallet_balance',
+        )
         // Convert backend response to frontend format
         return { balance: data.total_balance_sats }
       } catch (error) {
@@ -63,12 +65,12 @@ class WalletApiService {
       }
     } else {
       const response = await fetch(`${WEB_API_BASE}/api/wallet/balance`)
-      
+
       if (!response.ok) {
         const error = await response.text()
         throw new Error(error)
       }
-      
+
       const data: WalletBalanceResponse = await response.json()
       // Convert backend response to frontend format
       return { balance: data.total_balance_sats }
@@ -86,12 +88,12 @@ class WalletApiService {
       }
     } else {
       const response = await fetch(`${WEB_API_BASE}/api/wallet/info`)
-      
+
       if (!response.ok) {
         const error = await response.text()
         throw new Error(error)
       }
-      
+
       return await response.json()
     }
   }
@@ -103,7 +105,7 @@ class WalletApiService {
       // In the future, this could be enhanced to get actual channel capacity info
       const balanceResponse = await this.getWalletBalance()
       const nodeInfo = await this.getNodeInfo()
-      
+
       return {
         send: balanceResponse.balance,
         receive: nodeInfo.balance_sats || 0, // This could be enhanced to show actual receive capacity
@@ -119,19 +121,21 @@ class WalletApiService {
     if (isTauri()) {
       await loadTauriAPIs()
       try {
-        const data: ListTransactionsResponse = await tauriInvoke('get_wallet_transactions')
+        const data: ListTransactionsResponse = await tauriInvoke(
+          'get_wallet_transactions',
+        )
         return data.transactions
       } catch (error) {
         throw new Error(`Failed to get transactions: ${error}`)
       }
     } else {
       const response = await fetch(`${WEB_API_BASE}/api/wallet/transactions`)
-      
+
       if (!response.ok) {
         const error = await response.text()
         throw new Error(error)
       }
-      
+
       const data: ListTransactionsResponse = await response.json()
       return data.transactions
     }
@@ -156,14 +160,20 @@ class WalletApiService {
   async getBolt12Offer(): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
-      // Use HTTP fetch even in Tauri mode
-      // TODO: Implement backend BOLT12 offer endpoint
-      console.warn('BOLT12 offer not yet implemented in backend')
-      return 'lno1qgsqvgnwgcg35z6ee2h3yczraddm72xrfua9uve2rlrm9deu7xyfzrcgqgn3qzsyt8qqqqqqqq' // Placeholder
+      return await tauriInvoke('get_offer')
     } else {
-      // TODO: Implement backend BOLT12 offer endpoint
-      console.warn('BOLT12 offer not yet implemented in backend')
-      return 'lno1qgsqvgnwgcg35z6ee2h3yczraddm72xrfua9uve2rlrm9deu7xyfzrcgqgn3qzsyt8qqqqqqqq' // Placeholder
+      const response = await fetch(`${WEB_API_BASE}/api/wallet/offer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+      return await response.json()
     }
   }
 }

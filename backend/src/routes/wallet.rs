@@ -108,12 +108,29 @@ async fn get_wallet_transactions(State(state): State<AppState>) -> Result<Respon
     }
 }
 
+// Get a BOLT12 offer
+async fn get_offer(
+    State(state): State<AppState>,
+    Json(request): Json<CreateInvoiceRequest>
+) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
+    match &state.lightning_node {
+        Some(node) => {
+            match node.get_offer().await {
+                Ok(invoice) => Ok(ResponseJson(invoice)),
+                Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create invoice: {}", e)))
+            }
+        }
+        None => Err((StatusCode::SERVICE_UNAVAILABLE, "Lightning node not initialized".to_string()))
+    }
+}
+
 // Create wallet routes
 pub fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/api/wallet/info", get(get_node_info))
         .route("/api/wallet/balance", get(get_wallet_balance))
         .route("/api/wallet/invoice", post(create_invoice))
+        .route("/api/wallet/offer", post(get_offer))
         .route("/api/wallet/pay", post(pay_invoice))
         .route("/api/wallet/status", get(get_wallet_status))
         .route("/api/wallet/transactions", get(get_wallet_transactions))

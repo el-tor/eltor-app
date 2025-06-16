@@ -292,6 +292,29 @@ impl LightningNode {
         })
     }
 
+    /// Create an invoice (async to handle blocking LNI calls)
+    pub async fn get_offer(&self) -> Result<CreateInvoiceResponse, String> {
+        let params = CreateInvoiceParams {
+            invoice_type: InvoiceType::Bolt12,
+            amount_msats: None,
+            description: Some("El Tor Offer".to_string()),
+            ..Default::default()
+        };
+
+        let inner = self.inner.clone();
+        let transaction = tokio::task::spawn_blocking(move || inner.create_invoice(params))
+            .await
+            .map_err(|e| format!("Task join error: {}", e))?
+            .map_err(|e| format!("Failed to create invoice: {:?}", e))?;
+
+        Ok(CreateInvoiceResponse {
+            payment_request: transaction.invoice,
+            payment_hash: transaction.payment_hash,
+            amount_sats: Some((transaction.amount_msats / 1000) as u64),
+            expiry: None,
+        })
+    }
+
     /// Get node type as string
     pub fn node_type(&self) -> &'static str {
         self.node_type

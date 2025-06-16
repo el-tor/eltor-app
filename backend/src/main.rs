@@ -171,6 +171,7 @@ async fn main() {
     println!("   GET  /api/wallet/balance");
     println!("   POST /api/wallet/invoice");
     println!("   POST /api/wallet/pay");
+    println!("   POST /api/wallet/offer");
     println!("   GET  /api/wallet/status");
     println!("   GET  /api/wallet/transactions");
 
