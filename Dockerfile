@@ -110,8 +110,7 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     libsqlite3-0 \
     nano \
-    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
+    python3-minimal \
     && rm -rf /var/lib/apt/lists/*
 
 # Install multi-arch libraries for phoenixd if needed
@@ -126,43 +125,53 @@ RUN dpkg --add-architecture amd64 && \
         libstdc++6:amd64 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create application structure
-RUN mkdir -p /root/code/eltor-app/backend/bin \
-             /app/logs \
-             /app/data/tor \
-             /app/data/phoenix
+# Create non-root user and group
+RUN groupadd -r eltor && useradd -r -g eltor -d /home/eltor -s /bin/bash eltor
+
+# Create application structure with proper ownership
+RUN mkdir -p /home/eltor/code/eltor-app/backend/bin \
+             /home/eltor/data/logs \
+             /home/eltor/data/tor \
+             /home/eltor/data/phoenix \
+             /home/eltor/.phoenix \
+    && chown -R eltor:eltor /home/eltor
 
 # Copy built binaries from previous stages
-COPY --from=backend-builder /root/code/eltord/target/release/eltor /root/code/eltor-app/backend/bin/eltord
-COPY --from=backend-builder /root/code/eltor-app/backend/target/release/eltor-backend /root/code/eltor-app/backend/bin/eltor-backend
-COPY --from=phoenix-downloader /usr/local/bin/phoenixd /root/code/eltor-app/backend/bin/phoenixd
-COPY --from=phoenix-downloader /usr/local/bin/phoenix-cli /root/code/eltor-app/backend/bin/phoenix-cli
+COPY --from=backend-builder /root/code/eltord/target/release/eltor /home/eltor/code/eltor-app/backend/bin/eltord
+COPY --from=backend-builder /root/code/eltor-app/backend/target/release/eltor-backend /home/eltor/code/eltor-app/backend/bin/eltor-backend
+COPY --from=phoenix-downloader /usr/local/bin/phoenixd /home/eltor/code/eltor-app/backend/bin/phoenixd
+COPY --from=phoenix-downloader /usr/local/bin/phoenix-cli /home/eltor/code/eltor-app/backend/bin/phoenix-cli
 
-# Copy built frontend
-COPY frontend /root/code/eltor-app/frontend/
-COPY --from=frontend-builder /root/code/eltor-app/frontend/node_modules /root/code/eltor-app/frontend/node_modules
-COPY --from=frontend-builder /root/code/eltor-app/frontend/dist /root/code/eltor-app/frontend/dist
+# Copy frontend
+COPY --from=frontend-builder /root/code/eltor-app/frontend/dist /home/eltor/code/eltor-app/frontend/dist
 
 # Copy configuration files
-COPY backend/bin/IP2LOCATION-LITE-DB3.BIN /root/code/eltor-app/backend/bin/
-COPY backend/*.json /root/code/eltor-app/backend/
-COPY backend/bin/torrc.template /root/code/eltor-app/backend/bin/
-COPY backend/bin/torrc.relay.template /root/code/eltor-app/backend/bin/
-COPY backend/run.sh /root/code/eltor-app/backend/
-COPY scripts/start.sh /app/start.sh
-COPY scripts/exports.sh /app/exports.sh
+COPY backend/bin/IP2LOCATION-LITE-DB3.BIN /home/eltor/code/eltor-app/backend/bin/
+COPY backend/*.json /home/eltor/code/eltor-app/backend/
+COPY backend/bin/torrc.template /home/eltor/code/eltor-app/backend/bin/
+COPY backend/bin/torrc.relay.template /home/eltor/code/eltor-app/backend/bin/
+COPY backend/run.sh /home/eltor/code/eltor-app/backend/
+COPY scripts/start.sh /home/eltor/start.sh
+COPY scripts/exports.sh /home/eltor/exports.sh
+
+# Set ownership for all copied files
+RUN chown -R eltor:eltor /home/eltor/code \
+    && chown eltor:eltor /home/eltor/start.sh /home/eltor/exports.sh
 
 # Set permissions
-RUN chmod +x /root/code/eltor-app/backend/bin/eltord \
-             /root/code/eltor-app/backend/bin/phoenixd \
-             /root/code/eltor-app/backend/bin/phoenix-cli \
-             /root/code/eltor-app/backend/bin/eltor-backend \
-             /root/code/eltor-app/backend/run.sh \
-             /app/start.sh \
-             /app/exports.sh
+RUN chmod +x /home/eltor/code/eltor-app/backend/bin/eltord \
+             /home/eltor/code/eltor-app/backend/bin/phoenixd \
+             /home/eltor/code/eltor-app/backend/bin/phoenix-cli \
+             /home/eltor/code/eltor-app/backend/bin/eltor-backend \
+             /home/eltor/code/eltor-app/backend/run.sh \
+             /home/eltor/start.sh \
+             /home/eltor/exports.sh
+
+# Switch to non-root user
+USER eltor
 
 # Set working directory
-WORKDIR /root/code/eltor-app
+WORKDIR /home/eltor/code/eltor-app
 
 # Expose ports
 EXPOSE 5173 8080 9740 18058 9996
@@ -177,4 +186,4 @@ ENV BACKEND_PORT=8080
 ENV FRONTEND_PORT=5173
 
 # Run the application
-CMD ["/app/start.sh"]
+CMD ["/home/eltor/start.sh"]

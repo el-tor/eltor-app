@@ -19,8 +19,10 @@ services:
       - BACKEND_PORT=8080
       - FRONTEND_PORT=5173
     volumes:
-      # Mount local phoenixd for persistence
-      - ${HOME}/.phoenix:/root/.phoenix
+      # Mount local phoenixd for persistence (mapping to eltor user home)
+      - ${HOME}/.phoenix:/home/eltor/.phoenix
+      # Mount data directory for logs and tor data
+      - eltor-data:/home/eltor/data
     networks:
       - eltor-network
     restart: unless-stopped
@@ -30,6 +32,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  eltor-data:
+    driver: local
 
 networks:
   eltor-network:
