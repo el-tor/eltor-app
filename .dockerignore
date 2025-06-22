@@ -54,6 +54,7 @@ frontend/.env.*.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
+node_modules/.cache
 
 # Tauri (not needed for web deployment)
 frontend/src-tauri/target/
@@ -66,3 +67,8 @@ frontend/src-tauri/gen/
 # Temporary files
 tmp/
 temp/
+
+*.key
+
+**/payments_sent.json
+**/payments_received.json

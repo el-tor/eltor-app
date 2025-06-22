@@ -1,9 +1,9 @@
 services:
   eltor:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    #image: eltor-app:latest
+    #build:
+    #  context: .
+    #  dockerfile: Dockerfile
+    image: eltor/eltor-app@sha256:97498b1dd42c62e08baaeab8871dfccabe769024733c9c5ecb11334f6ac43a3b
     container_name: app
     hostname: eltor
     ports:

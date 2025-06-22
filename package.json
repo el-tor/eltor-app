@@ -9,15 +9,12 @@
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",
-    "docker:build": "docker buildx build -t eltor-app:latest .",
-    "docker:tag": "docker tag eltor-app:latest",
-    "docker": "DOCKER_BUILDKIT=1 && docker-compose up --build",
-    "docker:clean": "docker-compose up --build --no-cache",
-    "docker:deploy": "./scripts/deploy.sh",
-    "docker:stop": "./scripts/deploy.sh --stop",
-    "docker:up:prod": "docker-compose up -d --build",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+
+    "docker": "DOCKER_BUILDKIT=1 docker-compose up --build",
+    "docker:build": "DOCKER_BUILDKIT=1 docker build -t eltor/eltor-app:latest . --load",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.1",
+    "docker:push": "docker push eltor/eltor-app:latest",
+    "docker:clean": "docker-compose up --build --no-cache"
   },
   "workspaces": [
     "frontend",
