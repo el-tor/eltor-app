@@ -3,10 +3,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  
+
   // Tauri expects a relative base path
   base: './',
-  
+
   build: {
     // Don't minify for debug builds
     minify: !process.env.TAURI_DEBUG ? 'esbuild' : false,
@@ -15,10 +15,8 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
   },
-  
   // Prevent dev server issues
   clearScreen: false,
-  
   server: {
     port: 5173,
     strictPort: true,
@@ -35,6 +33,5 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
-  
   envPrefix: ['VITE_', 'TAURI_'],
 })

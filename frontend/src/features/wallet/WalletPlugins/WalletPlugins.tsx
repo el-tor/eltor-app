@@ -10,10 +10,10 @@ import {
   Group,
 } from "@mantine/core";
 
-import phoenixDLogo from "../../../features/wallet/phoenixDLogo.svg";
-import lndLogo from "../../../features/wallet/lndLogo.svg";
-import clnLogo from "../../../features/wallet/clnLogo.svg";
-import strikeLogo from "../../../features/wallet/strikeLogo.svg";
+import phoenixDLogo from "../phoenixdLogo.svg";
+import lndLogo from "../lndLogo.svg";
+import clnLogo from "../clnLogo.svg";
+import strikeLogo from "../strikeLogo.svg";
 
 import { WalletBox } from "./WalletBox";
 

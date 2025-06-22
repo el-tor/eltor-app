@@ -49,7 +49,11 @@ coverage/
 tmp/
 temp/
 
+# Torrc files - exclude actual config files but allow templates
 **torrc**
+!**/*.template
+!**/torrc.template
+!**/torrc.relay.template
 
 payments_sent.json
 payments_received.json

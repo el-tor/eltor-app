@@ -52,4 +52,11 @@ temp/
 frontend/src-tauri/target/
 backend/target/
 
+# Torrc files - exclude actual config files but allow templates
 **torrc**
+!**/*.template
+!**/torrc.template
+!**/torrc.relay.template
+!**/torrc_parser.rs
+
+env.sh

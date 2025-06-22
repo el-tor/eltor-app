@@ -122,9 +122,15 @@ fn is_private_ip(ip: &IpAddr) -> bool {
             ipv4.is_loopback() || ipv4.is_private() || ipv4.is_link_local()
         }
         IpAddr::V6(ipv6) => {
-            ipv6.is_loopback() || ipv6.is_unicast_link_local()
+            ipv6.is_loopback() || is_unicast_link_local_ipv6(&ipv6)
         }
     }
+}
+
+fn is_unicast_link_local_ipv6(addr: &std::net::Ipv6Addr) -> bool {
+    // Link-local unicast addresses are in the range fe80::/10
+    let octets = addr.octets();
+    octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80
 }
 
 /// Generate location for local/private IPs

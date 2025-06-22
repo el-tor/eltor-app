@@ -7,18 +7,10 @@ use axum::{
 use dotenv::dotenv;
 use std::env;
 use tower_http::cors::CorsLayer;
+use eltor_backend::state::{AppState, MessageResponse, StatusResponse};
 
-mod lightning;
-mod ports;
-mod routes;
-mod state;
-mod torrc_parser;
-mod wallet;
-
-use state::{AppState, MessageResponse, StatusResponse};
-
-use crate::routes::eltor::get_bin_dir;
-use crate::routes::ip;
+use eltor_backend::routes::eltor::get_bin_dir;
+use eltor_backend::routes::ip;
 
 // Tor-related handlers
 async fn connect_tor() -> ResponseJson<StatusResponse> {
@@ -60,7 +52,7 @@ async fn main() {
 
     // Clean up any processes using our ports
     println!("🧹 Starting port cleanup...");
-    if let Err(e) = crate::ports::cleanup_ports_startup().await {
+    if let Err(e) = eltor_backend::ports::cleanup_ports_startup().await {
         eprintln!("⚠️  Port cleanup failed: {}", e);
         eprintln!("   Continuing with startup...");
     }
@@ -83,8 +75,10 @@ async fn main() {
     println!("⚡ Initializing Lightning node...");
 
     // Initialize from torrc
-    let torrc_path = "bin/torrc";
-    let lightning_node = match crate::lightning::LightningNode::from_torrc(torrc_path) {
+    let bin_dir = get_bin_dir();
+    let torrc_path = bin_dir.join("torrc");
+    println!("🔍 Looking for torrc file at: {:?}", torrc_path);
+    let lightning_node = match eltor_backend::lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {
             println!(
                 "✅ Lightning node connected from torrc ({})",
@@ -107,7 +101,7 @@ async fn main() {
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {
         println!("🚀 Starting embedded phoenixd...");
-        match crate::wallet::start_phoenixd(state.clone()).await {
+        match eltor_backend::wallet::start_phoenixd(state.clone()).await {
             Ok(()) => println!("✅ Phoenixd started successfully"),
             Err(e) => {
                 eprintln!("❌ Failed to start phoenixd: {}", e);
@@ -147,8 +141,8 @@ async fn main() {
         .route("/api/tor/status", get(get_tor_status))
         .route("/api/ip/:ip", get(ip::get_ip_location))
         .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
-        .merge(routes::eltor::create_routes())
-        .merge(routes::wallet::create_routes())
+        .merge(eltor_backend::routes::eltor::create_routes())
+        .merge(eltor_backend::routes::wallet::create_routes())
         .layer(cors)
         .with_state(state);
 

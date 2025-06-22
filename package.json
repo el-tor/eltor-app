@@ -4,18 +4,26 @@
   "private": true,
   "description": "Monorepo for eltor-app",
   "scripts": {
-    "tauri": "cd web && pnpm run dev:tauri",
-    "web" : "concurrently \"pnpm run backend\" \"pnpm run frontend\"",
+    "tauri": "cd frontend && pnpm run dev:tauri",
+    "web": "concurrently \"pnpm run backend\" \"pnpm run frontend\"",
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
-    "build:web": "cd web && pnpm run build"
+    "build:web": "cd frontend && pnpm run build",
+    "docker:build": "docker buildx build -t eltor-app:latest .",
+    "docker:tag": "docker tag eltor-app:latest",
+    "docker": "DOCKER_BUILDKIT=1 && docker-compose up --build",
+    "docker:clean": "docker-compose up --build --no-cache",
+    "docker:deploy": "./scripts/deploy.sh",
+    "docker:stop": "./scripts/deploy.sh --stop",
+    "docker:up:prod": "docker-compose up -d --build",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "workspaces": [
     "frontend",
     "backend"
   ],
   "devDependencies": {
-    "concurrently": "^8.0.0"
-  },
-  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
+    "concurrently": "^8.2.2"
+  }
 }

@@ -35,6 +35,7 @@ Rust backend server for the El Tor application.
 cargo run
 # or
 ./run.sh
+```
 
 ## Bin
 The bin directory contains symbolic links of the 
@@ -43,9 +44,12 @@ The bin directory contains symbolic links of the
 - phoenixd binary
 
 To link
-```
+```sh
 ln -s ~/code/eltord/target/debug/eltor ~/code/eltor-app/backend/bin/eltord
+
 ln -s ~/code/eltord/torrc.client.prod ~/code/eltor-app/backend/bin/torrc
+
 ln -s ~/code/eltord/torrc.relay.prod ~/code/eltor-app/backend/bin/torrc.relay
+
 # manually copied phoenixd and phoenix-cli to the bin
 ```

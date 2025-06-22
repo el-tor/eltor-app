@@ -1,6 +1,6 @@
+import '@mantine/core/styles.css'
 import ReactDom from 'react-dom/client'
 import React from 'react'
-import '@mantine/core/styles.css'
 import './globals.css'
 import { App } from './App'
 

@@ -119,6 +119,18 @@ pub fn get_bin_dir() -> std::path::PathBuf {
         });
     
     let bin_dir: std::path::PathBuf = std::path::Path::new(&backend_dir).join("bin");
+
+    let eltord_binary = bin_dir.join("eltord");
+    if !eltord_binary.exists() {
+        println!("🔍 eltord not found in bin directory, checking current directory...");
+        let current_dir = std::env::current_dir().unwrap();
+        let current_eltord = current_dir.join("eltord");
+        if current_eltord.exists() {
+            println!("✅ Found eltord in current directory: {:?}", current_dir);
+            return current_dir;
+        }
+    }
+
     bin_dir
 }
 

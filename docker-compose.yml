@@ -1,0 +1,38 @@
+services:
+  eltor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    #image: eltor-app:latest
+    container_name: app
+    hostname: eltor
+    ports:
+      - "0.0.0.0:8080:8080"   # Backend API - explicitly bind to all interfaces
+      - "0.0.0.0:5173:5173"   # Frontend web server - explicitly bind to all interfaces
+      - "0.0.0.0:9740:9740"   # Lightning node - explicitly bind to all interfaces
+      - "0.0.0.0:18058:18058" # Tor SOCKS proxy - explicitly bind to all interfaces
+      - "0.0.0.0:9996:9996"   # Tor relay OR port
+    env_file:
+      - .env
+    environment:
+      - RUST_LOG=info
+      - BACKEND_PORT=8080
+      - FRONTEND_PORT=5173
+    volumes:
+      # Mount local phoenixd for persistence
+      - ${HOME}/.phoenix:/root/.phoenix
+    networks:
+      - eltor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  eltor-network:
+    driver: bridge
+
+

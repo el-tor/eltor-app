@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+env.sh
+
+# Torrc files - exclude actual config files but allow templates
+**torrc**
+!**/*.template
+!**/torrc.template
+!**/torrc.relay.template
+!**/torrc_parser.rs
+
+
+# Backend Rust
+backend/target/
+backend/.cargo/
+backend/**/*.rs.bk
+
+# Frontend Node.js
+frontend/node_modules/
+frontend/.cache/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Tauri (not needed for web deployment)
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+
+# Test files
+**/*test*
+**/*spec*
+
+# Temporary files
+tmp/
+temp/

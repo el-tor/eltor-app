@@ -88,18 +88,23 @@ The app automatically detects whether it's running in web or desktop mode and us
 ### Available Scripts
 
 ```bash
+# Quick start
+npm i
+npm run tauri     # quick start to run the tauri app with rust invoke backend
+npm run web       # quick start to run web frontend with rust rest backend
+
 # Frontend
 cd frontend
-pnpm dev          # Web development mode
 pnpm dev:web      # Web development mode  
 pnpm dev:tauri    # Desktop development mode
-pnpm build:web    # Build web app
-pnpm build:tauri  # Build desktop app
 
 # Backend
 cd backend
-cargo run         # Start HTTP server
 cargo build       # Build binary
+cargo run         # Start HTTP server
+
+# Docker
+npm run docker
 ```
 
 ### Environment Setup
