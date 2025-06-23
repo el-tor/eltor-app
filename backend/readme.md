@@ -47,9 +47,9 @@ To link
 ```sh
 ln -s ~/code/eltord/target/debug/eltor ~/code/eltor-app/backend/bin/eltord
 
-ln -s ~/code/eltord/torrc.client.prod ~/code/eltor-app/backend/bin/torrc
+ln -s ~/code/eltord/torrc.client.prod ~/code/eltor-app/backend/bin/data/torrc
 
-ln -s ~/code/eltord/torrc.relay.prod ~/code/eltor-app/backend/bin/torrc.relay
+ln -s ~/code/eltord/torrc.relay.prod ~/code/eltor-app/backend/bin/data/torrc.relay
 
 # manually copied phoenixd and phoenix-cli to the bin
 ```

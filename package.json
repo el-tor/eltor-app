@@ -12,7 +12,7 @@
 
     "docker": "pnpm run build:web && DOCKER_BUILDKIT=1 docker-compose up --build",
     "docker:build": "DOCKER_BUILDKIT=1 docker build -t eltor/eltor-app:latest . --load",
-    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.5",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.9",
     "docker:push": "docker push eltor/eltor-app:latest",
     "docker:clean": "docker-compose up --build --no-cache"
   },

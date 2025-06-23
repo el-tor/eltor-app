@@ -133,6 +133,7 @@ RUN groupadd -r -g 1000 user && \
 
 # Create application structure with shared group ownership
 RUN mkdir -p /home/user/code/eltor-app/backend/bin \
+             /home/user/code/eltor-app/backend/bin/data \
              /home/user/data/logs \
              /home/user/data/tor \
              /home/user/data/phoenix \

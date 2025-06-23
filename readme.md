@@ -243,3 +243,11 @@ MIT License - see LICENSE file for details
 ---
 
 **El Tor**: Privacy-first networking with economic incentives 🚀
+
+Umbrel
+=======
+
+To copy local phoenix conf folder over to umbrel via ssh for testing:
+```
+scp ~/.phoenix/* umbrel@umbrel.local:~/umbrel/app-data/eltor-app/data/phoenix
+```

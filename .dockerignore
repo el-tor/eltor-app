@@ -34,6 +34,8 @@ env.sh
 
 # Torrc files - exclude actual config files but allow templates
 **torrc**
+**/torrc
+**/torrc.relay
 !**/*.template
 !**/torrc.template
 !**/torrc.relay.template

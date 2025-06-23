@@ -80,7 +80,7 @@ async fn main() {
 
     // Initialize from torrc
     let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("torrc");
+    let torrc_path = bin_dir.join("data").join("torrc");
     println!("🔍 Looking for torrc file at: {:?}", torrc_path);
     let lightning_node = match eltor_backend::lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {

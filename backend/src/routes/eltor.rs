@@ -161,7 +161,7 @@ pub async fn activate_eltord(
 
     let bin_dir = get_bin_dir();
     let eltord_binary = bin_dir.join("eltord");
-    let torrc_file = bin_dir.join("torrc");
+    let torrc_file = bin_dir.join("data").join("torrc");
     
     println!("🔍 Looking for eltord binary at: {:?}", eltord_binary);
     println!("🔍 Looking for torrc file at: {:?}", torrc_file);
@@ -287,7 +287,7 @@ pub async fn activate_eltord_internal(
     
     // Use provided torrc_file_name or default to state's torrc_file_name
     let torrc_file_name = torrc_file_name.unwrap_or_else(|| state.torrc_file_name.clone());
-    let torrc_file = bin_dir.join(&torrc_file_name);
+    let torrc_file = bin_dir.join("data").join(&torrc_file_name);
     
     println!("🔍 Looking for eltord binary at: {:?}", eltord_binary);
     println!("🔍 Looking for torrc file at: {:?}", torrc_file);

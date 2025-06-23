@@ -445,7 +445,7 @@ fn main() {
                 }
 
                 // Initialize lightning node
-                let torrc_path = get_bin_dir().join("torrc");
+                let torrc_path = get_bin_dir().join("data").join("torrc");
                 match lightning::LightningNode::from_torrc(torrc_path) {
                     Ok(node) => {
                         println!(
