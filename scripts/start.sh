@@ -10,12 +10,19 @@ echo "🔧 Backend will run on http://0.0.0.0:$BACKEND_PORT"
 echo "🌐 Frontend will be served from http://0.0.0.0:$FRONTEND_PORT"
 echo ""
 
+# Ensure data directories exist with proper permissions
+echo "📁 Creating data directories..."
+mkdir -p /home/user/data/logs \
+         /home/user/data/tor/client \
+         /home/user/data/tor-relay/client \
+         /home/user/data/phoenix
+
 # include environment variables
-. /home/eltor/exports.sh
+. /home/user/exports.sh
 
 # run phoenixd 
 # TODO check if USE_PHOENIXD_EMBEDDED=true
-cd /home/eltor/code/eltor-app/backend/bin
+cd /home/user/code/eltor-app/backend/bin
 echo "🔧 Starting Phoenix daemon..." 
 ./phoenixd &
 PHOENIX_PID=$!
@@ -30,21 +37,19 @@ get_phoenixd_password() {
 }
 PHOENIXD_PASSWORD=$(get_phoenixd_password)
 export TOR_PAYMENT_LIGHTNING_NODE_CONFIG="type=phoenixd url=http://127.0.0.1:9740 password=$PHOENIXD_PASSWORD default=true"
-envsubst < /home/eltor/code/eltor-app/backend/bin/torrc.template > /home/eltor/code/eltor-app/backend/bin/torrc
+envsubst < /home/user/code/eltor-app/backend/bin/torrc.template > /home/user/code/eltor-app/backend/bin/torrc
 printenv
-envsubst < /home/eltor/code/eltor-app/backend/bin/torrc.relay.template > /home/eltor/code/eltor-app/backend/bin/torrc.relay
+envsubst < /home/user/code/eltor-app/backend/bin/torrc.relay.template > /home/user/code/eltor-app/backend/bin/torrc.relay
 
-mkdir -p /home/eltor/data/tor/client
-mkdir -p /home/eltor/data/tor-relay/client
 
 # Start backend in background
-cd /home/eltor/code/eltor-app/backend/bin
+cd /home/user/code/eltor-app/backend/bin
 echo "📡 Starting backend server..."
 ./eltor-backend &
 BACKEND_PID=$!
 
 # Start frontend
-cd /home/eltor/code/eltor-app/frontend/dist
+cd /home/user/code/eltor-app/frontend/dist
 echo "🌐 Starting frontend server..."
 python3 -m http.server $FRONTEND_PORT --bind 0.0.0.0 &
 FRONTEND_PID=$!

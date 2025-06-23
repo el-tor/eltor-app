@@ -6,6 +6,7 @@ services:
     #image: eltor/eltor-app@sha256:97498b1dd42c62e08baaeab8871dfccabe769024733c9c5ecb11334f6ac43a3b
     container_name: app
     hostname: eltor
+    user: "1000:2000"  # UID 1000, GID 2000 (datagroup)
     ports:
       - "0.0.0.0:5174:5174"   # Backend API - explicitly bind to all interfaces
       - "0.0.0.0:5173:5173"   # Frontend web server - explicitly bind to all interfaces
@@ -19,10 +20,10 @@ services:
       - BACKEND_PORT=5174
       - FRONTEND_PORT=5173
     volumes:
-      # Mount local phoenixd for persistence (mapping to eltor user home)
-      - ${HOME}/.phoenix:/home/eltor/.phoenix
-      # Mount data directory for logs and tor data
-      - eltor-data:/home/eltor/data
+      # Mount local phoenixd for persistence (mapping to user with UID 1000)
+      - ${HOME}/.phoenix:/home/user/.phoenix
+      # Mount data directory for logs and tor data with shared group ownership
+      - eltor-data:/home/user/data
     networks:
       - eltor-network
     restart: unless-stopped
