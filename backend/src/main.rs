@@ -57,16 +57,20 @@ async fn main() {
         eprintln!("   Continuing with startup...");
     }
 
-    // Read USE_PHOENIXD_EMBEDDED from environment (default to true)
+    // Read environment variables
+    let backend_port = env::var("BACKEND_PORT")
+        .unwrap_or_else(|_| "5174".to_string())
+        .parse::<u16>()
+        .unwrap_or(5174);
+
     let use_phoenixd_embedded = env::var("USE_PHOENIXD_EMBEDDED")
         .unwrap_or_else(|_| "true".to_string())
         .parse::<bool>()
         .unwrap_or(true);
 
-    println!(
-        "🔧 Wallet configuration: phoenixd embedded = {}",
-        use_phoenixd_embedded
-    );
+    println!("🔧 Backend configuration:");
+    println!("   Port: {}", backend_port);
+    println!("   Phoenixd embedded: {}", use_phoenixd_embedded);
 
     // Initialize shared state
     let mut state = AppState::new(use_phoenixd_embedded);
@@ -124,14 +128,7 @@ async fn main() {
     }
 
     // Configure CORS to allow SSE
-    let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
-        .allow_headers([
-            HeaderName::from_static("content-type"),
-            HeaderName::from_static("cache-control"),
-        ])
-        .allow_credentials(true);
+    let cors = CorsLayer::permissive();
 
     // Build the router
     let app = Router::new()
@@ -147,10 +144,11 @@ async fn main() {
         .with_state(state);
 
     // Start the server
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let bind_address = format!("0.0.0.0:{}", backend_port);
+    let listener = tokio::net::TcpListener::bind(&bind_address).await.unwrap();
     println!("🚀 El Tor Backend Server");
-    println!("📡 Running on http://localhost:8080");
-    println!("🔗 Health check: http://localhost:8080/health");
+    println!("📡 Running on http://0.0.0.0:{}", backend_port);
+    println!("🔗 Health check: http://localhost:{}/health", backend_port);
     println!("📋 API endpoints:");
     println!("   POST /api/tor/connect");
     println!("   POST /api/tor/disconnect");

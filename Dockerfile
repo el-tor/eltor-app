@@ -173,16 +173,16 @@ USER eltor
 # Set working directory
 WORKDIR /home/eltor/code/eltor-app
 
-# Expose ports
-EXPOSE 5173 8080 9740 18058 9996
+# Expose ports (now using environment variables)
+EXPOSE 5173 5174 9740 18058 9996
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:${BACKEND_PORT:-5174}/health || exit 1
 
-# Set environment variables
+# Set environment variables with defaults
 ENV RUST_LOG=info
-ENV BACKEND_PORT=8080
+ENV BACKEND_PORT=5174
 ENV FRONTEND_PORT=5173
 
 # Run the application

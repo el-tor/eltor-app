@@ -1,4 +1,5 @@
 import { isTauri } from '../utils/platform'
+import config from '../config'
 
 // Tauri imports (only loaded when in Tauri mode)
 let tauriInvoke: any = null
@@ -14,8 +15,8 @@ const loadTauriAPIs = async () => {
   }
 }
 
-// Web API base URL
-const WEB_API_BASE = 'http://localhost:8080'
+// Web API base URL - now configurable
+const WEB_API_BASE = config.API_BASE_URL
 
 export interface EltordStatus {
   running: boolean

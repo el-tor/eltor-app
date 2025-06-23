@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
 
+# Set default environment variables if not provided
+export BACKEND_PORT=${BACKEND_PORT:-5174}
+export FRONTEND_PORT=${FRONTEND_PORT:-5173}
+
 echo "🚀 Starting Eltor Application..."
-echo "🔧 Backend will run on http://0.0.0.0:8080"
-echo "🌐 Frontend will be served from http://0.0.0.0:5173"
+echo "🔧 Backend will run on http://0.0.0.0:$BACKEND_PORT"
+echo "🌐 Frontend will be served from http://0.0.0.0:$FRONTEND_PORT"
 echo ""
 
 # include environment variables
@@ -42,7 +46,7 @@ BACKEND_PID=$!
 # Start frontend
 cd /home/eltor/code/eltor-app/frontend/dist
 echo "🌐 Starting frontend server..."
-python3 -m http.server 5173 --bind 0.0.0.0 &
+python3 -m http.server $FRONTEND_PORT --bind 0.0.0.0 &
 FRONTEND_PID=$!
 
 # Function to cleanup on exit

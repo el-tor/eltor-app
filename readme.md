@@ -111,7 +111,7 @@ npm run docker
 
 **Web Development:**
 - Frontend runs on `http://localhost:5173`
-- Backend API on `http://localhost:8080`
+- Backend API on `http://localhost:5174`
 - Supports hot reload for both frontend and backend
 
 **Desktop Development:**

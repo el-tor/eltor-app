@@ -1,4 +1,5 @@
 import { isTauri } from '../utils/platform'
+import config from '../config'
 import type {
   FetchWalletBalanceResponseType,
   FetchChannelInfoResponseType,
@@ -15,8 +16,8 @@ const loadTauriAPIs = async () => {
   }
 }
 
-// Web API base URL
-const WEB_API_BASE = 'http://localhost:8080'
+// Web API base URL - now configurable
+const WEB_API_BASE = config.API_BASE_URL
 
 // Backend API response types that match the Rust structs
 interface WalletBalanceResponse {

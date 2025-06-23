@@ -10,9 +10,9 @@
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",
 
-    "docker": "DOCKER_BUILDKIT=1 docker-compose up --build",
+    "docker": "pnpm run build:web && DOCKER_BUILDKIT=1 docker-compose up --build",
     "docker:build": "DOCKER_BUILDKIT=1 docker build -t eltor/eltor-app:latest . --load",
-    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.1",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.3",
     "docker:push": "docker push eltor/eltor-app:latest",
     "docker:clean": "docker-compose up --build --no-cache"
   },
