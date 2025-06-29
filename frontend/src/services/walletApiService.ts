@@ -1,9 +1,5 @@
 import { isTauri } from '../utils/platform'
 import config from '../config'
-import type {
-  FetchWalletBalanceResponseType,
-  FetchChannelInfoResponseType,
-} from '../features/wallet/Wallet'
 
 // Tauri imports (only loaded when in Tauri mode)
 let tauriInvoke: any = null
@@ -19,31 +15,30 @@ const loadTauriAPIs = async () => {
 // Web API base URL - now configurable
 const WEB_API_BASE = config.API_BASE_URL
 
-// Backend API response types that match the Rust structs
-interface WalletBalanceResponse {
-  total_balance_sats: number
-  confirmed_balance_sats: number
-  unconfirmed_balance_sats: number
-  locked_balance_sats?: number
+export interface NodeInfoResponse {
+  alias: string
+  color: string
+  pubkey: string
+  network: string
+  block_height: number
+  block_hash: string
+  send_balance_msat: number
+  receive_balance_msat: number
+  fee_credit_balance_msat: number
+  unsettled_send_balance_msat: number
+  unsettled_receive_balance_msat: number
+  pending_open_send_balance: number
+  pending_open_receive_balance: number
+  node_type?: string
 }
 
-interface NodeInfoResponse {
-  node_id: string
-  alias?: string
-  version?: string
-  block_height?: number
-  num_peers?: number
-  num_channels?: number
-  balance_sats?: number
-  node_type: string
-}
-
-interface TransactionResponse {
+export interface TransactionResponse {
   payment_hash: string
   created_at: number
   amount_msats: number
   preimage?: string
   payer_note?: string
+  settled_at?: number
 }
 
 interface ListTransactionsResponse {
@@ -51,32 +46,6 @@ interface ListTransactionsResponse {
 }
 
 class WalletApiService {
-  // Get wallet balance
-  async getWalletBalance(): Promise<FetchWalletBalanceResponseType> {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      try {
-        const data: WalletBalanceResponse = await tauriInvoke(
-          'get_wallet_balance',
-        )
-        // Convert backend response to frontend format
-        return { balance: data.total_balance_sats }
-      } catch (error) {
-        throw new Error(`Failed to get wallet balance: ${error}`)
-      }
-    } else {
-      const response = await fetch(`${WEB_API_BASE}/api/wallet/balance`)
-
-      if (!response.ok) {
-        const error = await response.text()
-        throw new Error(error)
-      }
-
-      const data: WalletBalanceResponse = await response.json()
-      // Convert backend response to frontend format
-      return { balance: data.total_balance_sats }
-    }
-  }
 
   // Get node info (can be used to derive channel info)
   async getNodeInfo(): Promise<NodeInfoResponse> {
@@ -96,24 +65,6 @@ class WalletApiService {
       }
 
       return await response.json()
-    }
-  }
-
-  // Get channel info (for now, use balance as send amount and derive receive from node info)
-  async getChannelInfo(): Promise<FetchChannelInfoResponseType> {
-    try {
-      // For now, use the balance as the send amount and set receive to 0
-      // In the future, this could be enhanced to get actual channel capacity info
-      const balanceResponse = await this.getWalletBalance()
-      const nodeInfo = await this.getNodeInfo()
-
-      return {
-        send: balanceResponse.balance,
-        receive: nodeInfo.balance_sats || 0, // This could be enhanced to show actual receive capacity
-      }
-    } catch (error) {
-      console.warn('Failed to get channel info, using defaults:', error)
-      return { send: 0, receive: 0 }
     }
   }
 

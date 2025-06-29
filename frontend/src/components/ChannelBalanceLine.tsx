@@ -22,11 +22,11 @@ export function ChannelBalanceLine({
       ></Box>
       <Group justify="space-between" mt="5">
         <Title order={6}>
-          Can Send: <span style={{ fontFamily: "monospace" }}>{send}</span> sats
+          Can Send: <span style={{ fontFamily: "monospace" }}>{send?.toLocaleString()}</span> sats
         </Title>
         <Title order={6}>
           Can Receive:{" "}
-          <span style={{ fontFamily: "monospace" }}>{receive}</span> sats
+          <span style={{ fontFamily: "monospace" }}>{receive?.toLocaleString()}</span> sats
         </Title>
       </Group>
     </Box>

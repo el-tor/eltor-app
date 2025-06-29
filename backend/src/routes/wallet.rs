@@ -10,9 +10,9 @@ use axum::{
 use crate::{
     state::{AppState, MessageResponse},
     lightning::{
-        NodeInfoResponse, WalletBalanceResponse, CreateInvoiceRequest, 
+        CreateInvoiceRequest, 
         CreateInvoiceResponse, PayInvoiceRequest, PayInvoiceResponse,
-        ListTransactionsResponse, ListTransactionsParams
+        ListTransactionsResponse, ListTransactionsParams, NodeInfoResponse
     }
 };
 
@@ -23,19 +23,6 @@ async fn get_node_info(State(state): State<AppState>) -> Result<ResponseJson<Nod
             match node.get_node_info().await {
                 Ok(info) => Ok(ResponseJson(info)),
                 Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get node info: {}", e)))
-            }
-        }
-        None => Err((StatusCode::SERVICE_UNAVAILABLE, "Lightning node not initialized".to_string()))
-    }
-}
-
-// Get wallet balance
-async fn get_wallet_balance(State(state): State<AppState>) -> Result<ResponseJson<WalletBalanceResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => {
-            match node.get_balance().await {
-                Ok(balance) => Ok(ResponseJson(balance)),
-                Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get balance: {}", e)))
             }
         }
         None => Err((StatusCode::SERVICE_UNAVAILABLE, "Lightning node not initialized".to_string()))
@@ -111,7 +98,6 @@ async fn get_wallet_transactions(State(state): State<AppState>) -> Result<Respon
 // Get a BOLT12 offer
 async fn get_offer(
     State(state): State<AppState>,
-    Json(request): Json<CreateInvoiceRequest>
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
     match &state.lightning_node {
         Some(node) => {
@@ -128,7 +114,6 @@ async fn get_offer(
 pub fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/api/wallet/info", get(get_node_info))
-        .route("/api/wallet/balance", get(get_wallet_balance))
         .route("/api/wallet/invoice", post(create_invoice))
         .route("/api/wallet/offer", post(get_offer))
         .route("/api/wallet/pay", post(pay_invoice))

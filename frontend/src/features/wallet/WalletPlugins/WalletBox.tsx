@@ -26,7 +26,7 @@ export const WalletBox = ({
   return (
     <Box
       w={160}
-      h={44}
+      h={52}
       m="xs"
       p="sm"
       className={styles.box}
@@ -50,14 +50,14 @@ export const WalletBox = ({
               right: 6,
             }}
           />
-          <Badge
+          {/* <Badge
             color="green"
             variant="filled"
-            size="8"
-            style={{ position: "absolute", bottom: 2, center: 0 }}
+            size="11"
+            style={{ position: "absolute", bottom: -7, center: 0}}
           >
             Default
-          </Badge>
+          </Badge> */}
         </>
       )}
 

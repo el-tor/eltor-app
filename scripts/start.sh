@@ -2,43 +2,86 @@
 set -e
 
 # Set default environment variables if not provided
-export BACKEND_PORT=${BACKEND_PORT:-5174}
-export FRONTEND_PORT=${FRONTEND_PORT:-5173}
+export BACKEND_PORT=${APP_ELTOR_BACKEND_PORT:-5174}
+export FRONTEND_PORT=${APP_ELTOR_FRONTEND_PORT:-5173}
 
 echo "🚀 Starting Eltor Application..."
-echo "🔧 Backend will run on http://0.0.0.0:$BACKEND_PORT"
-echo "🌐 Frontend will be served from http://0.0.0.0:$FRONTEND_PORT"
+echo "🔧 Backend will run on http://127.0.0.1:$BACKEND_PORT"
+echo "🌐 Frontend will be served from http://127.0.0.1:$FRONTEND_PORT"
 echo ""
+
+printenv
 
 # Ensure data directories exist with proper permissions
 echo "📁 Creating data directories..."
-mkdir -p /home/user/data/logs \
-         /home/user/data/tor/client \
-         /home/user/data/tor-relay/client \
-         /home/user/data/phoenix \
-         /home/user/code/eltor-app/backend/bin/data
+mkdir -p $APP_ELTOR_TOR_DATA_DIRECTORY/logs \
+         $APP_ELTOR_TOR_DATA_DIRECTORY/client \
+         $APP_ELTOR_TOR_RELAY_DATA_DIRECTORY/client \
+         $APP_ELTOR_USER_DIR/data/phoenix \
+         $APP_ELTOR_USER_DIR/code/eltor-app/backend/bin/data
 
 # include environment variables
-. /home/user/exports.sh
+. $APP_ELTOR_USER_DIR/exports.sh
 
-# run phoenixd 
-# TODO check if USE_PHOENIXD_EMBEDDED=true
-cd /home/user/code/eltor-app/backend/bin
-echo "🔧 Starting Phoenix daemon..." 
-./phoenixd &
-PHOENIX_PID=$!
-# Wait for Phoenix daemon to start
-echo "⏳ Waiting for Phoenix daemon to start..."
-sleep 5
-kill $PHOENIX_PID 2>/dev/null || true
+##############################################
+# Phoenixd 
+##############################################
+if [ "$APP_ELTOR_USE_PHOENIXD_EMBEDDED" = "true" ]; then
+    echo "🔧 Embedded Phoenix mode enabled, starting Phoenix daemon..."
+    cd /home/user/code/eltor-app/backend/bin
+    ./phoenixd &
+    PHOENIX_PID=$!
+    # Wait for Phoenix daemon to start
+    echo "⏳ Waiting for Phoenix daemon to start..."
+    sleep 5
+    kill $PHOENIX_PID 2>/dev/null || true
 
-# Parse phoenixd password from the conf and copy to torrc
-get_phoenixd_password() {
-    awk -F'=' '/^http-password=/ {print $2}' ~/.phoenix/phoenix.conf
-}
-PHOENIXD_PASSWORD=$(get_phoenixd_password)
-export TOR_PAYMENT_LIGHTNING_NODE_CONFIG="type=phoenixd url=http://127.0.0.1:9740 password=$PHOENIXD_PASSWORD default=true"
+    # Parse phoenixd password from the conf and copy to torrc
+    get_phoenixd_password() {
+        awk -F'=' '/^http-password=/ {print $2}' ~/.phoenix/phoenix.conf
+    }
+    PHOENIXD_PASSWORD=$(get_phoenixd_password)
+    export APP_ELTOR_LN_CONFIG="type=phoenixd url=http://127.0.0.1:9740 password=$PHOENIXD_PASSWORD default=true"
+    export APP_ELTOR_LN_IMPLEMENTATION="phoenixd"    
+    # Get BOLT12 offer from Phoenix daemon
+    echo "🔍 Fetching BOLT12 offer from Phoenix daemon..."
+    BOLT12_OFFER=""
+    
+    # Try to get the offer from Phoenix API
+    for attempt in 1 2 3; do
+        echo "⏳ Attempt $attempt to get BOLT12 offer..."
+        BOLT12_OFFER=$(curl -s -u ":$PHOENIXD_PASSWORD" \
+            -X GET "http://127.0.0.1:9740/getoffer" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "description=Eltor%20Relay%20Payment" 2>/dev/null || echo "")
+        
+        if [ -n "$BOLT12_OFFER" ] && [ "$BOLT12_OFFER" != "null" ] && [[ "$BOLT12_OFFER" == lno* ]]; then
+            echo "✅ Got BOLT12 offer: ${BOLT12_OFFER:0:50}..."
+            break
+        else
+            echo "⚠️  Failed to get BOLT12 offer, retrying in 2 seconds..."
+            sleep 2
+        fi
+    done
+    
+    # Set the offer or use a placeholder
+    if [ -n "$BOLT12_OFFER" ] && [ "$BOLT12_OFFER" != "null" ]; then
+        export APP_ELTOR_LN_BOLT12="$BOLT12_OFFER"
+    else
+        echo "❌ Could not retrieve BOLT12 offer from Phoenix, using placeholder"
+        export APP_ELTOR_LN_BOLT12="lno-phoenix-offer-unavailable"
+    fi
+    
+    echo "✅ Phoenix daemon configured with password from ~/.phoenix/phoenix.conf"
+else
+    echo "🔧 Using external Lightning implementation: $APP_ELTOR_LN_IMPLEMENTATION"
+    echo "📡 Lightning config: $APP_ELTOR_LN_CONFIG"
+fi
 
+
+##############################################
+# torrc 
+##############################################
 # Generate torrc files only if they don't exist
 echo "📝 Ensuring torrc data directory exists and is writable..."
 mkdir -p /home/user/code/eltor-app/backend/bin/data
@@ -97,6 +140,10 @@ else
     echo "✅ torrc.relay already exists, skipping generation"
 fi
 
+
+##############################################
+# IP address 
+##############################################
 # Function to get public IP address
 get_public_ip() {
     local ip=""
@@ -148,9 +195,11 @@ update_torrc_relay_address() {
 # Update the Address in torrc.relay with current public IP
 update_torrc_relay_address
 
-printenv
 
 
+##############################################
+# Start App 
+##############################################
 # Start backend in background
 cd /home/user/code/eltor-app/backend/bin
 echo "📡 Starting backend server..."
@@ -163,6 +212,9 @@ echo "🌐 Starting frontend server..."
 python3 -m http.server $FRONTEND_PORT --bind 0.0.0.0 &
 FRONTEND_PID=$!
 
+##############################################
+# Cleanup on exit
+##############################################
 # Function to cleanup on exit
 cleanup() {
     echo "🛑 Shutting down services..."

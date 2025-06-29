@@ -9,7 +9,7 @@ pub mod torrc_parser;
 pub mod wallet;
 
 // Re-export commonly used types for convenience
-pub use lightning::{LightningNode, NodeInfoResponse, WalletBalanceResponse, ListTransactionsResponse};
+pub use lightning::{LightningNode, WalletBalanceResponse, ListTransactionsResponse};
 pub use state::{AppState, MessageResponse, StatusResponse, LogEntry, EltordStatusResponse};
 pub use routes::eltor::{activate_eltord as backend_activate, deactivate_eltord as backend_deactivate, get_eltord_status as backend_status, get_bin_dir, activate_eltord_internal};
 pub use ports::{get_ports_to_check, cleanup_ports, cleanup_ports_with_torrc, cleanup_ports_startup, cleanup_tor_ports_only, get_tor_ports_only};

@@ -22,6 +22,7 @@ pub struct TransactionResponse {
     pub amount_msats: i64,
     pub preimage: Option<String>,
     pub payer_note: Option<String>,
+    pub settled_at: Option<i64>,
 }
 
 /// Response structure for listing transactions
@@ -55,16 +56,11 @@ pub struct NodeConfig {
     pub accept_invalid_certs: Option<bool>,
 }
 
-/// Response structure for node info
+/// Response structure for node info - includes raw NodeInfo plus node_type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfoResponse {
-    pub node_id: String,
-    pub alias: Option<String>,
-    pub version: Option<String>,
-    pub block_height: Option<u64>,
-    pub num_peers: Option<u32>,
-    pub num_channels: Option<u32>,
-    pub balance_sats: Option<u64>,
+    #[serde(flatten)]
+    pub node_info: lni::NodeInfo,
     pub node_type: String,
 }
 
@@ -188,28 +184,11 @@ impl LightningNode {
             .map_err(|e| format!("Failed to get node info: {:?}", e))?;
 
         Ok(NodeInfoResponse {
-            node_id: info.pubkey,
-            alias: Some(info.alias),
-            version: None, // Not available in current NodeInfo
-            block_height: Some(info.block_height as u64),
-            num_peers: None,    // Not available in current NodeInfo
-            num_channels: None, // Not available in current NodeInfo
-            balance_sats: None, // Not available in current NodeInfo
+            node_info: info,
             node_type: self.node_type.to_string(),
         })
     }
 
-    /// Get wallet balance (async to handle blocking LNI calls)
-    pub async fn get_balance(&self) -> Result<WalletBalanceResponse, String> {
-        // For now, return a placeholder response since the LNI library doesn't expose a direct balance method
-        // In the future, this could be implemented using the node's getinfo or a separate balance API call
-        Ok(WalletBalanceResponse {
-            total_balance_sats: 6671, // From the phoenixd getinfo response we saw in logs
-            confirmed_balance_sats: 6671,
-            unconfirmed_balance_sats: 0,
-            locked_balance_sats: Some(0),
-        })
-    }
 
     /// Create an invoice (async to handle blocking LNI calls)
     pub async fn create_invoice(
@@ -284,6 +263,7 @@ impl LightningNode {
                 amount_msats: tx.amount_msats,
                 preimage: Some(tx.preimage),
                 payer_note: None, // Not available in current Transaction
+                settled_at: Some(tx.settled_at),
             })
             .collect();
 

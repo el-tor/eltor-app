@@ -4,15 +4,16 @@
   "private": true,
   "description": "Monorepo for eltor-app",
   "scripts": {
-    "tauri": "cd frontend && pnpm run dev:tauri",
-    "web": "concurrently \"pnpm run backend\" \"pnpm run frontend\"",
+    "tauri": "npm run env && cd frontend && pnpm run dev:tauri",
+    "web": "concurrently \"npm run env && pnpm run backend\" \"pnpm run frontend\"",
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",
+    "env": "source scripts/exports.sh",
 
-    "docker": "pnpm run build:web && DOCKER_BUILDKIT=1 docker-compose up --build",
+    "docker": "pnpm run build:web && npm run env && DOCKER_BUILDKIT=1 docker-compose up --build",
     "docker:build": "DOCKER_BUILDKIT=1 docker build -t eltor/eltor-app:latest . --load",
-    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.9",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.10",
     "docker:push": "docker push eltor/eltor-app:latest",
     "docker:clean": "docker-compose up --build --no-cache"
   },

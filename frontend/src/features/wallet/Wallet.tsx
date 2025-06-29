@@ -11,10 +11,9 @@ import {
 import { useDispatch, useSelector } from '../../hooks'
 import { useEffect, useState } from 'react'
 import {
-  fetchChannelInfo,
-  fetchWalletBalance,
   setDefaultWallet,
   getBolt12Offer,
+  fetchNodeInfo,
 } from './walletStore'
 import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
 import { WalletPlugins } from './WalletPlugins/WalletPlugins'
@@ -50,16 +49,12 @@ type FetchChannelInfoResponseType = {
   receive: number
 }
 
-type WalletProviderType =
-  | 'Phoenixd'
-  | 'Lndk'
-  | 'CoreLightning'
-  | 'Strike'
-  | 'None'
+type WalletProviderType = 'phoenixd' | 'lnd' | 'cln' | 'strike' | 'none'
 
 export const Wallet = () => {
   const {
-    balance,
+    send,
+    receive,
     defaultWallet,
     channelInfo,
     bolt12Offer,
@@ -70,12 +65,8 @@ export const Wallet = () => {
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
 
-  fetchChannelInfo('')
-  fetchChannelInfo('')
-
   useEffect(() => {
-    dispatch(fetchWalletBalance(''))
-    dispatch(fetchChannelInfo(''))
+    dispatch(fetchNodeInfo(''))
     dispatch(getBolt12Offer(''))
   }, [])
 
@@ -89,7 +80,7 @@ export const Wallet = () => {
                 setShowWallet={setShowWallet}
                 showWallet={showWallet}
               /> */}
-              <WalletPlugins />
+              <WalletPlugins defaultWallet={defaultWallet} />
             </Center>
             <Group ml="auto">
               <Center>
@@ -104,26 +95,25 @@ export const Wallet = () => {
                 )}
               </Center>
             </Group>
-            <Circle color={defaultWallet ? 'lightgreen' : '#FF6347'} />
-            {/* <Title order={2}>{defaultWallet}</Title> */}
+            {!!!defaultWallet && <Circle color={'#FF6347'} />}
           </Group>
 
           <Group mt="xl">
             <Title order={4}>
               Balance:{' '}
-              <span style={{ fontFamily: 'monospace' }}>{balance}</span>
+              <span style={{ fontFamily: 'monospace' }}>{send?.toLocaleString()}</span>
             </Title>
             <IconRefresh
               stroke={1.5}
               onClick={() => {
-                dispatch(fetchWalletBalance(''))
+                dispatch(fetchNodeInfo(''))
               }}
               style={{ cursor: 'pointer' }}
             />
           </Group>
           <ChannelBalanceLine
-            send={balance ?? 0}
-            receive={channelInfo.receive ?? 0}
+            send={send ?? 0}
+            receive={receive ?? 0}
           />
 
           <SimpleGrid

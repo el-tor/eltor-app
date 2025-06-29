@@ -6,35 +6,69 @@ services:
     #image: eltor/eltor-app@sha256:97498b1dd42c62e08baaeab8871dfccabe769024733c9c5ecb11334f6ac43a3b
     container_name: app
     hostname: eltor
-    user: "1000:2000"  # UID 1000, GID 2000 (datagroup)
+    user: '1000:2000' # UID 1000, GID 2000 (datagroup)
     ports:
-      - "0.0.0.0:5174:5174"   # Backend API - explicitly bind to all interfaces
-      - "0.0.0.0:5173:5173"   # Frontend web server - explicitly bind to all interfaces
-      - "0.0.0.0:9740:9740"   # Lightning node - explicitly bind to all interfaces
-      - "0.0.0.0:18058:18058" # Tor SOCKS proxy - explicitly bind to all interfaces
-      - "0.0.0.0:9996:9996"   # Tor relay OR port
+      - '0.0.0.0:5174:5174' # Backend API - explicitly bind to all interfaces
+      - '0.0.0.0:5173:5173' # Frontend web server - explicitly bind to all interfaces
+      - '0.0.0.0:9740:9740' # Lightning node - explicitly bind to all interfaces
+      - '0.0.0.0:18058:18058' # Tor SOCKS proxy - explicitly bind to all interfaces
+      - '0.0.0.0:9996:9996' # Tor relay OR port
+    volumes:
+      # Todo use ~/.eltor for data storage (need to update the eltord project to use this path)
+      - ./data/eltor:/home/user/code/eltor-app/backend/bin/data
+      - ./data/phoenix:/home/user/.phoenix
     env_file:
       - .env
     environment:
-      - RUST_LOG=info
-      - BACKEND_PORT=5174
-      - FRONTEND_PORT=5173
-    volumes:
-      - ${HOME}/.phoenix:/home/user/.phoenix
-      - ./backend/bin/data:/home/user/code/eltor-app/backend/bin/data
+      # App env vars
+      - APP_ELTOR_FRONTEND_PORT=${APP_ELTOR_FRONTEND_PORT}
+      - APP_ELTOR_BACKEND_PORT=${APP_ELTOR_BACKEND_PORT}
+      - APP_ELTOR_HOST=${APP_ELTOR_HOST}
+      - APP_ELTOR_USER_DIR=/home/user
+      - APP_ELTOR_ELTORRC_PATH=/home/user/code/eltor-app/backend/bin/data
+
+      # LN env vars (from .env file)
+      - APP_ELTOR_USE_PHOENIXD_EMBEDDED=${APP_ELTOR_USE_PHOENIXD_EMBEDDED}
+      - APP_ELTOR_LN_IMPLEMENTATION=${APP_ELTOR_LN_IMPLEMENTATION}
+      - APP_ELTOR_LN_CONFIG=${APP_ELTOR_LN_CONFIG}
+
+      # Client Eltor Environment Variables
+      - APP_ELTOR_TOR_ADDITIONAL_DIR_AUTHORITY=${APP_ELTOR_TOR_ADDITIONAL_DIR_AUTHORITY}
+      - APP_ELTOR_TOR_NICKNAME=${APP_ELTOR_TOR_NICKNAME}
+      - APP_ELTOR_TOR_DATA_DIRECTORY="/home/user/.eltor"
+      - APP_ELTOR_TOR_SOCKS_PORT=${APP_ELTOR_TOR_SOCKS_PORT}
+      - APP_ELTOR_TOR_CONTROL_PORT=${APP_ELTOR_TOR_CONTROL_PORT}
+      - APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD=${APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD}
+      - APP_ELTOR_TOR_CLIENT_ADDRESS=${APP_ELTOR_TOR_CLIENT_ADDRESS}
+      - APP_ELTOR_TOR_PAYMENT_CIRCUIT_MAX_FEE=${APP_ELTOR_TOR_PAYMENT_CIRCUIT_MAX_FEE}
+
+      # Relay Eltor Environment Variables
+      - APP_ELTOR_TOR_RELAY_ADDITIONAL_DIR_AUTHORITY=${APP_ELTOR_TOR_RELAY_ADDITIONAL_DIR_AUTHORITY}
+      - APP_ELTOR_TOR_RELAY_DATA_DIRECTORY=/home/user/.eltor/relay
+      - APP_ELTOR_TOR_RELAY_CONTACT=${APP_ELTOR_TOR_RELAY_CONTACT}
+      - APP_ELTOR_TOR_RELAY_NICKNAME=${APP_ELTOR_TOR_RELAY_NICKNAME}
+      - APP_ELTOR_TOR_RELAY_OR_PORT=${APP_ELTOR_TOR_RELAY_OR_PORT}
+      - APP_ELTOR_TOR_RELAY_CONTROL_PORT=${APP_ELTOR_TOR_RELAY_CONTROL_PORT}
+      - APP_ELTOR_TOR_RELAY_SOCKS_PORT=${APP_ELTOR_TOR_RELAY_SOCKS_PORT}
+      - APP_ELTOR_TOR_RELAY_HASHED_CONTROL_PASSWORD=${APP_ELTOR_TOR_RELAY_HASHED_CONTROL_PASSWORD}
+      - APP_ELTOR_TOR_RELAY_SANDBOX=${APP_ELTOR_TOR_RELAY_SANDBOX}
+      - APP_ELTOR_TOR_EXIT_RELAY=${APP_ELTOR_TOR_EXIT_RELAY}
+      - APP_ELTOR_TOR_RELAY_PAYMENT_RATE_MSATS=${APP_ELTOR_TOR_RELAY_PAYMENT_RATE_MSATS}
+      - APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL=${APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL}
+      - APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL_ROUNDS=${APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL_ROUNDS}
+      - APP_ELTOR_TOR_RELAY_PAYMENT_CIRCUIT_MAX_FEE=${APP_ELTOR_TOR_RELAY_PAYMENT_CIRCUIT_MAX_FEE}
+      - APP_ELTOR_LN_BOLT12=${APP_ELTOR_LN_BOLT12}
     networks:
       - eltor-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT:-5174}/health"]
+      test:
+        ['CMD', 'curl', '-f', 'http://localhost:${BACKEND_PORT:-5174}/health']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-
 networks:
   eltor-network:
     driver: bridge
-
-

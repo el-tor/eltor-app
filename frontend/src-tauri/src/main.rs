@@ -2,6 +2,7 @@
 
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
+use std::env;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
@@ -9,9 +10,10 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord_wrapper_with_mode, create_app_state, deactivate_eltord_wrapper, deactivate_eltord_wrapper_with_mode, get_bin_dir,
-    get_eltord_status_wrapper, get_log_receiver, initialize_phoenixd, lightning, ports,
-    AppState as BackendAppState, LogEntry, lookup_ip_location, IpLocationResponse, shutdown_cleanup
+    activate_eltord_wrapper_with_mode, create_app_state, deactivate_eltord_wrapper,
+    deactivate_eltord_wrapper_with_mode, get_bin_dir, get_eltord_status_wrapper, get_log_receiver,
+    initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup,
+    AppState as BackendAppState, IpLocationResponse, LogEntry,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -110,7 +112,10 @@ async fn activate_eltord(
     torrc_file_name: Option<String>,
     mode: Option<String>,
 ) -> Result<String, String> {
-    println!("🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}", torrc_file_name, mode);
+    println!(
+        "🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}",
+        torrc_file_name, mode
+    );
 
     let backend_state = tauri_state.backend_state.clone();
 
@@ -179,7 +184,10 @@ async fn deactivate_eltord_with_mode(
     tauri_state: State<'_, TauriState>,
     mode: String,
 ) -> Result<String, String> {
-    println!("deactivate_eltord_with_mode command called with mode: {}", mode);
+    println!(
+        "deactivate_eltord_with_mode command called with mode: {}",
+        mode
+    );
 
     let backend_state = tauri_state.backend_state.clone();
 
@@ -211,7 +219,7 @@ async fn get_eltord_status(
 }
 
 #[command]
-async fn get_wallet_balance(
+async fn get_node_info(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
     // Get the lightning node from TauriState
@@ -221,11 +229,11 @@ async fn get_wallet_balance(
         .ok_or("Lightning node not initialized")?;
 
     // Get the balance from the lightning node
-    match lightning_node.get_balance().await {
+    match lightning_node.get_node_info().await {
         Ok(balance) => {
             println!(
-                "✅ Retrieved wallet balance: {} sats",
-                balance.confirmed_balance_sats
+                "✅ Send wallet balance: {} sats",
+                balance.node_info.send_balance_msat / 1000
             );
             Ok(serde_json::json!(balance))
         }
@@ -262,9 +270,7 @@ async fn get_wallet_transactions(
 }
 
 #[command]
-async fn get_offer(
-    tauri_state: State<'_, TauriState>,
-) -> Result<serde_json::Value, String> {
+async fn get_offer(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
     // Get the lightning node from TauriState
     let lightning_node_guard = tauri_state.lightning_node.lock().await;
     let lightning_node = lightning_node_guard
@@ -290,16 +296,14 @@ async fn lookup_ip_location_tauri(ip: String) -> Result<IpLocationResponse, Stri
 }
 
 #[command]
-async fn app_shutdown(
-    tauri_state: State<'_, TauriState>,
-) -> Result<String, String> {
+async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, String> {
     println!("🛑 App shutdown command called");
 
     let backend_state = tauri_state.backend_state.clone();
 
     // Perform comprehensive cleanup
     shutdown_cleanup((*backend_state).clone()).await?;
-    
+
     Ok("App shutdown cleanup completed".to_string())
 }
 
@@ -324,7 +328,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
                     println!("🛑 App quit requested - performing cleanup...");
-                    
+
                     match app_shutdown(tauri_state).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
@@ -333,7 +337,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                             println!("⚠️  Shutdown warning: {}", e);
                         }
                     }
-                    
+
                     // Exit after cleanup
                     app_handle.exit(0);
                 });
@@ -360,7 +364,14 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
-                    match activate_eltord(tauri_state, app_handle.clone(), None, Some("client".to_string())).await {
+                    match activate_eltord(
+                        tauri_state,
+                        app_handle.clone(),
+                        None,
+                        Some("client".to_string()),
+                    )
+                    .await
+                    {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-activated", &msg);
@@ -410,6 +421,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn main() {
+    // Load environment variables from root .env file
+    dotenv::from_path("../../.env").ok();
+    // Print environment variables for debugging
+    println!("🔧 Tauri Environment variables:");
+    for (key, value) in env::vars() {
+        if key.starts_with("APP_") || key.starts_with("BACKEND_") || key.starts_with("PHOENIXD_") {
+            println!("   {}: {}", key, value);
+        }
+    }
+
     Builder::default()
         .setup(|app| {
             setup_tray(app.handle())?;
@@ -430,22 +451,30 @@ fn main() {
                     eprintln!("   Continuing with startup...");
                 }
 
-                match state_for_init.initialize_phoenixd().await {
-                    Ok(_) => {
-                        println!("✅ Phoenixd initialization completed successfully");
-                        let _ = app_handle.emit("phoenixd-ready", "Phoenixd wallet ready");
-                    }
-                    Err(e) => {
-                        println!("❌ Failed to initialize phoenixd: {}", e);
-                        let _ = app_handle.emit(
-                            "phoenixd-error",
-                            format!("Phoenixd initialization failed: {}", e),
-                        );
+                let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
+                    .unwrap_or_else(|_| "false".to_string())
+                    .parse::<bool>()
+                    .unwrap_or(false);
+
+                if use_phoenixd_embedded {
+                    match state_for_init.initialize_phoenixd().await {
+                        Ok(_) => {
+                            println!("✅ Phoenixd initialization completed successfully");
+                            let _ = app_handle.emit("phoenixd-ready", "Phoenixd wallet ready");
+                        }
+                        Err(e) => {
+                            println!("❌ Failed to initialize phoenixd: {}", e);
+                            let _ = app_handle.emit(
+                                "phoenixd-error",
+                                format!("Phoenixd initialization failed: {}", e),
+                            );
+                        }
                     }
                 }
 
                 // Initialize lightning node
                 let torrc_path = get_bin_dir().join("data").join("torrc");
+                println!("🔎 Lightning torrc path: {:?}", torrc_path);
                 match lightning::LightningNode::from_torrc(torrc_path) {
                     Ok(node) => {
                         println!(
@@ -500,7 +529,7 @@ fn main() {
             deactivate_eltord_with_mode,
             get_eltord_status,
             test_log_event,
-            get_wallet_balance,
+            get_node_info,
             get_wallet_transactions,
             get_offer,
             lookup_ip_location_tauri,

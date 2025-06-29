@@ -1,13 +1,11 @@
 use axum::{
-    http::{HeaderName, HeaderValue, Method},
     response::Json as ResponseJson,
     routing::{get, post},
     Router,
 };
-use dotenv::dotenv;
+use eltor_backend::state::{AppState, MessageResponse, StatusResponse};
 use std::env;
 use tower_http::cors::CorsLayer;
-use eltor_backend::state::{AppState, MessageResponse, StatusResponse};
 
 use eltor_backend::routes::eltor::get_bin_dir;
 use eltor_backend::routes::ip;
@@ -47,8 +45,15 @@ async fn health_check() -> ResponseJson<MessageResponse> {
 
 #[tokio::main]
 async fn main() {
-    // Load environment variables from .env file
-    dotenv().ok();
+    // Load environment variables from root .env file
+    dotenv::from_path("../.env").ok();
+    // Print environment variables for debugging
+    println!("🔧 Backend Environment variables:");
+    for (key, value) in env::vars() {
+        if key.starts_with("APP_") || key.starts_with("BACKEND_") || key.starts_with("PHOENIXD_") {
+            println!("   {}: {}", key, value);
+        }
+    }
 
     // Clean up any processes using our ports
     println!("🧹 Starting port cleanup...");
@@ -63,10 +68,10 @@ async fn main() {
         .parse::<u16>()
         .unwrap_or(5174);
 
-    let use_phoenixd_embedded = env::var("USE_PHOENIXD_EMBEDDED")
-        .unwrap_or_else(|_| "true".to_string())
+    let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
+        .unwrap_or_else(|_| "false".to_string())
         .parse::<bool>()
-        .unwrap_or(true);
+        .unwrap_or(false);
 
     println!("🔧 Backend configuration:");
     println!("   Port: {}", backend_port);

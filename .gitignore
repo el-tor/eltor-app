@@ -60,3 +60,5 @@ backend/target/
 !**/torrc_parser.rs
 
 env.sh
+
+data/
