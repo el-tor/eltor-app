@@ -20,6 +20,8 @@ out/
 .env.local
 .env.*.local
 **.env**
+env.sh
+!.env.example
 
 # IDE files
 .vscode/
@@ -59,6 +61,9 @@ backend/target/
 !**/torrc.relay.template
 !**/torrc_parser.rs
 
-env.sh
 
 data/
+
+
+payments_sent.json
+payments_received.json

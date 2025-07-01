@@ -5,6 +5,7 @@ pub mod lightning;
 pub mod ports;
 pub mod routes;
 pub mod state;
+pub mod static_files;
 pub mod torrc_parser;
 pub mod wallet;
 

@@ -12,8 +12,14 @@ const loadTauriAPIs = async () => {
   }
 }
 
-// Web API base URL - now configurable
-const WEB_API_BASE = config.API_BASE_URL
+// Web API base URL - construct from current location
+const getApiBaseUrl = () => {
+  // Just use the current location's protocol, hostname, and port
+  // This works because the frontend is served from the same server as the API
+  const currentUrl = `${window.location.protocol}//${window.location.host}`
+  console.log('walletApiService - Using current location as API base:', currentUrl)
+  return currentUrl
+}
 
 export interface NodeInfoResponse {
   alias: string
@@ -57,7 +63,7 @@ class WalletApiService {
         throw new Error(`Failed to get node info: ${error}`)
       }
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/wallet/info`)
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/info`)
 
       if (!response.ok) {
         const error = await response.text()
@@ -81,7 +87,7 @@ class WalletApiService {
         throw new Error(`Failed to get transactions: ${error}`)
       }
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/wallet/transactions`)
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/transactions`)
 
       if (!response.ok) {
         const error = await response.text()
@@ -114,7 +120,7 @@ class WalletApiService {
       await loadTauriAPIs()
       return await tauriInvoke('get_offer')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/wallet/offer`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/offer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

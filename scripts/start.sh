@@ -2,12 +2,13 @@
 set -e
 
 # Set default environment variables if not provided
-export BACKEND_PORT=${APP_ELTOR_BACKEND_PORT:-5174}
-export FRONTEND_PORT=${APP_ELTOR_FRONTEND_PORT:-5173}
+export BACKEND_PORT=${BACKEND_PORT:-${PORT:-5174}}
+export BIND_ADDRESS=${BIND_ADDRESS:-0.0.0.0}  # Default to 0.0.0.0 for Docker
+BACKEND_URL=${BACKEND_URL:-http://localhost:${BACKEND_PORT}}
 
 echo "🚀 Starting Eltor Application..."
-echo "🔧 Backend will run on http://127.0.0.1:$BACKEND_PORT"
-echo "🌐 Frontend will be served from http://127.0.0.1:$FRONTEND_PORT"
+echo "🔧 Backend will run on http://${BIND_ADDRESS}:$BACKEND_PORT"
+echo "🌐 Frontend will be served from the backend (integrated mode)"
 echo ""
 
 printenv
@@ -200,30 +201,28 @@ update_torrc_relay_address
 ##############################################
 # Start App 
 ##############################################
-# Start backend in background
-cd /home/user/code/eltor-app/backend/bin
-echo "📡 Starting backend server..."
-./eltor-backend &
-BACKEND_PID=$!
-
-# Start frontend
-cd /home/user/code/eltor-app/frontend/dist
-echo "🌐 Starting frontend server..."
-python3 -m http.server $FRONTEND_PORT --bind 0.0.0.0 &
-FRONTEND_PID=$!
+# With the new integrated backend, we only need to start the backend
+# which will serve both the API and the frontend static files
+echo "� Starting integrated Eltor server..."
+echo "   Backend API: http://$BIND_ADDRESS:$BACKEND_PORT/api/*"
+echo "   Frontend: http://$BIND_ADDRESS:$BACKEND_PORT/"
+echo "   Environment variables will be injected into frontend automatically"
+cd /home/user/code/eltor-app
+./backend/bin/eltor-backend &
+SERVER_PID=$!
 
 ##############################################
 # Cleanup on exit
 ##############################################
 # Function to cleanup on exit
 cleanup() {
-    echo "🛑 Shutting down services..."
-    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
+    echo "🛑 Shutting down server..."
+    kill $SERVER_PID 2>/dev/null || true
     exit 0
 }
 
 # Set up signal handlers
 trap cleanup SIGTERM SIGINT
 
-# Wait for both processes
-wait $BACKEND_PID $FRONTEND_PID
+# Wait for the server process
+wait $SERVER_PID

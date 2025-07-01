@@ -9,6 +9,7 @@ use tower_http::cors::CorsLayer;
 
 use eltor_backend::routes::eltor::get_bin_dir;
 use eltor_backend::routes::ip;
+use eltor_backend::static_files;
 
 // Tor-related handlers
 async fn connect_tor() -> ResponseJson<StatusResponse> {
@@ -64,9 +65,13 @@ async fn main() {
 
     // Read environment variables
     let backend_port = env::var("BACKEND_PORT")
+        .or_else(|_| env::var("PORT")) // Also check for standard PORT env var
         .unwrap_or_else(|_| "5174".to_string())
         .parse::<u16>()
         .unwrap_or(5174);
+
+    let bind_address = env::var("BIND_ADDRESS")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
         .unwrap_or_else(|_| "false".to_string())
@@ -74,6 +79,7 @@ async fn main() {
         .unwrap_or(false);
 
     println!("🔧 Backend configuration:");
+    println!("   Bind Address: {}", bind_address);
     println!("   Port: {}", backend_port);
     println!("   Phoenixd embedded: {}", use_phoenixd_embedded);
 
@@ -145,15 +151,32 @@ async fn main() {
         .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
         .merge(eltor_backend::routes::eltor::create_routes())
         .merge(eltor_backend::routes::wallet::create_routes())
+        // Serve static frontend files (this should be last to catch all non-API routes)
+        .fallback(static_files::serve_static)
         .layer(cors)
         .with_state(state);
 
     // Start the server
-    let bind_address = format!("0.0.0.0:{}", backend_port);
-    let listener = tokio::net::TcpListener::bind(&bind_address).await.unwrap();
+    let full_bind_address = format!("{}:{}", bind_address, backend_port);
+    let listener = tokio::net::TcpListener::bind(&full_bind_address).await.unwrap();
+    
+    // Determine the display URL based on bind address
+    let display_address = if bind_address == "0.0.0.0" {
+        format!("http://0.0.0.0:{}", backend_port)
+    } else {
+        format!("http://{}:{}", bind_address, backend_port)
+    };
+    
+    let local_url = if bind_address == "0.0.0.0" {
+        format!("http://localhost:{}", backend_port)
+    } else {
+        format!("http://{}:{}", bind_address, backend_port)
+    };
+    
     println!("🚀 El Tor Backend Server");
-    println!("📡 Running on http://0.0.0.0:{}", backend_port);
-    println!("🔗 Health check: http://localhost:{}/health", backend_port);
+    println!("📡 Running on {}", display_address);
+    println!("🌐 Frontend served at {}", local_url);
+    println!("🔗 Health check: {}/health", local_url);
     println!("📋 API endpoints:");
     println!("   POST /api/tor/connect");
     println!("   POST /api/tor/disconnect");
@@ -171,6 +194,11 @@ async fn main() {
     println!("   POST /api/wallet/offer");
     println!("   GET  /api/wallet/status");
     println!("   GET  /api/wallet/transactions");
+    println!("📁 Static files served from frontend/dist/");
+    println!("🔧 Environment variables injected into frontend:");
+    println!("   BACKEND_PORT: {}", backend_port);
+    println!("   BACKEND_URL: {}", env::var("BACKEND_URL").unwrap_or_else(|_| local_url.clone()));
+    println!("   BIND_ADDRESS: {}", bind_address);
 
     axum::serve(listener, app).await.unwrap();
 }

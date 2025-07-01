@@ -144,6 +144,68 @@ Outputs platform-specific installers:
 - **macOS**: `.dmg`, `.app`
 - **Linux**: `.deb`, `.rpm`, `.AppImage`
 
+# Eltor App
+
+## Development & Production
+
+### Quick Start
+
+```bash
+# Development mode (separate frontend/backend)
+npm run web
+
+# Production mode (integrated backend serves frontend)
+npm run prod
+```
+
+### Production Commands
+
+```bash
+# Build and start production server
+npm run prod
+
+# Or run steps separately:
+npm run build:prod  # Build frontend + backend
+npm run start:prod  # Start integrated server
+```
+
+### Environment Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+**Key Environment Variables:**
+- `BIND_ADDRESS`: `127.0.0.1` (localhost) or `0.0.0.0` (all interfaces)
+- `BACKEND_PORT` or `PORT`: Port number (default: 5174)
+- `BACKEND_URL`: Base URL for API calls
+
+### Docker Deployment
+
+```bash
+# Build and run with Docker Compose
+npm run docker
+
+# Or manually:
+docker-compose up --build
+```
+
+### Production Examples
+
+```bash
+# Localhost only (secure)
+npm run prod
+
+# External access on port 80
+BIND_ADDRESS=0.0.0.0 PORT=80 BACKEND_PORT=80 BACKEND_URL=https://yourdomain.com npm run prod
+
+# Behind reverse proxy
+BIND_ADDRESS=127.0.0.1 PORT=3000 BACKEND_URL=https://api.yourdomain.com npm run prod
+```
+
 ## 🌐 El Tor Network
 
 ### Browser Configuration

@@ -134,12 +134,15 @@ RUN groupadd -r -g 1000 user && \
 # Create application structure with shared group ownership
 RUN mkdir -p /home/user/code/eltor-app/backend/bin \
              /home/user/code/eltor-app/backend/bin/data \
+             /home/user/.eltor \
+             /home/user/.tor \
              /home/user/data/logs \
-             /home/user/data/tor \
+             /home/user/data/tor/client \
+             /home/user/data/tor-relay/client \
              /home/user/data/phoenix \
              /home/user/.phoenix \
     && chown -R user:datagroup /home/user \
-    && chmod -R g+rwx /home/user/data
+    && chmod -R g+rwx /home/user/data 
 
 # Copy built binaries from previous stages
 COPY --from=backend-builder /root/code/eltord/target/release/eltor /home/user/code/eltor-app/backend/bin/eltord
@@ -180,16 +183,19 @@ USER user
 WORKDIR /home/user/code/eltor-app
 
 # Expose ports (now using environment variables)
-EXPOSE 5173 5174 9740 18058 9996
+# Note: Frontend is now served by the backend, so only backend port is needed
+EXPOSE 5174 9740 18058 9996
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${BACKEND_PORT:-5174}/health || exit 1
 
-# Set environment variables with defaults
+# Set environment variables with defaults for Docker
 ENV RUST_LOG=info
 ENV BACKEND_PORT=5174
-ENV FRONTEND_PORT=5173
+ENV BIND_ADDRESS=0.0.0.0
+ENV BACKEND_URL=http://localhost:5174
+# FRONTEND_PORT no longer needed as frontend is served by backend
 
 # Run the application
 CMD ["/home/user/start.sh"]

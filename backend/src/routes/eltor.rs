@@ -87,38 +87,46 @@ async fn read_process_stderr_logs(
 
 pub fn get_bin_dir() -> std::path::PathBuf {
     // Get the path to the eltord binary from ./bin folder (relative to backend crate)
-    // Use the CARGO_MANIFEST_DIR environment variable to find the backend directory
-    let backend_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(|manifest_dir| {
-            let path = std::path::Path::new(&manifest_dir);
-            // If CARGO_MANIFEST_DIR points to src-tauri, navigate to backend
-            if path.ends_with("src-tauri") {
-                path.parent().unwrap().parent().unwrap().join("backend").to_string_lossy().to_string()
-            } else if path.file_name().unwrap() == "backend" {
-                // Already in backend directory
-                manifest_dir
-            } else {
-                // Try to find backend directory from manifest location
-                path.join("backend").to_string_lossy().to_string()
-            }
-        })
-        .unwrap_or_else(|_| {
-            // Fallback: try to find the backend directory relative to current dir
-            let current_dir = std::env::current_dir().unwrap();
-            println!("🔍 Current working directory: {:?}", current_dir);
-            
-            // If we're in src-tauri, go up to find backend
-            if current_dir.ends_with("src-tauri") {
-                current_dir.parent().unwrap().parent().unwrap().join("backend").to_string_lossy().to_string()
-            } else if current_dir.ends_with("frontend") {
-                current_dir.parent().unwrap().join("backend").to_string_lossy().to_string()
-            } else {
-                // Assume we're in the root project directory
-                current_dir.join("backend").to_string_lossy().to_string()
-            }
-        });
+    let current_dir = std::env::current_dir().unwrap();
+    println!("🔍 Current working directory: {:?}", current_dir);
     
-    let bin_dir: std::path::PathBuf = std::path::Path::new(&backend_dir).join("bin");
+    let backend_dir = if current_dir.ends_with("backend") {
+        // We're already in the backend directory
+        println!("✅ Already in backend directory");
+        current_dir
+    } else if current_dir.join("backend").exists() {
+        // We're in the root project directory and backend exists
+        println!("✅ Found backend directory from root");
+        current_dir.join("backend")
+    } else if current_dir.ends_with("src-tauri") {
+        // We're in src-tauri, go up to find backend
+        println!("✅ In src-tauri, navigating to backend");
+        current_dir.parent().unwrap().parent().unwrap().join("backend")
+    } else if current_dir.ends_with("frontend") {
+        // We're in frontend, go up to find backend
+        println!("✅ In frontend, navigating to backend");
+        current_dir.parent().unwrap().join("backend")
+    } else {
+        // Fallback: try CARGO_MANIFEST_DIR
+        match std::env::var("CARGO_MANIFEST_DIR") {
+            Ok(manifest_dir) => {
+                let path = std::path::Path::new(&manifest_dir);
+                println!("✅ Using CARGO_MANIFEST_DIR: {:?}", path);
+                if path.ends_with("backend") {
+                    path.to_path_buf()
+                } else {
+                    path.join("backend")
+                }
+            }
+            Err(_) => {
+                println!("⚠️  Could not determine backend directory, using current + backend");
+                current_dir.join("backend")
+            }
+        }
+    };
+    
+    let bin_dir = backend_dir.join("bin");
+    println!("🔍 Looking for binaries in: {:?}", bin_dir);
 
     let eltord_binary = bin_dir.join("eltord");
     if !eltord_binary.exists() {

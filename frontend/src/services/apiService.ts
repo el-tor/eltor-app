@@ -15,8 +15,14 @@ const loadTauriAPIs = async () => {
   }
 }
 
-// Web API base URL - now configurable
-const WEB_API_BASE = config.API_BASE_URL
+// Web API base URL - construct from current location
+const getApiBaseUrl = () => {
+  // Just use the current location's protocol, hostname, and port
+  // This works because the frontend is served from the same server as the API
+  const currentUrl = `${window.location.protocol}//${window.location.host}`
+  console.log('apiService - Using current location as API base:', currentUrl)
+  return currentUrl
+}
 
 export interface EltordStatus {
   running: boolean
@@ -144,17 +150,17 @@ class ApiService {
       })
     } else {
       // Build endpoint based on provided parameters
-      let endpoint = `${WEB_API_BASE}/api/eltord/activate`
+      let endpoint = `${getApiBaseUrl()}/api/eltord/activate`
       
       if (mode && torrcFile) {
         // Both mode and torrc file specified
-        endpoint = `${WEB_API_BASE}/api/eltord/activate/${encodeURIComponent(mode)}/${encodeURIComponent(torrcFile)}`
+        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}/${encodeURIComponent(torrcFile)}`
       } else if (mode) {
         // Only mode specified
-        endpoint = `${WEB_API_BASE}/api/eltord/activate/${encodeURIComponent(mode)}`
+        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}`
       } else if (torrcFile) {
         // Only torrc file specified (use default client mode)
-        endpoint = `${WEB_API_BASE}/api/eltord/activate/client/${encodeURIComponent(torrcFile)}`
+        endpoint = `${getApiBaseUrl()}/api/eltord/activate/client/${encodeURIComponent(torrcFile)}`
       }
       // If neither specified, use default endpoint
       
@@ -186,7 +192,7 @@ class ApiService {
       await loadTauriAPIs()
       return await tauriInvoke('deactivate_eltord')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/eltord/deactivate`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/eltord/deactivate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -207,7 +213,7 @@ class ApiService {
       console.log(`📡 [API] Calling deactivate_eltord_with_mode for mode: ${mode}`)
       return await tauriInvoke('deactivate_eltord_with_mode', { mode })
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/eltord/deactivate/${mode}`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/eltord/deactivate/${mode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -227,7 +233,7 @@ class ApiService {
       await loadTauriAPIs()
       return await tauriInvoke('get_eltord_status')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/eltord/status`)
+      const response = await fetch(`${getApiBaseUrl()}/api/eltord/status`)
       return await response.json()
     }
   }
@@ -238,7 +244,7 @@ class ApiService {
       await loadTauriAPIs()
       return await tauriInvoke('connect_tor')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/tor/connect`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/tor/connect`, {
         method: 'POST',
       })
       const data = await response.json()
@@ -251,7 +257,7 @@ class ApiService {
       await loadTauriAPIs()
       return await tauriInvoke('disconnect_tor')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/tor/disconnect`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/tor/disconnect`, {
         method: 'POST',
       })
       const data = await response.json()
@@ -264,7 +270,7 @@ class ApiService {
       await loadTauriAPIs()
       return await tauriInvoke('get_tor_status')
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/tor/status`)
+      const response = await fetch(`${getApiBaseUrl()}/api/tor/status`)
       return await response.json()
     }
   }
@@ -300,7 +306,7 @@ class ApiService {
       return () => {}
     }
 
-    const eventSource = new EventSource(`${WEB_API_BASE}/api/eltord/logs`)
+    const eventSource = new EventSource(`${getApiBaseUrl()}/api/eltord/logs`)
 
     eventSource.onmessage = (event) => {
       try {
@@ -330,7 +336,7 @@ class ApiService {
       return await tauriInvoke('lookup_ip_location_tauri', { ip })
     } else {
       const response = await fetch(
-        `${WEB_API_BASE}/api/ip/${encodeURIComponent(ip)}`,
+        `${getApiBaseUrl()}/api/ip/${encodeURIComponent(ip)}`,
       )
       if (!response.ok) {
         const error = await response.json()
@@ -357,7 +363,7 @@ class ApiService {
         }
       })
     } else {
-      const response = await fetch(`${WEB_API_BASE}/api/ip/bulk`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/ip/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ips }),

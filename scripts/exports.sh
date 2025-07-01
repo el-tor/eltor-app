@@ -7,8 +7,9 @@ export APP_ELTOR_BACKEND_PORT="5174"
 export APP_ELTOR_HOST="eltor-app_web_1"
 export APP_ELTOR_USER_DIR="/home/user"
 export APP_ELTOR_ELTORRC_PATH="$APP_ELTOR_USER_DIR/code/eltor-app/backend/bin/data"
-
-
+export BACKEND_PORT="${BACKEND_PORT:-5174}"
+export BIND_ADDRESS="${BIND_ADDRESS:-0.0.0.0}"
+export BACKEND_URL="${BACKEND_URL:-http://localhost:$BACKEND_PORT}"
 
 ######################################
 ### LN env vars
