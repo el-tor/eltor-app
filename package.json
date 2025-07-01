@@ -19,7 +19,7 @@
     "env": "source scripts/exports.sh",
     "docker": "pnpm run build:prod && npm run env && npm run env && DOCKER_BUILDKIT=1 docker-compose up --build",
     "docker:build": "DOCKER_BUILDKIT=1 docker build -t eltor/eltor-app:latest . --load",
-    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.11",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.12",
     "docker:push": "docker push eltor/eltor-app:latest",
     "docker:clean": "docker-compose up --build --no-cache"
   },
