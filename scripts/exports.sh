@@ -2,8 +2,6 @@
 ######################################
 ### App env vars
 ######################################
-export APP_ELTOR_FRONTEND_PORT="5173"
-export APP_ELTOR_BACKEND_PORT="5174"
 export APP_ELTOR_HOST="eltor-app_web_1"
 export APP_ELTOR_USER_DIR="/home/user"
 export APP_ELTOR_ELTORRC_PATH="$APP_ELTOR_USER_DIR/code/eltor-app/backend/bin/data"

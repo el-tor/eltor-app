@@ -25,10 +25,7 @@ services:
       - BACKEND_PORT=${BACKEND_PORT:-8080}
       - BACKEND_URL=${BACKEND_URL:-http://localhost:8080}
       
-      # App env vars (legacy support)
-      - APP_ELTOR_FRONTEND_PORT=${APP_ELTOR_FRONTEND_PORT}
-      - APP_ELTOR_BACKEND_PORT=${APP_ELTOR_BACKEND_PORT}
-      - APP_ELTOR_HOST=${APP_ELTOR_HOST}
+      # App env vars
       - APP_ELTOR_USER_DIR=/home/user
       - APP_ELTOR_ELTORRC_PATH=/home/user/code/eltor-app/backend/bin/data
 

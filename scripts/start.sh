@@ -35,7 +35,6 @@ if [ "$APP_ELTOR_USE_PHOENIXD_EMBEDDED" = "true" ]; then
     # Wait for Phoenix daemon to start
     echo "⏳ Waiting for Phoenix daemon to start..."
     sleep 5
-    kill $PHOENIX_PID 2>/dev/null || true
 
     # Parse phoenixd password from the conf and copy to torrc
     get_phoenixd_password() {
@@ -218,6 +217,10 @@ SERVER_PID=$!
 cleanup() {
     echo "🛑 Shutting down server..."
     kill $SERVER_PID 2>/dev/null || true
+    if [ "$APP_ELTOR_USE_PHOENIXD_EMBEDDED" = "true" ] && [ -n "$PHOENIX_PID" ]; then
+        echo "🛑 Shutting down Phoenix daemon..."
+        kill $PHOENIX_PID 2>/dev/null || true
+    fi
     exit 0
 }
 
