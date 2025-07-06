@@ -28,6 +28,21 @@ logs/
 # Environment files
 .env
 .env.*
+
+# Frontend source files (we only need the built dist)
+frontend/src
+frontend/node_modules
+frontend/.vite
+frontend/tsconfig.json
+frontend/vite.config.ts
+frontend/package.json
+frontend/pnpm-lock.yaml
+frontend/postcss.config.js
+frontend/tailwind.config.js
+# Note: frontend/dist is included because it contains the pre-built frontend
+
+# Backend target directory (we rebuild in Docker)
+backend/target
 **/.env
 **/.env.*
 env.sh
@@ -50,7 +65,7 @@ backend/**/*.rs.bk
 # Frontend Node.js
 frontend/node_modules/
 frontend/.cache/
-frontend/dist/
+# frontend/dist/ - COMMENTED OUT: We need this for Docker build
 frontend/.env.local
 frontend/.env.*.local
 frontend/npm-debug.log*

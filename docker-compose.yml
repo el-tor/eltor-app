@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+        - linux/arm64
     #image: eltor/eltor-app@sha256:97498b1dd42c62e08baaeab8871dfccabe769024733c9c5ecb11334f6ac43a3b
     container_name: app
     hostname: eltor

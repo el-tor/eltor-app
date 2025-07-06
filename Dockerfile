@@ -64,20 +64,7 @@ WORKDIR /root/code/eltor-app/backend
 RUN cargo build --release
 
 # =============================================================================
-# Stage 3: Build Frontend
-# =============================================================================
-FROM builder AS frontend-builder
-
-WORKDIR /root/code/eltor-app/frontend
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install
-
-# Copy frontend source and build
-COPY frontend ./
-RUN pnpm run build
-
-# =============================================================================
-# Stage 4: Download Phoenix
+# Stage 3: Download Phoenix
 # =============================================================================
 FROM debian:bookworm-slim AS phoenix-downloader
 
@@ -97,7 +84,7 @@ RUN ARCH=$(uname -m) && \
     chmod +x /usr/local/bin/phoenixd /usr/local/bin/phoenix-cli
 
 # =============================================================================
-# Stage 5: Final Runtime Image
+# Stage 4: Final Runtime Image
 # =============================================================================
 FROM debian:bookworm-slim AS runtime
 
@@ -150,8 +137,8 @@ COPY --from=backend-builder /root/code/eltor-app/backend/target/release/eltor-ba
 COPY --from=phoenix-downloader /usr/local/bin/phoenixd /home/user/code/eltor-app/backend/bin/phoenixd
 COPY --from=phoenix-downloader /usr/local/bin/phoenix-cli /home/user/code/eltor-app/backend/bin/phoenix-cli
 
-# Copy frontend
-COPY --from=frontend-builder /root/code/eltor-app/frontend/dist /home/user/code/eltor-app/frontend/dist
+# Copy pre-built frontend
+COPY frontend/dist /home/user/code/eltor-app/frontend/dist
 
 # Copy configuration files
 COPY backend/bin/IP2LOCATION-LITE-DB3.BIN /home/user/code/eltor-app/backend/bin/

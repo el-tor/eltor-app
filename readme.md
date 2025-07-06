@@ -185,6 +185,16 @@ cp .env.example .env
 
 ### Docker Deployment
 
+Mult Arch Build Prereqs
+
+```
+docker buildx create --name mybuilder --driver docker-container --use 
+docker buildx inspect --bootstrap 
+docker run --privileged --rm tonistiigi/binfmt --install all
+# if you get errors you might need to turn off (or on) rosetta 
+orb config set rosetta false
+```
+
 ```bash
 # Build and run with Docker Compose
 npm run docker
