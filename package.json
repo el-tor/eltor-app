@@ -12,7 +12,7 @@
     
     "prod": "npm run build:prod && npm run start:prod",
     "build:prod": "npm run build:frontend && npm run build:backend",
-    "build:frontend": "cd frontend && pnpm run build",
+    "build:frontend": "cd frontend && pnpm i && pnpm run build",
     "build:backend": "cd backend && cargo build --release",
     "start:prod": "BIND_ADDRESS=${BIND_ADDRESS:-127.0.0.1} BACKEND_PORT=${BACKEND_PORT:-${PORT:-5174}} BACKEND_URL=${BACKEND_URL:-} ./backend/target/release/eltor-backend",
     
