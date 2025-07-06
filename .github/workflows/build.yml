@@ -33,6 +33,7 @@ jobs:
 
       - name: Build Frontend
         run: |
+          npm install -g pnpm
           npm run build:frontend
         #if: github.event_name == 'push'
 
