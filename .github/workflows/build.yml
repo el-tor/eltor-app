@@ -29,7 +29,12 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-        if: github.event_name == 'push'
+        #if: github.event_name == 'push'
+
+      - name: Build Frontend
+        run: |
+          npm run build:frontend
+        #if: github.event_name == 'push'
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -43,7 +48,7 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}
 
       - name: Run and test container
-        if: github.event_name == 'pull_request'
+        #if: github.event_name == 'pull_request'
         run: |
           docker run --platform linux/amd64 -d -p 5174:5174 -p 9740:9740 -p 18058:18058 -p 9996:9996 --name test-container ${{ secrets.DOCKER_USERNAME }}/eltor:latest
           sleep 10
