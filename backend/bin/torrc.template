@@ -1,0 +1,69 @@
+
+# Tor configuration template for client mode
+# This file is used to generate the actual torrc file at runtime
+
+# Directory authorities (existing ones preserved)
+DirAuthority test000a orport=5055 no-v2 v3ident=324BC790BF07167CF95F95887C12306BF1DE0D2E 170.75.160.21:7055 8CCE450098C37D6EFCD0B8DA97202086C2F24D5B
+DirAuthority test001a orport=5056 no-v2 v3ident=15CF6EFF32A822A2B70BDFC28D42D85920BE9795 170.75.160.21:7056 9B4A26E9E4D90CAC20BE1108123BFFEFDE77FA5C
+DirAuthority test002a orport=5057 no-v2 v3ident=BD8130B2020371D876EAF56DDBC3F612B9C4E1FE 170.75.160.21:7057 67A23C16EE151A0F4DBE6C0DCC464AC508E569F1
+DirAuthority test003a orport=5058 no-v2 v3ident=6D55B4C3984B7B341DB5D0B0A980FD7C4B9ADA1C 170.75.160.21:7058 3F6BCD7DA1505ECD15F1957C1C3F81EF3FD12D15
+
+# Optional additional directory authority (can be configured via environment)
+$APP_ELTOR_TOR_ADDITIONAL_DIR_AUTHORITY
+
+# Testing network configuration
+DownloadExtraInfo 1
+FetchUselessDescriptors 1
+TestingTorNetwork 1
+PathsNeededToBuildCircuits 0.67
+TestingDirAuthVoteExit *
+TestingDirAuthVoteHSDir *
+V3AuthNIntervalsValid 2
+TestingDirAuthVoteGuard *
+TestingMinExitFlagThreshold 0
+UseDefaultFallbackDirs 0
+AssumeReachable 1
+
+# Nickname - configurable via environment
+Nickname $APP_ELTOR_TOR_NICKNAME
+
+# Logging configuration - configurable via environment
+Log notice file $APP_ELTOR_TOR_DATA_DIRECTORY/client/notice.log
+Log info file $APP_ELTOR_TOR_DATA_DIRECTORY/client/info.log
+Log debug file $APP_ELTOR_TOR_DATA_DIRECTORY/client/debug.log
+
+# Data directory - configurable via environment
+DataDirectory $APP_ELTOR_TOR_DATA_DIRECTORY
+
+# TODO REMOVE
+ElTorPayHashHop1 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop2 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop3 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop4 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop5 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop6 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPayHashHop7 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop1 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop2 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop3 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop4 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop5 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop6 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+ElTorPreimageHop7 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b
+
+## Client Configuration
+# Network ports - configurable via environment
+SocksPort $APP_ELTOR_TOR_SOCKS_PORT
+ControlPort $APP_ELTOR_TOR_CONTROL_PORT
+
+# Control authentication - configurable via environment (password1234_)
+HashedControlPassword $APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD
+
+# Address - configurable via environment
+Address $APP_ELTOR_TOR_CLIENT_ADDRESS
+
+# Payment configuration - configurable via environment
+PaymentCircuitMaxFee $APP_ELTOR_TOR_PAYMENT_CIRCUIT_MAX_FEE
+PaymentLightningNodeConfig $APP_ELTOR_LN_CONFIG
+
+

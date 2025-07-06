@@ -1,78 +1,34 @@
 {
-  "name": "eltor",
-  "productName": "El Tor App",
-  "description": "El Tor App",
-  "version": "0.0.1",
+  "name": "eltor-app-monorepo",
+  "version": "1.0.0",
   "private": true,
-  "main": "./out/main/index.js",
-  "homepage": "https://eltor.dev",
-  "license": "MIT",
-  "author": {
-    "name": "eltordev",
-    "email": "eltordev@proton.me"
-  },
+  "description": "Monorepo for eltor-app",
   "scripts": {
-    "start": "electron-vite preview",
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "tauri": "npm run env && cd frontend && pnpm run dev:tauri",
+    "web": "concurrently \"npm run env && pnpm run backend\" \"pnpm run frontend\"",
+    "frontend": "cd frontend && pnpm run dev:web",
+    "backend": "cd backend && ./run.sh",
+    "build:web": "cd frontend && pnpm run build",
+    
+    "prod": "npm run build:prod && npm run start:prod",
+    "build:prod": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && pnpm run build",
+    "build:backend": "cd backend && cargo build --release",
+    "start:prod": "BIND_ADDRESS=${BIND_ADDRESS:-127.0.0.1} BACKEND_PORT=${BACKEND_PORT:-${PORT:-5174}} BACKEND_URL=${BACKEND_URL:-} ./backend/target/release/eltor-backend",
+    
+    "env": "source scripts/exports.sh",
+    "docker": "pnpm run build:frontend && DOCKER_BUILDKIT=1 docker-compose up --build",
+    "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain pnpm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor-app-arm64:latest .",
+    "docker:build:x86": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain pnpm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=x86_64 -t eltor/eltor-app-x86_64:latest .",
+    "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.15",
+    "docker:push": "docker push eltor/eltor-app:latest",
+    "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache"
   },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "devDependencies": {
-    "@types/geoip-lite": "^1.4.4",
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "@types/react-redux": "^7.1.34",
-    "@types/react-simple-maps": "^3.0.6",
-    "@vitejs/plugin-react": "^2.2.0",
-    "electron": "^32.1.2",
-    "electron-builder": "^25.0.5",
-    "electron-devtools-installer": "^3.2.0",
-    "electron-vite": "^2.3.0",
-    "eslint": "8.57.0",
-    "postcss": "^8.4.47",
-    "postcss-preset-mantine": "^1.17.0",
-    "postcss-simple-vars": "^7.0.1",
-    "rollup-plugin-inject-process-env": "^1.3.1",
-    "typescript": "^5",
-    "vite": "^3.2.3",
-    "vite-plugin-svgr": "^4.2.0",
-    "vite-tsconfig-paths": "^3.5.2"
-  },
-  "dependencies": {
-    "@electron-toolkit/preload": "^3.0.1",
-    "@electron-toolkit/utils": "^3.0.0",
-    "@mantine/core": "^7.13.0",
-    "@mantine/hooks": "^7.13.0",
-    "@radix-ui/react-icons": "^1.3.0",
-    "@radix-ui/react-scroll-area": "^1.1.0",
-    "@radix-ui/react-separator": "^1.1.0",
-    "@reduxjs/toolkit": "^2.2.7",
-    "@tabler/icons-react": "^3.19.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.1",
-    "dayjs": "^1.11.13",
-    "dotenv": "^16.4.5",
-    "electron-router-dom": "^2.0.0",
-    "electron-store": "^10.0.0",
-    "geoip-lite": "^1.4.10",
-    "immer": "^10.1.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-qr-code": "^2.0.15",
-    "react-redux": "^9.1.2",
-    "react-router-dom": "^6.22.3",
-    "react-simple-maps": "^3.0.0",
-    "redux-persist": "^6.0.0",
-    "telnet-client": "^2.2.1",
-    "usehooks-ts": "^3.1.0"
-  },
-  "eslintIgnore": [
-    "dist",
-    "out"
-  ]
+    "concurrently": "^8.2.2"
+  }
 }

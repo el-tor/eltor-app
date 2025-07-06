@@ -1,0 +1,91 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+
+# Frontend source files (we only need the built dist)
+frontend/src
+frontend/node_modules
+frontend/.vite
+frontend/tsconfig.json
+frontend/vite.config.ts
+frontend/package.json
+frontend/pnpm-lock.yaml
+frontend/postcss.config.js
+frontend/tailwind.config.js
+# Note: frontend/dist is included because it contains the pre-built frontend
+
+# Backend target directory (we rebuild in Docker)
+backend/target
+**/.env
+**/.env.*
+env.sh
+
+# Torrc files - exclude actual config files but allow templates
+**torrc**
+**/torrc
+**/torrc.relay
+!**/*.template
+!**/torrc.template
+!**/torrc.relay.template
+!**/torrc_parser.rs
+
+
+# Backend Rust
+backend/target/
+backend/.cargo/
+backend/**/*.rs.bk
+
+# Frontend Node.js
+frontend/node_modules/
+frontend/.cache/
+# frontend/dist/ - COMMENTED OUT: We need this for Docker build
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+node_modules/.cache
+
+# Tauri (not needed for web deployment)
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+
+# Test files
+**/*test*
+**/*spec*
+
+# Temporary files
+tmp/
+temp/
+
+*.key
+
+**/payments_sent.json
+**/payments_received.json

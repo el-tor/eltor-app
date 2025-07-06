@@ -24,5 +24,11 @@
         "txns",
         "unenhanced",
         "usehooks"
-    ]
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./frontend/src-tauri/Cargo.toml",
+        "./backend/Cargo.toml"
+    ],
+    "rust-analyzer.cargo.features": "all",
+    "rust-analyzer.check.command": "clippy"
 }

@@ -1,0 +1,51 @@
+name: Build and Push Docker Image
+
+on:
+  workflow_run:
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+        if: github.event_name == 'push'
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/eltor:latest
+            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}
+
+      - name: Run and test container
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run --platform linux/amd64 -d -p 5174:5174 -p 9740:9740 -p 18058:18058 -p 9996:9996 --name test-container ${{ secrets.DOCKER_USERNAME }}/eltor:latest
+          sleep 10
+          curl --retry 3 --retry-delay 5 http://localhost:5174/health || exit 1
+          docker stop test-container
