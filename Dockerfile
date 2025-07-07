@@ -45,7 +45,7 @@ RUN git clone https://github.com/el-tor/eltor.git /root/code/eltor && \
 
 # Checkout specific branches
 # TODO change to master
-RUN cd /root/code/eltord && git checkout relay-flows-2 && \
+RUN cd /root/code/eltord && git checkout master && \
     cd /root/code/lni && git checkout search
 
 # Build libeltor-sys
@@ -121,6 +121,7 @@ RUN groupadd -r -g 1000 user && \
 # Create application structure with shared group ownership
 RUN mkdir -p /home/user/code/eltor-app/backend/bin \
              /home/user/code/eltor-app/backend/bin/data \
+             /home/user/code/eltor-app/data \
              /home/user/.eltor \
              /home/user/.tor \
              /home/user/data/logs \
