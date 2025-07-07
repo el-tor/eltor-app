@@ -111,6 +111,10 @@ pub struct PayInvoiceResponse {
 impl LightningNode {
     /// Create a new lightning node connection based on torrc configuration
     pub fn from_torrc<P: AsRef<std::path::Path>>(torrc_path: P) -> Result<Self, String> {
+        let accept_invalid_certs = Some(env::var("ACCEPT_INVALID_CERTS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(true));
         match parse_lightning_config_from_torrc(&torrc_path)? {
             Some(config) => {
                 match config.node_type.as_str() {
@@ -119,9 +123,7 @@ impl LightningNode {
                             url: config.url,
                             password: config.password,
                             socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs: env::var("ACCEPT_INVALID_CERTS")
-                                .ok()
-                                .and_then(|v| v.parse().ok()),
+                            accept_invalid_certs,
                             ..Default::default()
                         };
 
@@ -136,9 +138,7 @@ impl LightningNode {
                             url: config.url,
                             macaroon: config.password, // For LND, password field contains macaroon
                             socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs: env::var("ACCEPT_INVALID_CERTS")
-                                .ok()
-                                .and_then(|v| v.parse().ok()),
+                            accept_invalid_certs,
                             ..Default::default()
                         };
 
@@ -153,9 +153,7 @@ impl LightningNode {
                             url: config.url,
                             rune: config.password, // For CLN, password field contains rune
                             socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs: env::var("ACCEPT_INVALID_CERTS")
-                                .ok()
-                                .and_then(|v| v.parse().ok()),
+                            accept_invalid_certs,
                             ..Default::default()
                         };
 
@@ -188,7 +186,6 @@ impl LightningNode {
             node_type: self.node_type.to_string(),
         })
     }
-
 
     /// Create an invoice (async to handle blocking LNI calls)
     pub async fn create_invoice(
