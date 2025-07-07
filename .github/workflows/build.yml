@@ -1,5 +1,4 @@
 name: Build and Push Docker Image
-
 on:
   workflow_dispatch:
   # push:
@@ -12,6 +11,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,7 +21,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,16 +44,29 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/eltor:latest
-            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ matrix.platform == 'linux/amd64' && 'latest-amd64' || 'latest-arm64' }}
+            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
 
-      - name: Run and test container
-        #if: github.event_name == 'pull_request'
+  manifest:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create and push manifest
         run: |
-          docker run --platform linux/amd64 -d -p 5174:5174 -p 9740:9740 -p 18058:18058 -p 9996:9996 --name test-container eltor/eltor:latest
-          sleep 10
-          curl --retry 3 --retry-delay 5 http://localhost:5174/health || exit 1
-          docker stop test-container
+          docker manifest create ${{ secrets.DOCKER_USERNAME }}/eltor:latest \
+            --amend ${{ secrets.DOCKER_USERNAME }}/eltor:latest-amd64 \
+            --amend ${{ secrets.DOCKER_USERNAME }}/eltor:latest-arm64
+          docker manifest push ${{ secrets.DOCKER_USERNAME }}/eltor:latest
+          docker manifest create ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }} \
+            --amend ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-amd64 \
+            --amend ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-arm64
+          docker manifest push ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}

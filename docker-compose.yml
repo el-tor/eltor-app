@@ -1,12 +1,12 @@
 services:
   eltor:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      platforms:
-        - linux/amd64
-        - linux/arm64
-    #image: eltor/eltor@latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    #   platforms:
+    #     - linux/amd64
+    #     - linux/arm64
+    image: eltor/eltor:latest
     container_name: app
     hostname: eltor
     user: '1000:2000' # UID 1000, GID 2000 (datagroup)
