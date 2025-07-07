@@ -129,8 +129,6 @@ RUN mkdir -p /home/user/code/eltor-app/backend/bin \
              /home/user/data/tor-relay/client \
              /home/user/data/phoenix \
              /home/user/.phoenix \
-    && touch /home/user/code/eltor-app/data/payments_sent.json \
-    && touch /home/user/code/eltor-app/data/payments_received.json \
     && chown -R user:datagroup /home/user \
     && chmod -R g+rwx /home/user/data 
 
