@@ -6,7 +6,7 @@ services:
       platforms:
         - linux/amd64
         - linux/arm64
-    #image: eltor/eltor-app@sha256:97498b1dd42c62e08baaeab8871dfccabe769024733c9c5ecb11334f6ac43a3b
+    #image: eltor/eltor@latest
     container_name: app
     hostname: eltor
     user: '1000:2000' # UID 1000, GID 2000 (datagroup)

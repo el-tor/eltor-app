@@ -43,7 +43,7 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name == 'push' }}
+          push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/eltor:latest
             ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}
@@ -51,7 +51,7 @@ jobs:
       - name: Run and test container
         #if: github.event_name == 'pull_request'
         run: |
-          docker run --platform linux/amd64 -d -p 5174:5174 -p 9740:9740 -p 18058:18058 -p 9996:9996 --name test-container ${{ secrets.DOCKER_USERNAME }}/eltor:latest
+          docker run --platform linux/amd64 -d -p 5174:5174 -p 9740:9740 -p 18058:18058 -p 9996:9996 --name test-container eltor/eltor:latest
           sleep 10
           curl --retry 3 --retry-delay 5 http://localhost:5174/health || exit 1
           docker stop test-container
