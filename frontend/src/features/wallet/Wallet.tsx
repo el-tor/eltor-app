@@ -1,5 +1,5 @@
 import {
-  Stack,
+  Modal,
   Title,
   Center,
   Box,
@@ -7,14 +7,11 @@ import {
   Group,
   SimpleGrid,
   Checkbox,
+  Image,
 } from '@mantine/core'
 import { useDispatch, useSelector } from '../../hooks'
 import { useEffect, useState } from 'react'
-import {
-  setDefaultWallet,
-  getBolt12Offer,
-  fetchNodeInfo,
-} from './walletStore'
+import { setDefaultWallet, getBolt12Offer, fetchNodeInfo } from './walletStore'
 import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
 import { WalletPlugins } from './WalletPlugins/WalletPlugins'
 import CopyableTextBox from '../../components/CopyableTextBox'
@@ -22,6 +19,14 @@ import QRCode from 'react-qr-code'
 import { IconRefresh } from '@tabler/icons-react'
 import { Circle } from '../../components/Circle'
 import { Transactions } from './Transactions'
+import { useDisclosure } from '@mantine/hooks'
+import { WalletConfigModal } from './WalletConfigModal'
+import phoenixDLogo from './phoenixdLogo.svg'
+import lndLogo from './lndLogo.svg'
+import clnLogo from './clnLogo.svg'
+import strikeLogo from './strikeLogo.svg'
+import styles from './WalletPlugins/WalletBox.module.css'
+import { clear } from 'console'
 
 export interface IWallet {
   getWalletTransactions: (walletId: string) => Promise<any>
@@ -56,6 +61,7 @@ export const Wallet = () => {
     send,
     receive,
     defaultWallet,
+    clickedWallet,
     channelInfo,
     bolt12Offer,
     requestState,
@@ -64,6 +70,7 @@ export const Wallet = () => {
   } = useSelector((state) => state.wallet)
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
+  const [opened, { open, close }] = useDisclosure(false)
 
   useEffect(() => {
     dispatch(fetchNodeInfo(''))
@@ -74,13 +81,58 @@ export const Wallet = () => {
     <Box>
       {showWallet && (
         <Box w="100%">
+          <Modal.Root opened={opened} onClose={close} size="40rem">
+            <Modal.Overlay />
+            <Modal.Content>
+              <Modal.Header>
+                <Group justify="space-between" align="top" w="100%">
+                  <Box
+                    w={160}
+                    h={52}
+                    m="xs"
+                    className={styles.box2}
+                    bg="white"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      position: 'relative',
+                    }}
+                  >
+                    <Center style={{ width: '100%', height: '100%' }}>
+                      <Image
+                        bg="white"
+                        src={(() => {
+                          switch (clickedWallet) {
+                            case 'phoenixd':
+                              return phoenixDLogo
+                            case 'lnd':
+                              return lndLogo
+                            case 'cln':
+                              return clnLogo
+                            case 'strike':
+                              return strikeLogo
+                            default:
+                              return ''
+                          }
+                        })()}
+                        alt={`${clickedWallet} Logo`}
+                        h="26px"
+                      />
+                    </Center>
+                  </Box>
+                  <Modal.CloseButton />
+                </Group>
+              </Modal.Header>
+              <Modal.Body>
+                <WalletConfigModal />
+              </Modal.Body>
+            </Modal.Content>
+          </Modal.Root>
           <Group>
             <Center>
-              {/* <WalletPlugins
-                setShowWallet={setShowWallet}
-                showWallet={showWallet}
-              /> */}
-              <WalletPlugins defaultWallet={defaultWallet} />
+              <WalletPlugins defaultWallet={defaultWallet} onClick={open} />
             </Center>
             <Group ml="auto">
               <Center>
@@ -101,7 +153,9 @@ export const Wallet = () => {
           <Group mt="xl">
             <Title order={4}>
               Balance:{' '}
-              <span style={{ fontFamily: 'monospace' }}>{send?.toLocaleString()}</span>
+              <span style={{ fontFamily: 'monospace' }}>
+                {send?.toLocaleString()}
+              </span>
             </Title>
             <IconRefresh
               stroke={1.5}
@@ -111,10 +165,7 @@ export const Wallet = () => {
               style={{ cursor: 'pointer' }}
             />
           </Group>
-          <ChannelBalanceLine
-            send={send ?? 0}
-            receive={receive ?? 0}
-          />
+          <ChannelBalanceLine send={send ?? 0} receive={receive ?? 0} />
 
           <SimpleGrid
             mt="lg"

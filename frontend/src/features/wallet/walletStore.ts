@@ -6,13 +6,12 @@ import type {
 import type { PayloadAction, SerializedError } from '@reduxjs/toolkit'
 import { TransactionResponse, walletApiService, type NodeInfoResponse } from '../../services/walletApiService'
 
-const defaultWallet = 'phoenixd'
-
 export {
   type WalletState,
   walletStore,
   walletReducer,
   setDefaultWallet,
+  setClickedWallet,
   getBolt12Offer,
   fetchTransactions,
   fetchNodeInfo,
@@ -23,6 +22,7 @@ interface WalletState {
   send: number
   receive: number
   defaultWallet: WalletProviderType
+  clickedWallet?: WalletProviderType
   requestState: RequestState
   loading: boolean
   error: SerializedError | null
@@ -37,6 +37,7 @@ const initialState: WalletState = {
   send: 0,
   receive: 0,
   defaultWallet: 'none',
+  clickedWallet: 'none',
   requestState: 'idle',
   loading: false,
   error: null,
@@ -55,6 +56,9 @@ const walletStore = createSlice({
   reducers: {
     setDefaultWallet: (state, action: PayloadAction<WalletProviderType>) => {
       state.defaultWallet = action.payload
+    },
+    setClickedWallet: (state, action: PayloadAction<WalletProviderType>) => {
+      state.clickedWallet = action.payload
     },
   },
   extraReducers: (builder) => {
@@ -116,7 +120,7 @@ const walletStore = createSlice({
 
 const walletReducer = walletStore.reducer
 // Action creators are generated for each case reducer function
-const { setDefaultWallet } = walletStore.actions
+const { setDefaultWallet, setClickedWallet } = walletStore.actions
 
 
 const fetchTransactions = createAsyncThunk<Array<any>, string>( // Todo type Transaction
