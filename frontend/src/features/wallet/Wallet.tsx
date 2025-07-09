@@ -225,7 +225,7 @@ export const Wallet = () => {
           <Checkbox mt="xl" defaultChecked label="Default Wallet" />
 
           {/* Lightning Configurations Display */}
-          {lightningConfigs.length > 0 && (
+          {lightningConfigs?.length > 0 && (
             <Box
               mt="lg"
               mb="lg"
@@ -236,7 +236,7 @@ export const Wallet = () => {
               <Title order={5} mb="sm">
                 Lightning Configurations
               </Title>
-              {lightningConfigs.map((config, index) => (
+              {lightningConfigs?.map((config, index) => (
                 <Group
                   key={`${config.node_type}-${config.url}`}
                   justify="space-between"
