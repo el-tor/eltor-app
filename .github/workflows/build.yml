@@ -23,21 +23,18 @@ jobs:
         with:
           ref: ${{ github.event.inputs.branch || 'master' }}
 
-      - name: Cache node_modules
+      - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Install pnpm
         run: npm install -g pnpm
 
-      - name: Install dependencies
-        run: pnpm install
-
       - name: Build Frontend
-        run: pnpm run build:frontend
+        run: npm run build:frontend
 
       - name: Upload frontend build artifacts
         uses: actions/upload-artifact@v4
@@ -85,7 +82,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   build-arm64:
-    runs-on: ubuntu-24.04-arm64
+    runs-on: ubuntu-latest-arm64-4core
     needs: build-frontend
     steps:
       - name: Checkout repository

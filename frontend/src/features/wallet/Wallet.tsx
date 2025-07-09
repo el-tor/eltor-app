@@ -222,7 +222,6 @@ export const Wallet = () => {
 
             <Transactions h="450px" />
           </SimpleGrid>
-          <Checkbox mt="xl" defaultChecked label="Default Wallet" />
 
           {/* Lightning Configurations Display */}
           {lightningConfigs?.length > 0 && (
@@ -234,7 +233,7 @@ export const Wallet = () => {
               style={{ backgroundColor: '#f8f9fa', borderRadius: '6px' }}
             >
               <Title order={5} mb="sm">
-                Lightning Configurations
+                Lightning Configuration:
               </Title>
               {lightningConfigs?.map((config, index) => (
                 <Group
