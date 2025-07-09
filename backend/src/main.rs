@@ -70,8 +70,7 @@ async fn main() {
         .parse::<u16>()
         .unwrap_or(5174);
 
-    let bind_address = env::var("BIND_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
         .unwrap_or_else(|_| "false".to_string())
@@ -158,21 +157,23 @@ async fn main() {
 
     // Start the server
     let full_bind_address = format!("{}:{}", bind_address, backend_port);
-    let listener = tokio::net::TcpListener::bind(&full_bind_address).await.unwrap();
-    
+    let listener = tokio::net::TcpListener::bind(&full_bind_address)
+        .await
+        .unwrap();
+
     // Determine the display URL based on bind address
     let display_address = if bind_address == "0.0.0.0" {
         format!("http://0.0.0.0:{}", backend_port)
     } else {
         format!("http://{}:{}", bind_address, backend_port)
     };
-    
+
     let local_url = if bind_address == "0.0.0.0" {
         format!("http://localhost:{}", backend_port)
     } else {
         format!("http://{}:{}", bind_address, backend_port)
     };
-    
+
     println!("🚀 El Tor Backend Server");
     println!("📡 Running on {}", display_address);
     println!("🌐 Frontend served at {}", local_url);
@@ -194,10 +195,16 @@ async fn main() {
     println!("   POST /api/wallet/offer");
     println!("   GET  /api/wallet/status");
     println!("   GET  /api/wallet/transactions");
+    println!("   PUT  /api/wallet/config");
+    println!("   DELETE /api/wallet/config");
+    println!("   GET  /api/wallet/configs");
     println!("📁 Static files served from frontend/dist/");
     println!("🔧 Environment variables injected into frontend:");
     println!("   BACKEND_PORT: {}", backend_port);
-    println!("   BACKEND_URL: {}", env::var("BACKEND_URL").unwrap_or_else(|_| local_url.clone()));
+    println!(
+        "   BACKEND_URL: {}",
+        env::var("BACKEND_URL").unwrap_or_else(|_| local_url.clone())
+    );
     println!("   BIND_ADDRESS: {}", bind_address);
 
     axum::serve(listener, app).await.unwrap();

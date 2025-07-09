@@ -8,10 +8,16 @@ import {
   SimpleGrid,
   Checkbox,
   Image,
+  Text,
 } from '@mantine/core'
 import { useDispatch, useSelector } from '../../hooks'
 import { useEffect, useState } from 'react'
-import { setDefaultWallet, getBolt12Offer, fetchNodeInfo } from './walletStore'
+import {
+  setDefaultWallet,
+  getBolt12Offer,
+  fetchNodeInfo,
+  fetchLightningConfigs,
+} from './walletStore'
 import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
 import { WalletPlugins } from './WalletPlugins/WalletPlugins'
 import CopyableTextBox from '../../components/CopyableTextBox'
@@ -67,12 +73,37 @@ export const Wallet = () => {
     requestState,
     error,
     loading,
+    lightningConfigs,
+    defaultLightningConfig,
   } = useSelector((state) => state.wallet)
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
   const [opened, { open, close }] = useDisclosure(false)
 
+  // Helper function to safely mask credentials
+  const maskCredential = (credential: string, visibleChars: number = 6) => {
+    if (
+      !credential ||
+      typeof credential !== 'string' ||
+      credential.length === 0
+    ) {
+      return '***'
+    }
+
+    if (credential.length <= visibleChars * 2) {
+      return '*'.repeat(Math.min(credential.length, 10))
+    }
+
+    const start = credential.substring(0, visibleChars)
+    const end = credential.substring(credential.length - visibleChars)
+    const middle = '*'.repeat(
+      Math.min(credential.length - visibleChars * 2, 20),
+    )
+    return `${start}${middle}${end}`
+  }
+
   useEffect(() => {
+    dispatch(fetchLightningConfigs())
     dispatch(fetchNodeInfo(''))
     dispatch(getBolt12Offer(''))
   }, [])
@@ -126,7 +157,7 @@ export const Wallet = () => {
                 </Group>
               </Modal.Header>
               <Modal.Body>
-                <WalletConfigModal />
+                <WalletConfigModal close={close} />
               </Modal.Body>
             </Modal.Content>
           </Modal.Root>
@@ -192,6 +223,43 @@ export const Wallet = () => {
             <Transactions h="450px" />
           </SimpleGrid>
           <Checkbox mt="xl" defaultChecked label="Default Wallet" />
+
+          {/* Lightning Configurations Display */}
+          {lightningConfigs.length > 0 && (
+            <Box
+              mt="lg"
+              mb="lg"
+              p="md"
+              bg="#1e1e1e"
+              style={{ backgroundColor: '#f8f9fa', borderRadius: '6px' }}
+            >
+              <Title order={5} mb="sm">
+                Lightning Configurations
+              </Title>
+              {lightningConfigs.map((config, index) => (
+                <Group
+                  key={`${config.node_type}-${config.url}`}
+                  justify="space-between"
+                  mb="xs"
+                >
+                  <Box>
+                    <Text size="sm" fw={config.is_default ? 700 : 400}>
+                      {config.node_type.toUpperCase()} - {config.url}
+                      {config.is_default && (
+                        <span style={{ color: '#228be6', marginLeft: '8px' }}>
+                          (DEFAULT)
+                        </span>
+                      )}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {config.password_type}:{' '}
+                      {maskCredential(config.password || '')}
+                    </Text>
+                  </Box>
+                </Group>
+              ))}
+            </Box>
+          )}
         </Box>
       )}
     </Box>

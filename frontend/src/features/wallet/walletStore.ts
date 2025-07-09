@@ -4,7 +4,15 @@ import type {
   FetchChannelInfoResponseType,
 } from './Wallet'
 import type { PayloadAction, SerializedError } from '@reduxjs/toolkit'
-import { TransactionResponse, walletApiService, type NodeInfoResponse } from '../../services/walletApiService'
+import { 
+  TransactionResponse, 
+  walletApiService, 
+  type NodeInfoResponse,
+  type LightningConfigRequest,
+  type DeleteLightningConfigRequest,
+  type LightningConfigResponse,
+  type MessageResponse
+} from '../../services/walletApiService'
 
 export {
   type WalletState,
@@ -15,6 +23,10 @@ export {
   getBolt12Offer,
   fetchTransactions,
   fetchNodeInfo,
+  fetchLightningConfigs,
+  upsertLightningConfig,
+  deleteLightningConfig,
+  clearLightningConfigError,
 }
 
 // 1. State
@@ -29,6 +41,12 @@ interface WalletState {
   channelInfo: FetchChannelInfoResponseType
   bolt12Offer: string
   transactions: Array<TransactionResponse>
+  
+  // Lightning configuration state
+  lightningConfigs: Array<LightningConfigResponse>
+  lightningConfigsLoading: boolean
+  lightningConfigsError: string | null
+  defaultLightningConfig: LightningConfigResponse | null
 }
 
 type RequestState = 'idle' | 'pending' | 'fulfilled' | 'rejected'
@@ -47,6 +65,12 @@ const initialState: WalletState = {
   },
   bolt12Offer: '',
   transactions: [],
+  
+  // Lightning configuration initial state
+  lightningConfigs: [],
+  lightningConfigsLoading: false,
+  lightningConfigsError: null,
+  defaultLightningConfig: null,
 } // satisfies WalletState as WalletState
 
 // 2. Slice and Reducers
@@ -59,6 +83,9 @@ const walletStore = createSlice({
     },
     setClickedWallet: (state, action: PayloadAction<WalletProviderType>) => {
       state.clickedWallet = action.payload
+    },
+    clearLightningConfigError: (state) => {
+      state.lightningConfigsError = null
     },
   },
   extraReducers: (builder) => {
@@ -115,12 +142,56 @@ const walletStore = createSlice({
         state.loading = false
         state.error = action.error
       })
+
+      // Lightning Config Cases
+      .addCase(fetchLightningConfigs.pending, (state) => {
+        state.lightningConfigsLoading = true
+        state.lightningConfigsError = null
+      })
+      .addCase(fetchLightningConfigs.fulfilled, (state, action) => {
+        state.lightningConfigs = action.payload
+        state.defaultLightningConfig = action.payload.find((config: LightningConfigResponse) => config.is_default) || null
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = null
+      })
+      .addCase(fetchLightningConfigs.rejected, (state, action) => {
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = action.error.message || 'Failed to fetch lightning configs'
+      })
+
+      .addCase(upsertLightningConfig.pending, (state) => {
+        state.lightningConfigsLoading = true
+        state.lightningConfigsError = null
+      })
+      .addCase(upsertLightningConfig.fulfilled, (state, action) => {
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = null
+        // Note: We'll dispatch fetchLightningConfigs after this to refresh the list
+      })
+      .addCase(upsertLightningConfig.rejected, (state, action) => {
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = action.error.message || 'Failed to upsert lightning config'
+      })
+
+      .addCase(deleteLightningConfig.pending, (state) => {
+        state.lightningConfigsLoading = true
+        state.lightningConfigsError = null
+      })
+      .addCase(deleteLightningConfig.fulfilled, (state, action) => {
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = null
+        // Note: We'll dispatch fetchLightningConfigs after this to refresh the list
+      })
+      .addCase(deleteLightningConfig.rejected, (state, action) => {
+        state.lightningConfigsLoading = false
+        state.lightningConfigsError = action.error.message || 'Failed to delete lightning config'
+      })
   },
 })
 
 const walletReducer = walletStore.reducer
 // Action creators are generated for each case reducer function
-const { setDefaultWallet, setClickedWallet } = walletStore.actions
+const { setDefaultWallet, setClickedWallet, clearLightningConfigError } = walletStore.actions
 
 
 const fetchTransactions = createAsyncThunk<Array<any>, string>( // Todo type Transaction
@@ -156,6 +227,50 @@ const fetchNodeInfo = createAsyncThunk<
   try {
     const info = await walletApiService.getNodeInfo()
     return info
+  } catch (error) {
+    return rejectWithValue(error)
+  }
+})
+
+// Lightning Config Async Thunks
+const fetchLightningConfigs = createAsyncThunk<
+  Array<LightningConfigResponse>,
+  void,
+  { state: { wallet: WalletState } }
+>('wallet/fetchLightningConfigs', async (_, { rejectWithValue }) => {
+  try {
+    const configs = await walletApiService.listLightningConfigs()
+    return configs
+  } catch (error) {
+    return rejectWithValue(error)
+  }
+})
+
+const upsertLightningConfig = createAsyncThunk<
+  MessageResponse,
+  LightningConfigRequest,
+  { state: { wallet: WalletState } }
+>('wallet/upsertLightningConfig', async (config, { rejectWithValue, dispatch }) => {
+  try {
+    const result = await walletApiService.upsertLightningConfig(config)
+    // Refresh the configs list after successful upsert
+    dispatch(fetchLightningConfigs())
+    return result
+  } catch (error) {
+    return rejectWithValue(error)
+  }
+})
+
+const deleteLightningConfig = createAsyncThunk<
+  MessageResponse,
+  DeleteLightningConfigRequest,
+  { state: { wallet: WalletState } }
+>('wallet/deleteLightningConfig', async (config, { rejectWithValue, dispatch }) => {
+  try {
+    const result = await walletApiService.deleteLightningConfig(config)
+    // Refresh the configs list after successful deletion
+    dispatch(fetchLightningConfigs())
+    return result
   } catch (error) {
     return rejectWithValue(error)
   }

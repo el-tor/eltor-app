@@ -1,6 +1,7 @@
 import { Routes } from './routes'
 import './globals.css'
 import { MantineProvider } from '@mantine/core'
+import { Notifications } from '@mantine/notifications'
 import { Provider } from 'react-redux'
 import { store, persistor } from './store'
 import { PersistGate } from 'redux-persist/integration/react'
@@ -19,6 +20,7 @@ export function App() {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <MantineProvider theme={theme} forceColorScheme="dark">
+          <Notifications />
           <AppContent />
         </MantineProvider>
       </PersistGate>

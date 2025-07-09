@@ -7,6 +7,7 @@ pub struct LightningConfig {
     pub node_type: String,
     pub url: String,
     pub password: String, // Can be password, rune, or macaroon depending on node_type
+    pub is_default: bool,
 }
 
 /// Operation type for modifying torrc
@@ -92,17 +93,28 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
 
                 // Check if this matches our target type and URL
                 if existing_type == node_type {
-                    // For operations that need URL matching
-                    if let Some(ref target_url) = url {
-                        if existing_url.as_ref() == Some(target_url) {
-                            found_target = true;
-                            target_line_index = Some(i);
+                    match operation {
+                        Operation::Upsert => {
+                            // For upsert, match by node_type only (one config per type)
+                            if !found_target {
+                                found_target = true;
+                                target_line_index = Some(i);
+                            }
                         }
-                    } else {
-                        // For delete operations without URL, take the first match
-                        if !found_target {
-                            found_target = true;
-                            target_line_index = Some(i);
+                        Operation::Delete => {
+                            // For delete, use the provided url if specified
+                            if let Some(target_url) = url.as_ref() {
+                                if existing_url.as_ref() == Some(target_url) {
+                                    found_target = true;
+                                    target_line_index = Some(i);
+                                }
+                            } else {
+                                // For delete operations without URL, take the first match
+                                if !found_target {
+                                    found_target = true;
+                                    target_line_index = Some(i);
+                                }
+                            }
                         }
                     }
                 }
@@ -137,6 +149,8 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
                 password,
                 default_str
             );
+
+            dbg!(&new_config);
 
             // If we're setting this as default, remove default=true from other lines
             if set_as_default && found_default {
@@ -210,10 +224,16 @@ pub fn parse_lightning_config_string(config_str: &str) -> Result<LightningConfig
         .or_else(|| get_config_value(config_str, "macaroon"))
         .ok_or("No authentication method (password/rune/macaroon) found in config")?;
 
+    // Check if this config is marked as default
+    let is_default = get_config_value(config_str, "default")
+        .map(|val| val.to_lowercase() == "true")
+        .unwrap_or(false);
+
     Ok(LightningConfig {
         node_type,
         url,
         password,
+        is_default,
     })
 }
 

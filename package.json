@@ -9,7 +9,7 @@
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",
-    
+
     "prod": "npm run build:prod && npm run start:prod",
     "build:prod": "npm run build:frontend && npm run build:backend",
     "build:frontend": "cd frontend && pnpm install --no-frozen-lockfile && pnpm run build",
