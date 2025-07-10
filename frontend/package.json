@@ -16,7 +16,9 @@
     "build:tauri": "tauri build",
     "preview": "vite preview",
     "serve": "python3 -m http.server 5173 --directory dist",
-    "clean": "rm -rf src-tauri/target && rm -rf node_modules/.cache && rm -rf dist"
+    "clean": "rm -rf src-tauri/target && rm -rf node_modules/.cache && rm -rf dist",
+
+    "dmg": "tauri build --bundles dmg"
   },
   "devDependencies": {
     "@redux-devtools/extension": "^3.3.0",
