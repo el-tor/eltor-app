@@ -222,7 +222,7 @@ Arm builds on Github is super slow, instead of using Github actions, you can use
 ```
 npm run actions
 # or
-ACT=true act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker -P ubuntu-latest-arm64=catthehacker/ubuntu:act-latest
+act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker-arm -P macos-latest=catthehacker/ubuntu:act-latest
 ```
 
 ### amd64 Docker Builds
