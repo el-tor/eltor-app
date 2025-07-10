@@ -89,3 +89,5 @@ temp/
 
 **/payments_sent.json
 **/payments_received.json
+
+.secrets

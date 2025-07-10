@@ -28,7 +28,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
   } = useSelector((state) => state.wallet)
 
   // Find existing config for the clicked wallet
-  const existingConfig = lightningConfigs.find(
+  const existingConfig = lightningConfigs?.find(
     (config) => config.node_type === clickedWallet,
   )
   const form = useForm({

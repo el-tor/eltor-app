@@ -1,4 +1,3 @@
-
 name: Build and Push Docker Image
 on:
   workflow_dispatch:
@@ -37,6 +36,7 @@ jobs:
         run: npm run build:frontend
 
       - name: Upload frontend build artifacts
+        if: ${{ !env.ACT }}
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
@@ -44,9 +44,19 @@ jobs:
           retention-days: 1
           compression-level: 6
 
-  build-amd64:
-    runs-on: ubuntu-latest
+  build-docker:
+    runs-on: ${{ matrix.runner }}
     needs: build-frontend
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            arch: amd64
+          - platform: linux/arm64
+            runner: macos-latest
+            arch: arm64
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,10 +64,25 @@ jobs:
           ref: ${{ github.event.inputs.branch || 'master' }}
 
       - name: Download frontend build artifacts
+        if: ${{ !env.ACT }} # dont run locally
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: frontend/dist
+
+      - name: Build frontend locally for act
+        if: ${{ env.ACT }} # only run locally 
+        run: |
+          if [ -d "frontend/dist" ]; then
+            echo "Using existing frontend/dist directory"
+            ls -la frontend/dist/
+          else
+            echo "Building frontend locally for act..."
+            npm install -g pnpm
+            npm run build:frontend
+            echo "Frontend build completed:"
+            ls -la frontend/dist/
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -68,59 +93,22 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image (amd64)
+      - name: Build and push Docker image (${{ matrix.arch }})
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/eltor:latest-amd64
-            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  build-arm64:
-    runs-on: ubuntu-latest-arm64-4core
-    needs: build-frontend
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || 'master' }}
-
-      - name: Download frontend build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/dist
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and push Docker image (arm64)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/eltor:latest-arm64
-            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-arm64
+            ${{ secrets.DOCKER_USERNAME }}/eltor:latest-${{ matrix.arch }}
+            ${{ secrets.DOCKER_USERNAME }}/eltor:${{ github.sha }}-${{ matrix.arch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   manifest:
     runs-on: ubuntu-latest
-    needs: [build-amd64, build-arm64]
+    needs: build-docker
     steps:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3

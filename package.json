@@ -17,12 +17,15 @@
     "start:prod": "BIND_ADDRESS=${BIND_ADDRESS:-127.0.0.1} BACKEND_PORT=${BACKEND_PORT:-${PORT:-5174}} BACKEND_URL=${BACKEND_URL:-} ./backend/target/release/eltor-backend",
     
     "env": "source scripts/exports.sh",
-    "docker": "pnpm run build:frontend && DOCKER_BUILDKIT=1 docker-compose up --build",
-    "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain pnpm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor-app-arm64:latest .",
-    "docker:build:x86": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain pnpm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=x86_64 -t eltor/eltor-app-x86_64:latest .",
+    "docker": "npm run build:frontend && DOCKER_BUILDKIT=1 docker-compose up --build",
+    "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor-app-arm64:latest .",
+    "docker:build:x86": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=x86_64 -t eltor/eltor-app-x86_64:latest .",
     "docker:tag": "docker tag eltor/eltor-app:latest eltor/eltor-app:v0.0.15",
     "docker:push": "docker push eltor/eltor-app:latest",
-    "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache"
+    "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache",
+
+    "actions": "ACT=true act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker -P ubuntu-latest-arm64=catthehacker/ubuntu:act-latest",
+    "actions:list": "act --list"
   },
   "workspaces": [
     "frontend",

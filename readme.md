@@ -183,17 +183,11 @@ cp .env.example .env
 - `BACKEND_PORT` or `PORT`: Port number (default: 5174)
 - `BACKEND_URL`: Base URL for API calls
 
-### Docker Deployment
+🐋 Docker
+----------
 
-Mult Arch Build Prereqs
 
-```
-docker buildx create --name mybuilder --driver docker-container --use 
-docker buildx inspect --bootstrap 
-docker run --privileged --rm tonistiigi/binfmt --install all
-# if you get errors you might need to turn off (or on) rosetta 
-orb config set rosetta false
-```
+### Local Dev Docker Compose Builds
 
 ```bash
 # Build and run with Docker Compose
@@ -202,6 +196,41 @@ npm run docker
 # Or manually:
 docker-compose up --build
 ```
+
+### arm64 Docker Builds
+Arm builds on Github is super slow, instead of using Github actions, you can use "act" https://nektosact.com/ to locally build arm64 based images. This allows you to build locally on like Mac M-series and still push artifacts to Github.
+
+1. Install Prereqs
+  ```
+  docker buildx create --name mybuilder --driver docker-container --use 
+  docker buildx inspect --bootstrap 
+  docker run --privileged --rm tonistiigi/binfmt --install all
+  # if you use orbstack and get errors you might need to turn off (or on?) rosetta 
+  orb config set rosetta false
+
+  brew install act
+  docker info | grep Architecture
+  ```
+
+2. Create ./secrets
+  ```
+  GITHUB_TOKEN=ghp_yourtokenhere
+  DOCKER_USERNAME=yourdockerusername
+  DOCKER_PASSWORD=dckr_pat_yourtokenhere
+  ```
+3. Run a actions build locally
+```
+npm run actions
+# or
+ACT=true act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker -P ubuntu-latest-arm64=catthehacker/ubuntu:act-latest
+```
+
+### amd64 Docker Builds
+amd64 can be build on Github action servers. 
+
+
+Testing Production Configs
+------------------------
 
 ### Production Examples
 
@@ -216,45 +245,11 @@ BIND_ADDRESS=0.0.0.0 PORT=80 BACKEND_PORT=80 BACKEND_URL=https://yourdomain.com 
 BIND_ADDRESS=127.0.0.1 PORT=3000 BACKEND_URL=https://api.yourdomain.com npm run prod
 ```
 
-## 🌐 El Tor Network
 
-### Browser Configuration
 
-Configure Tor Browser to use the El Tor network:
 
-**macOS:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/install.sh | bash
-```
-
-**Linux:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/install.sh | bash
-```
-
-### Network Testing
-
-**Connectivity Check:**
-1. Open Tor Browser
-2. Navigate to Circuit info (lock icon in URL bar)
-3. Look for IP `170.75.160.21` in the circuit
-
-**Hidden Service Test:**
-```
-http://3zlcerfvzmmdj2zv5j2lnz32762dwukcznrimbxllve4dzbjhmxkc4id.onion
-```
-
-### Running as Relay
-
-**Linux Relay Setup:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/relay.sh | bash
-```
-
-**Start Relay:**
-```bash
-./tor -f torrc
-```
+⚙️ Daemon
+=========
 
 **Run as Systemd Service:**
 ```bash
