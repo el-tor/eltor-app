@@ -67,3 +67,8 @@ data/
 
 payments_sent.json
 payments_received.json
+
+
+.github/instructions/instructions.instructions.md
+
+.secrets
