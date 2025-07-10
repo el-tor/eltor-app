@@ -24,7 +24,7 @@
     "docker:push": "docker push eltor/eltor-app:latest",
     "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache",
 
-    "actions": "ACT=true act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker -P ubuntu-latest-arm64=catthehacker/ubuntu:act-latest",
+    "actions": "ACT=true act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker -P macos-latest=catthehacker/ubuntu:act-latest",
     "actions:list": "act --list"
   },
   "workspaces": [
