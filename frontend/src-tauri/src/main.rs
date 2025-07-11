@@ -12,7 +12,7 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 use eltor_backend::{
     activate_eltord_wrapper_with_mode, create_app_state, deactivate_eltord_wrapper,
     deactivate_eltord_wrapper_with_mode, get_bin_dir, get_eltord_status_wrapper, get_log_receiver,
-    initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup,
+    initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup, torrc_parser,
     AppState as BackendAppState, IpLocationResponse, LogEntry,
 };
 
@@ -307,6 +307,195 @@ async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, Stri
     Ok("App shutdown cleanup completed".to_string())
 }
 
+#[command]
+async fn list_lightning_configs() -> Result<serde_json::Value, String> {
+    // Parse the torrc file to get all lightning configurations
+    let torrc_path = get_bin_dir().join("data").join("torrc");
+    
+    match torrc_parser::get_all_payment_lightning_configs(&torrc_path) {
+        Ok(configs) => {
+            println!("✅ Retrieved {} lightning config(s) from torrc", configs.len());
+            
+            let config_responses: Vec<serde_json::Value> = configs
+                .into_iter()
+                .map(|config| {
+                    // Determine password type based on node type
+                    let password_type = match config.node_type.as_str() {
+                        "phoenixd" => "password",
+                        "cln" => "rune", 
+                        "lnd" => "macaroon",
+                        _ => "password", // fallback
+                    };
+
+                    serde_json::json!({
+                        "node_type": config.node_type,
+                        "url": config.url,
+                        "password_type": password_type,
+                        "password": config.password,
+                        "is_default": config.is_default
+                    })
+                })
+                .collect();
+
+            Ok(serde_json::json!({
+                "configs": config_responses
+            }))
+        }
+        Err(e) => {
+            println!("❌ Failed to get lightning configs from torrc: {}", e);
+            Err(format!("Failed to get lightning configs: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn delete_lightning_config(
+    tauri_state: State<'_, TauriState>,
+    config: serde_json::Value,
+) -> Result<String, String> {
+    println!("🗑️  delete_lightning_config called with config: {}", config);
+    
+    let torrc_path = get_bin_dir().join("data").join("torrc");
+    
+    // Extract config values
+    let node_type_str = config["node_type"]
+        .as_str()
+        .ok_or("Missing node_type in config")?;
+    
+    let url = config["url"].as_str().map(|s| s.to_string());
+    
+    // Parse node type
+    let node_type = match node_type_str {
+        "phoenixd" => torrc_parser::NodeType::Phoenixd,
+        "cln" => torrc_parser::NodeType::Cln,
+        "lnd" => torrc_parser::NodeType::Lnd,
+        _ => return Err(format!("Unsupported node type: {}", node_type_str)),
+    };
+    
+    // Use backend torrc parser to delete the config
+    match torrc_parser::modify_payment_lightning_config(
+        &torrc_path,
+        torrc_parser::Operation::Delete,
+        node_type,
+        url.clone(),
+        None,
+        false,
+    ) {
+        Ok(_) => {
+            let message = match url {
+                Some(url) => format!("Successfully deleted {} lightning config for {}", node_type_str, url),
+                None => format!("Successfully deleted {} lightning config", node_type_str),
+            };
+            println!("✅ {}", message);
+            
+            // After deletion, try to reinitialize the lightning node in case there's a new default
+            if let Err(e) = reinitialize_lightning_node(&tauri_state).await {
+                println!("⚠️  Failed to reinitialize lightning node after deletion: {}", e);
+                println!("   This is expected if no configs remain.");
+            } else {
+                println!("🔄 Lightning node reinitialized after config deletion");
+            }
+            
+            Ok(message)
+        }
+        Err(e) => {
+            println!("❌ Failed to delete lightning config: {}", e);
+            Err(format!("Failed to delete lightning config: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn upsert_lightning_config(
+    tauri_state: State<'_, TauriState>,
+    config: serde_json::Value,
+) -> Result<String, String> {
+    println!("💾 upsert_lightning_config called with config: {}", config);
+    
+    let torrc_path = get_bin_dir().join("data").join("torrc");
+    
+    // Extract config values
+    let node_type_str = config["node_type"]
+        .as_str()
+        .ok_or("Missing node_type in config")?;
+    let url = config["url"]
+        .as_str()
+        .ok_or("Missing url in config")?;
+    let password = config["password"]
+        .as_str()
+        .ok_or("Missing password in config")?;
+    let set_as_default = config["set_as_default"]
+        .as_bool()
+        .unwrap_or(false);
+    
+    // Parse node type
+    let node_type = match node_type_str {
+        "phoenixd" => torrc_parser::NodeType::Phoenixd,
+        "cln" => torrc_parser::NodeType::Cln,
+        "lnd" => torrc_parser::NodeType::Lnd,
+        _ => return Err(format!("Unsupported node type: {}", node_type_str)),
+    };
+    
+    // Use backend torrc parser to upsert the config
+    match torrc_parser::modify_payment_lightning_config(
+        &torrc_path,
+        torrc_parser::Operation::Upsert,
+        node_type,
+        Some(url.to_string()),
+        Some(password.to_string()),
+        set_as_default,
+    ) {
+        Ok(_) => {
+            let message = format!(
+                "Successfully upserted {} lightning config for {}",
+                node_type_str, url
+            );
+            println!("✅ {}", message);
+            
+            // If this config is being set as default, reinitialize the lightning node
+            if set_as_default {
+                if let Err(e) = reinitialize_lightning_node(&tauri_state).await {
+                    println!("⚠️  Failed to reinitialize lightning node: {}", e);
+                } else {
+                    println!("🔄 Lightning node reinitialized with new default config");
+                }
+            }
+            
+            Ok(message)
+        }
+        Err(e) => {
+            println!("❌ Failed to upsert lightning config: {}", e);
+            Err(format!("Failed to upsert lightning config: {}", e))
+        }
+    }
+}
+
+/// Helper function to reinitialize the lightning node when configs change
+async fn reinitialize_lightning_node(tauri_state: &TauriState) -> Result<(), String> {
+    let torrc_path = get_bin_dir().join("data").join("torrc");
+    
+    match lightning::LightningNode::from_torrc(&torrc_path) {
+        Ok(node) => {
+            println!("✅ Lightning node reinitialized from torrc ({})", node.node_type());
+            
+            // Store the new lightning node in TauriState
+            let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
+            *lightning_node_guard = Some(node);
+            
+            Ok(())
+        }
+        Err(e) => {
+            println!("❌ Failed to reinitialize Lightning node from torrc: {}", e);
+            
+            // Clear the lightning node on error
+            let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
+            *lightning_node_guard = None;
+            
+            Err(e)
+        }
+    }
+}
+
 fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "hide", "Hide", true, None::<&str>)?;
@@ -534,6 +723,9 @@ fn main() {
             get_offer,
             lookup_ip_location_tauri,
             app_shutdown,
+            list_lightning_configs,
+            delete_lightning_config,
+            upsert_lightning_config
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

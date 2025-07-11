@@ -6,20 +6,23 @@ import {
   Anchor,
   Text,
   PasswordInput,
+  Modal,
+  Alert,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { IconClock } from '@tabler/icons-react'
 import { useSelector, useDispatch } from '../../hooks'
 import { useForm } from '@mantine/form'
 import {
   upsertLightningConfig,
   deleteLightningConfig,
-  fetchLightningConfigs,
 } from './walletStore'
 import type { LightningConfigRequest } from '../../services/walletApiService'
-import { useEffect } from 'react'
+import { useState } from 'react'
 
 export function WalletConfigModal({ close }: { close: () => void }) {
   const dispatch = useDispatch()
+  const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false)
   const {
     clickedWallet,
     lightningConfigs,
@@ -31,6 +34,9 @@ export function WalletConfigModal({ close }: { close: () => void }) {
   const existingConfig = lightningConfigs?.find(
     (config) => config.node_type === clickedWallet,
   )
+  
+  // Check if this wallet type is coming soon
+  const isComingSoon = clickedWallet === 'lnd' || clickedWallet === 'strike'
   const form = useForm({
     mode: 'uncontrolled',
     initialValues: {
@@ -107,12 +113,13 @@ export function WalletConfigModal({ close }: { close: () => void }) {
 
     try {
       await dispatch(upsertLightningConfig(configData)).unwrap()
+      
       // Success notification
       notifications.show({
         title: 'Configuration Saved',
         message: `Successfully ${
           existingConfig ? 'updated' : 'created'
-        } ${clickedWallet} configuration`,
+        } ${clickedWallet} configuration${configData.set_as_default ? '. Wallet data will refresh automatically.' : ''}`,
         color: 'green',
       })
       close()
@@ -129,39 +136,55 @@ export function WalletConfigModal({ close }: { close: () => void }) {
 
   const handleDelete = async () => {
     if (!existingConfig) return
+    setDeleteConfirmOpened(true)
+  }
 
-    if (
-      window.confirm(
-        `Are you sure you want to delete the ${clickedWallet} configuration?`,
-      )
-    ) {
-      try {
-        await dispatch(
-          deleteLightningConfig({
-            node_type: clickedWallet as any,
-            url: existingConfig.url,
-          }),
-        ).unwrap()
-        // Success notification
-        notifications.show({
-          title: 'Configuration Deleted',
-          message: `Successfully deleted ${clickedWallet} configuration`,
-          color: 'green',
-        })
-      } catch (error) {
-        console.error('Failed to delete config:', error)
-        // Error notification
-        notifications.show({
-          title: 'Delete Failed',
-          message: `Failed to delete ${clickedWallet} configuration: ${error}`,
-          color: 'red',
-        })
-      }
+  const confirmDelete = async () => {
+    if (!existingConfig) return
+
+    try {
+      await dispatch(
+        deleteLightningConfig({
+          node_type: clickedWallet as any,
+          url: existingConfig.url,
+        }),
+      ).unwrap()
+      // Success notification
+      notifications.show({
+        title: 'Configuration Deleted',
+        message: `Successfully deleted ${clickedWallet} configuration. Wallet data will refresh automatically.`,
+        color: 'green',
+      })
+      setDeleteConfirmOpened(false)
+      close()
+    } catch (error) {
+      console.error('Failed to delete config:', error)
+      // Error notification
+      notifications.show({
+        title: 'Delete Failed',
+        message: `Failed to delete ${clickedWallet} configuration: ${error}`,
+        color: 'red',
+      })
     }
   }
 
   return (
     <div>
+      {/* Coming Soon Banner */}
+      {isComingSoon && (
+        <Alert
+          variant="light"
+          color="blue"
+          title={`${clickedWallet.toUpperCase()} Integration Coming Soon`}
+          icon={<IconClock size={16} />}
+          mb="md"
+        >
+          <Text size="sm">
+            We're working on {clickedWallet.toUpperCase()} support. This feature will be available in a future update.
+          </Text>
+        </Alert>
+      )}
+
       {lightningConfigsError && (
         <Text c="red" size="sm" mb="md">
           Error: {lightningConfigsError}
@@ -191,6 +214,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
               return 'Url'
           }
         })()}
+        disabled={isComingSoon}
         {...form.getInputProps('url')}
       />
       <PasswordInput
@@ -212,12 +236,14 @@ export function WalletConfigModal({ close }: { close: () => void }) {
         placeholder={
           existingConfig ? 'Leave empty to keep current password' : undefined
         }
+        disabled={isComingSoon}
         {...form.getInputProps('password')}
       />
 
       <Checkbox
         mt="xl"
         label="Default Wallet - Click here to make this the default wallet that will be used to pay for bandwidth. If you are running a relay this wallet will be used to create a BOLT12 offer that you will receive payments for sharing your bandwidth."
+        disabled={isComingSoon}
         {...form.getInputProps('setAsDefault', { type: 'checkbox' })}
       />
 
@@ -226,13 +252,14 @@ export function WalletConfigModal({ close }: { close: () => void }) {
           w="20rem"
           mb="1rem"
           loading={lightningConfigsLoading}
+          disabled={isComingSoon}
           onClick={handleSave}
         >
           {existingConfig ? 'Update' : 'Save'}
         </Button>
       </Group>
 
-      {existingConfig && (
+      {existingConfig && !isComingSoon && (
         <Group justify="center">
           <Text
             onClick={handleDelete}
@@ -243,6 +270,33 @@ export function WalletConfigModal({ close }: { close: () => void }) {
           </Text>
         </Group>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        opened={deleteConfirmOpened}
+        onClose={() => setDeleteConfirmOpened(false)}
+        title="Confirm Deletion"
+        centered
+      >
+        <Text mb="md">
+          Are you sure you want to delete the {clickedWallet} configuration?
+        </Text>
+        <Group justify="flex-end">
+          <Button
+            variant="outline"
+            onClick={() => setDeleteConfirmOpened(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            color="red"
+            onClick={confirmDelete}
+            loading={lightningConfigsLoading}
+          >
+            Delete
+          </Button>
+        </Group>
+      </Modal>
     </div>
   )
 }

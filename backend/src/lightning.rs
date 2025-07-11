@@ -12,7 +12,7 @@ pub use lni::types::*;
 use lni::LightningNode as LniTrait;
 
 // Import torrc parser
-use crate::torrc_parser::parse_lightning_config_from_torrc;
+use crate::torrc_parser::get_all_payment_lightning_configs;
 
 /// Transaction response structure matching frontend expectations
 #[derive(Debug, Serialize, Deserialize)]
@@ -115,61 +115,64 @@ impl LightningNode {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(true));
-        match parse_lightning_config_from_torrc(&torrc_path)? {
-            Some(config) => {
-                match config.node_type.as_str() {
-                    "phoenixd" => {
-                        let phoenixd_config = PhoenixdConfig {
-                            url: config.url,
-                            password: config.password,
-                            socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs,
-                            ..Default::default()
-                        };
+            
+        // Get all lightning configs and find the default one
+        let configs = get_all_payment_lightning_configs(&torrc_path)?;
+        let default_config = configs
+            .into_iter()
+            .find(|config| config.is_default)
+            .ok_or("No default lightning config found in torrc")?;
 
-                        let node = PhoenixdNode::new(phoenixd_config);
-                        Ok(LightningNode {
-                            inner: Arc::new(node),
-                            node_type: "phoenixd",
-                        })
-                    }
-                    "lnd" => {
-                        let lnd_config = LndConfig {
-                            url: config.url,
-                            macaroon: config.password, // For LND, password field contains macaroon
-                            socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs,
-                            ..Default::default()
-                        };
+        match default_config.node_type.as_str() {
+            "phoenixd" => {
+                let phoenixd_config = PhoenixdConfig {
+                    url: default_config.url,
+                    password: default_config.password,
+                    socks5_proxy: env::var("SOCKS5_PROXY").ok(),
+                    accept_invalid_certs,
+                    ..Default::default()
+                };
 
-                        let node = LndNode::new(lnd_config);
-                        Ok(LightningNode {
-                            inner: Arc::new(node),
-                            node_type: "lnd",
-                        })
-                    }
-                    "cln" => {
-                        let cln_config = ClnConfig {
-                            url: config.url,
-                            rune: config.password, // For CLN, password field contains rune
-                            socks5_proxy: env::var("SOCKS5_PROXY").ok(),
-                            accept_invalid_certs,
-                            ..Default::default()
-                        };
-
-                        let node = ClnNode::new(cln_config);
-                        Ok(LightningNode {
-                            inner: Arc::new(node),
-                            node_type: "cln",
-                        })
-                    }
-                    _ => Err(format!(
-                        "Unsupported node type from torrc: {}",
-                        config.node_type
-                    )),
-                }
+                let node = PhoenixdNode::new(phoenixd_config);
+                Ok(LightningNode {
+                    inner: Arc::new(node),
+                    node_type: "phoenixd",
+                })
             }
-            None => Err("No PaymentLightningNodeConfig found in torrc file".to_string()),
+            "lnd" => {
+                let lnd_config = LndConfig {
+                    url: default_config.url,
+                    macaroon: default_config.password, // For LND, password field contains macaroon
+                    socks5_proxy: env::var("SOCKS5_PROXY").ok(),
+                    accept_invalid_certs,
+                    ..Default::default()
+                };
+
+                let node = LndNode::new(lnd_config);
+                Ok(LightningNode {
+                    inner: Arc::new(node),
+                    node_type: "lnd",
+                })
+            }
+            "cln" => {
+                let cln_config = ClnConfig {
+                    url: default_config.url,
+                    rune: default_config.password, // For CLN, password field contains rune
+                    socks5_proxy: env::var("SOCKS5_PROXY").ok(),
+                    accept_invalid_certs,
+                    ..Default::default()
+                };
+
+                let node = ClnNode::new(cln_config);
+                Ok(LightningNode {
+                    inner: Arc::new(node),
+                    node_type: "cln",
+                })
+            }
+            _ => Err(format!(
+                "Unsupported node type from torrc: {}",
+                default_config.node_type
+            )),
         }
     }
 

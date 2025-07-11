@@ -9,6 +9,8 @@ import {
   Checkbox,
   Image,
   Text,
+  Button,
+  Alert,
 } from '@mantine/core'
 import { useDispatch, useSelector } from '../../hooks'
 import { useEffect, useState } from 'react'
@@ -22,7 +24,7 @@ import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
 import { WalletPlugins } from './WalletPlugins/WalletPlugins'
 import CopyableTextBox from '../../components/CopyableTextBox'
 import QRCode from 'react-qr-code'
-import { IconRefresh } from '@tabler/icons-react'
+import { IconRefresh, IconAlertTriangle } from '@tabler/icons-react'
 import { Circle } from '../../components/Circle'
 import { Transactions } from './Transactions'
 import { useDisclosure } from '@mantine/hooks'
@@ -79,6 +81,9 @@ export const Wallet = () => {
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
   const [opened, { open, close }] = useDisclosure(false)
+
+  // Check if there's no default wallet configured
+  const hasNoDefaultWallet = !defaultLightningConfig && lightningConfigs.length > 0
 
   // Helper function to safely mask credentials
   const maskCredential = (credential: string, visibleChars: number = 6) => {
@@ -196,32 +201,63 @@ export const Wallet = () => {
               style={{ cursor: 'pointer' }}
             />
           </Group>
-          <ChannelBalanceLine send={send ?? 0} receive={receive ?? 0} />
 
-          <SimpleGrid
-            mt="lg"
-            cols={{ base: 1, sm: 2 }} // Stack vertically on small screens, two columns on larger screens
-            spacing={{ base: 'md', sm: 'lg' }} // Adjust spacing based on screen size
-            verticalSpacing={{ base: 'md', sm: 'lg' }} // Adjust vertical spacing based on screen size
-          >
-            <Box bg="white" p="md" style={{ borderRadius: '6px' }}>
-              <Center>
-                <Title order={5} mb="xs" style={{ color: 'black' }}>
-                  BOLT 12 Offer
-                </Title>
-              </Center>
-              <Center>
-                <QRCode
-                  value={bolt12Offer}
-                  size={280}
-                  style={{ border: 2, borderColor: 'whitesmoke' }}
-                />
-              </Center>
-              <CopyableTextBox text={bolt12Offer} limitChars={36} bg="white" />
-            </Box>
+          {/* No Default Wallet Alert */}
+          {hasNoDefaultWallet && (
+            <Alert
+              variant="light"
+              color="orange"
+              title="No Default Wallet Selected"
+              icon={<IconAlertTriangle size={16} />}
+              mt="md"
+              mb="md"
+            >
+              <Text mb="md">
+                You have Lightning configurations but none is set as default. 
+                Please select a default wallet to view balance and transactions.
+              </Text>
+              <Button
+                variant="outline"
+                color="orange"
+                size="sm"
+                onClick={open}
+              >
+                Configure Default Wallet
+              </Button>
+            </Alert>
+          )}
 
-            <Transactions h="450px" />
-          </SimpleGrid>
+          {/* Show balance and transactions only if there's a default wallet */}
+          {!hasNoDefaultWallet && (
+            <>
+              <ChannelBalanceLine send={send ?? 0} receive={receive ?? 0} />
+
+              <SimpleGrid
+                mt="lg"
+                cols={{ base: 1, sm: 2 }}
+                spacing={{ base: 'md', sm: 'lg' }}
+                verticalSpacing={{ base: 'md', sm: 'lg' }}
+              >
+                <Box bg="white" p="md" style={{ borderRadius: '6px' }}>
+                  <Center>
+                    <Title order={5} mb="xs" style={{ color: 'black' }}>
+                      BOLT 12 Offer
+                    </Title>
+                  </Center>
+                  <Center>
+                    <QRCode
+                      value={bolt12Offer}
+                      size={280}
+                      style={{ border: 2, borderColor: 'whitesmoke' }}
+                    />
+                  </Center>
+                  <CopyableTextBox text={bolt12Offer} limitChars={36} bg="white" />
+                </Box>
+
+                <Transactions h="450px" />
+              </SimpleGrid>
+            </>
+          )}
 
           {/* Lightning Configurations Display */}
           {lightningConfigs?.length > 0 && (

@@ -6,6 +6,7 @@
   "scripts": {
     "tauri": "npm run env && cd frontend && pnpm run dev:tauri",
     "web": "concurrently \"npm run env && pnpm run backend\" \"pnpm run frontend\"",
+    "android": "npm run env && cd frontend && pnpm run dev:android",
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",

@@ -1,4 +1,4 @@
-import { ScrollArea, Table, Collapse, ActionIcon, Text, Group, Box, CopyButton, Tooltip } from '@mantine/core'
+import { ScrollArea, Table, Collapse, ActionIcon, Text, Group, Box, CopyButton, Tooltip, Center } from '@mantine/core'
 import React, { useEffect, useState } from 'react'
 import { IconChevronDown, IconChevronRight, IconCopy, IconCheck } from '@tabler/icons-react'
 import dayjs from 'dayjs'
@@ -10,7 +10,7 @@ import { fetchTransactions } from './walletStore'
 dayjs.extend(relativeTime)
 
 export function Transactions({ h }: { h?: number | string }) {
-  const { transactions } = useSelector((state) => state.wallet)
+  const { transactions, defaultLightningConfig } = useSelector((state) => state.wallet)
   const dispatch = useDispatch()
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
@@ -42,8 +42,11 @@ export function Transactions({ h }: { h?: number | string }) {
 
   useEffect(() => {
     console.log('Transactions component mounted')
-    dispatch(fetchTransactions(''))
-  }, [])
+    // Only fetch transactions if there's a default lightning config
+    if (defaultLightningConfig) {
+      dispatch(fetchTransactions(''))
+    }
+  }, [defaultLightningConfig])
 
   return (
     <ScrollArea
@@ -67,7 +70,17 @@ export function Transactions({ h }: { h?: number | string }) {
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {transactions?.length > 0 &&
+          {!defaultLightningConfig ? (
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Center p="xl">
+                  <Text c="dimmed" size="sm">
+                    No default wallet configured
+                  </Text>
+                </Center>
+              </Table.Td>
+            </Table.Tr>
+          ) : transactions?.length > 0 ? (
             transactions
               .slice()
               .sort((a, b) => (b.settled_at || 0) - (a.settled_at || 0))
@@ -151,7 +164,18 @@ export function Transactions({ h }: { h?: number | string }) {
                     )}
                   </React.Fragment>
                 )
-              })}
+              })
+          ) : (
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Center p="xl">
+                  <Text c="dimmed" size="sm">
+                    No transactions found
+                  </Text>
+                </Center>
+              </Table.Td>
+            </Table.Tr>
+          )}
         </Table.Tbody>
       </Table>
     </ScrollArea>

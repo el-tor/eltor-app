@@ -105,6 +105,8 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.loading = false
         state.error = action.error
+        // If getBolt12Offer fails (e.g., no default wallet), clear the offer
+        state.bolt12Offer = ''
       })
 
       .addCase(fetchTransactions.pending, (state) => {
@@ -122,6 +124,8 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.loading = false
         state.error = action.error
+        // If fetchTransactions fails (e.g., no default wallet), clear transactions
+        state.transactions = []
       })
 
       .addCase(fetchNodeInfo.pending, (state, action) => {
@@ -141,6 +145,10 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.loading = false
         state.error = action.error
+        // If fetchNodeInfo fails (e.g., no default wallet), reset wallet data
+        state.defaultWallet = 'none'
+        state.send = 0
+        state.receive = 0
       })
 
       // Lightning Config Cases
@@ -153,6 +161,15 @@ const walletStore = createSlice({
         state.defaultLightningConfig = action.payload.find((config: LightningConfigResponse) => config.is_default) || null
         state.lightningConfigsLoading = false
         state.lightningConfigsError = null
+        
+        // If there's no default config, reset wallet data to prevent showing stale data
+        if (!state.defaultLightningConfig) {
+          state.defaultWallet = 'none'
+          state.send = 0
+          state.receive = 0
+          state.bolt12Offer = ''
+          state.transactions = []
+        }
       })
       .addCase(fetchLightningConfigs.rejected, (state, action) => {
         state.lightningConfigsLoading = false
@@ -255,6 +272,12 @@ const upsertLightningConfig = createAsyncThunk<
     const result = await walletApiService.upsertLightningConfig(config)
     // Refresh the configs list after successful upsert
     dispatch(fetchLightningConfigs())
+    
+    // Always refresh wallet data after config changes
+    dispatch(fetchNodeInfo('wallet'))
+    dispatch(fetchTransactions('wallet'))
+    dispatch(getBolt12Offer('wallet'))
+    
     return result
   } catch (error) {
     return rejectWithValue(error)
@@ -270,6 +293,12 @@ const deleteLightningConfig = createAsyncThunk<
     const result = await walletApiService.deleteLightningConfig(config)
     // Refresh the configs list after successful deletion
     dispatch(fetchLightningConfigs())
+    
+    // Always refresh wallet data after deletion since default might change or disappear
+    dispatch(fetchNodeInfo('wallet'))
+    dispatch(fetchTransactions('wallet'))
+    dispatch(getBolt12Offer('wallet'))
+    
     return result
   } catch (error) {
     return rejectWithValue(error)

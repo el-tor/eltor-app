@@ -48,73 +48,85 @@ pub struct ListLightningConfigsResponse {
     pub configs: Vec<LightningConfigResponse>,
 }
 
+// Helper function to get the current lightning node from torrc
+// This ensures we always use the latest configuration
+fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
+    let bin_dir = get_bin_dir();
+    let torrc_path = bin_dir.join("data").join("torrc");
+    crate::lightning::LightningNode::from_torrc(&torrc_path)
+}
+
 // Get node information
 async fn get_node_info(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<ResponseJson<NodeInfoResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => match node.get_node_info().await {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => match node.get_node_info().await {
             Ok(info) => Ok(ResponseJson(info)),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to get node info: {}", e),
             )),
         },
-        None => Err((
+        Err(e) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            "Lightning node not initialized".to_string(),
+            format!("No lightning node configured: {}", e),
         )),
     }
 }
 
 // Create an invoice (receive payment)
 async fn create_invoice(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(request): Json<CreateInvoiceRequest>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => match node.create_invoice(request).await {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => match node.create_invoice(request).await {
             Ok(invoice) => Ok(ResponseJson(invoice)),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create invoice: {}", e),
             )),
         },
-        None => Err((
+        Err(e) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            "Lightning node not initialized".to_string(),
+            format!("No lightning node configured: {}", e),
         )),
     }
 }
 
 // Pay an invoice (send payment)
 async fn pay_invoice(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(request): Json<PayInvoiceRequest>,
 ) -> Result<ResponseJson<PayInvoiceResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => match node.pay_invoice(request).await {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => match node.pay_invoice(request).await {
             Ok(payment) => Ok(ResponseJson(payment)),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to pay invoice: {}", e),
             )),
         },
-        None => Err((
+        Err(e) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            "Lightning node not initialized".to_string(),
+            format!("No lightning node configured: {}", e),
         )),
     }
 }
 
 // Get wallet status (simplified node info)
-async fn get_wallet_status(State(state): State<AppState>) -> ResponseJson<MessageResponse> {
-    match &state.lightning_node {
-        Some(node) => {
+async fn get_wallet_status(State(_state): State<AppState>) -> ResponseJson<MessageResponse> {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => {
             let status = format!("Lightning wallet connected ({})", node.node_type());
             ResponseJson(MessageResponse { message: status })
         }
-        None => ResponseJson(MessageResponse {
+        Err(_) => ResponseJson(MessageResponse {
             message: "Lightning wallet not connected".to_string(),
         }),
     }
@@ -122,10 +134,11 @@ async fn get_wallet_status(State(state): State<AppState>) -> ResponseJson<Messag
 
 // Get wallet transactions
 async fn get_wallet_transactions(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListTransactionsResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => {
             // Use basic parameters - matching the required fields
             let params = ListTransactionsParams {
                 payment_hash: None, // Get all transactions
@@ -142,28 +155,29 @@ async fn get_wallet_transactions(
                 )),
             }
         }
-        None => Err((
+        Err(e) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            "Lightning node not initialized".to_string(),
+            format!("No lightning node configured: {}", e),
         )),
     }
 }
 
 // Get a BOLT12 offer
 async fn get_offer(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
-    match &state.lightning_node {
-        Some(node) => match node.get_offer().await {
+    // Get the current lightning node from torrc to ensure we use the latest config
+    match get_current_lightning_node() {
+        Ok(node) => match node.get_offer().await {
             Ok(invoice) => Ok(ResponseJson(invoice)),
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create invoice: {}", e),
             )),
         },
-        None => Err((
+        Err(e) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
-            "Lightning node not initialized".to_string(),
+            format!("No lightning node configured: {}", e),
         )),
     }
 }

@@ -11,6 +11,7 @@
     "dev": "vite",
     "dev:web": "pnpm i && vite",
     "dev:tauri": "tauri dev",
+    "dev:android": "tauri dev android",
     "build": "vite build",
     "build:web": "vite build",
     "build:tauri": "tauri build",
@@ -18,7 +19,8 @@
     "serve": "python3 -m http.server 5173 --directory dist",
     "clean": "rm -rf src-tauri/target && rm -rf node_modules/.cache && rm -rf dist",
 
-    "dmg": "tauri build --bundles dmg"
+    "dmg": "tauri build --bundles dmg",
+    "dmg:debug": "tauri build --bundles dmg --debug"
   },
   "devDependencies": {
     "@redux-devtools/extension": "^3.3.0",
