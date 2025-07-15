@@ -141,9 +141,27 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
     println!("📊 Final extracted data - City: '{}', Region: '{}', Coordinates: ({}, {})", 
              city, region, lat, lng);
 
-    // For now, we'll return placeholder values for country info until we understand the Country type
-    let country = "Unknown".to_string();
-    let country_code = "XX".to_string();
+    // Extract country information from the location record
+    let (country, country_code) = if let Some(country_info) = &location_record.country {
+        let country_name = country_info.long_name.as_ref();
+        let country_short = country_info.short_name.as_ref();
+        (
+            if !country_name.is_empty() && country_name != "-" {
+                country_name.to_string()
+            } else {
+                "Unknown".to_string()
+            },
+            if !country_short.is_empty() && country_short != "-" {
+                country_short.to_string()
+            } else {
+                "XX".to_string()
+            }
+        )
+    } else {
+        ("Unknown".to_string(), "XX".to_string())
+    };
+
+    println!("🏳️ Country extracted - Name: '{}', Code: '{}'", country, country_code);
 
     Ok(IpLocationResponse {
         ip: ip.to_string(),
