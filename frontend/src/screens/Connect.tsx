@@ -181,6 +181,7 @@ export const Connect = () => {
       <Center>
         <Box
           style={{
+            width: '100%',
             position: 'relative',
             padding: 4,
             borderRadius: 4,
@@ -206,7 +207,7 @@ export const Connect = () => {
           >
             <LogViewer
               height="300px"
-              className="mt-[-130px] z-10 relative max-w-full log-window"
+              className="mt-[-130px] z-10 relative max-w-full"
               mode="client"
               scroll={false}
             />

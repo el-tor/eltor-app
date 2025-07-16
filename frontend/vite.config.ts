@@ -22,18 +22,20 @@ export default defineConfig({
     strictPort: true,
     open: true,
     // Proxy for web mode
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5174',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:5174',
-        changeOrigin: true,
+    // Only run proxy in development mode (not in Tauri)
+    ...(process.env.NODE_ENV === 'development' ? {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:5174',
+          changeOrigin: true,
+        },
+        '/health': {
+          target: 'http://localhost:5174',
+          changeOrigin: true,
+        }
       }
-    }
+    } : {}),
   },
-  
   define: {
     global: 'globalThis',
   },
