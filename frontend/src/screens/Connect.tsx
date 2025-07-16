@@ -178,47 +178,49 @@ export const Connect = () => {
         </Group>
       </Group>
       <MapComponent h={500} />
-      <Box
-        style={{
-          maxWidth: styles.maxWidth,
-          position: 'relative',
-          padding: 4,
-          borderRadius: 4,
-          backgroundColor: '#1e1e1e',
-          marginTop: -130,
-          zIndex: 1,
-        }}
-      >
-        <pre
-          ref={preRef}
+      <Center>
+        <Box
+          className="log-window"
           style={{
-            backgroundColor: '#1e1e1e',
-            height: '300px',
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            color: '#d4d4d4',
-            padding: 6,
-            paddingTop: 0,
-            overflow: 'auto',
-            display: 'block',
             position: 'relative',
+            padding: 4,
+            borderRadius: 4,
+            backgroundColor: '#1e1e1e',
+            marginTop: -130,
+            zIndex: 1,
           }}
         >
-          <LogViewer
-            height="300px"
-            className="mt-[-130px] z-10 relative max-w-full"
-            mode="client"
-            scroll={false}
-          />
-        </pre>
-        <Button
-          size="xs"
-          style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
-          onClick={() => dispatch(clearLogsClient())}
-        >
-          Clear
-        </Button>
-      </Box>
+          <pre
+            ref={preRef}
+            style={{
+              backgroundColor: '#1e1e1e',
+              height: '300px',
+              borderRadius: 4,
+              fontFamily: 'monospace',
+              color: '#d4d4d4',
+              padding: 6,
+              paddingTop: 0,
+              overflow: 'auto',
+              display: 'block',
+              position: 'relative',
+            }}
+          >
+            <LogViewer
+              height="300px"
+              className="mt-[-130px] z-10 relative max-w-full"
+              mode="client"
+              scroll={false}
+            />
+          </pre>
+          <Button
+            size="xs"
+            style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
+            onClick={() => dispatch(clearLogsClient())}
+          >
+            Clear
+          </Button>
+        </Box>
+      </Center>
     </Stack>
   )
 }

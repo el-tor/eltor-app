@@ -7,6 +7,24 @@
   }
 }
 
+.log-window {
+  width: 1200px;
+  height: 300px;
+}
+
+@media (max-width: 1200px) {
+  .container {
+    width: 100%;
+    padding: 0px;
+  }
+
+  .log-window {
+    width: 100%;
+    height: 250px;
+    padding: 0px;
+  }
+}
+
 /* Example CSS for responsiveness */
 @media (max-width: 768px) {
   .container {

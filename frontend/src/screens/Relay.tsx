@@ -94,8 +94,15 @@ export const Relay = () => {
               console.error('❌ [Relay] Deactivate error:', error)
               // Handle the case where backend says "No eltord relay process is currently running"
               // This means the frontend state is out of sync with backend
-              if (error instanceof Error && error.message.includes('No eltord relay process is currently running')) {
-                console.log('🔄 [Relay] Backend says relay not running, syncing frontend state')
+              if (
+                error instanceof Error &&
+                error.message.includes(
+                  'No eltord relay process is currently running',
+                )
+              ) {
+                console.log(
+                  '🔄 [Relay] Backend says relay not running, syncing frontend state',
+                )
                 // The useEltord hook should handle state updates through the 'eltord-error' event
                 // But in case it doesn't, we can dispatch the state change here if needed
               }
@@ -129,46 +136,48 @@ export const Relay = () => {
           <Circle color={isRelayRunning ? 'lightgreen' : '#FF6347'} />
         </Group>
       </Group>
-      <Box
-        style={{
-          maxWidth: styles.maxWidth,
-          position: 'relative',
-          padding: 4,
-          borderRadius: 4,
-          backgroundColor: '#1e1e1e',
-          zIndex: 1,
-        }}
-      >
-        <pre
-          ref={preRef}
+      <Center>
+        <Box
+          className="log-window"
           style={{
-            backgroundColor: '#1e1e1e',
-            height: '220px',
-            borderRadius: 4,
-            fontFamily: 'monospace',
-            color: '#d4d4d4',
-            padding: 6,
-            paddingTop: 0,
-            overflow: 'auto',
-            display: 'block',
             position: 'relative',
+            padding: 4,
+            borderRadius: 4,
+            backgroundColor: '#1e1e1e',
+            zIndex: 1,
           }}
         >
-          <LogViewer
-            height="250px"
-            className="mt-[-130px] z-10 relative max-w-full"
-            mode="relay"
-            scroll={false}
-          />
-        </pre>
-        <Button
-          size="xs"
-          style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
-          onClick={() => dispatch(clearLogsRelay())}
-        >
-          Clear
-        </Button>
-      </Box>
+          <pre
+            ref={preRef}
+            style={{
+              backgroundColor: '#1e1e1e',
+              height: '250px',
+              borderRadius: 4,
+              fontFamily: 'monospace',
+              color: '#d4d4d4',
+              padding: 6,
+              paddingTop: 0,
+              overflow: 'auto',
+              display: 'block',
+              position: 'relative',
+            }}
+          >
+            <LogViewer
+              height="250px"
+              className="mt-[-130px] z-10 relative max-w-full"
+              mode="relay"
+              scroll={false}
+            />
+          </pre>
+          <Button
+            size="xs"
+            style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
+            onClick={() => dispatch(clearLogsRelay())}
+          >
+            Clear
+          </Button>
+        </Box>
+      </Center>
       <Text>
         <b>2. OS Firewall</b> - Make sure to open the ORPort on your OS firewall
       </Text>
