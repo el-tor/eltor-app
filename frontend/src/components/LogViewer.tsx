@@ -11,7 +11,7 @@ interface LogViewerProps {
 
 const LogViewer: React.FC<LogViewerProps> = ({
   className = '',
-  height = '400px',
+  height = '300px',
   mode = 'client',
   scroll = true,
 }) => {
@@ -85,17 +85,47 @@ const LogViewer: React.FC<LogViewerProps> = ({
   const getLevelColor = (level: string) => {
     switch (level.toUpperCase()) {
       case 'ERROR':
-        return 'red'
+        return 'text-red-400'
       case 'WARN':
       case 'WARNING':
-        return 'yellow'
+        return 'text-yellow-400'
       case 'INFO':
-        return 'white'
+        return 'text-gray-200'
       case 'DEBUG':
-        return 'white'
+        return 'text-gray-400'
       default:
-        return 'white'
+        return 'text-gray-200'
     }
+  }
+
+  // Clean ANSI color codes and extract code path to show at the end
+  const cleanLogMessage = (message: string, level: string, timestamp: string) => {
+    let cleaned = message
+      // Remove ANSI color codes like [0m, [32m, [38;5;8m, etc.
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      // Remove duplicate timestamp patterns
+      .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s+/, '')
+      // Clean up extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
+    
+    // Format timestamp
+    const time = new Date(timestamp).toLocaleTimeString()
+    
+    // Extract code path - look for patterns like "eltor::client::payments_loop" that might be at the start
+    const codePathMatch = cleaned.match(/^(?:INFO|ERROR|WARN|DEBUG)\s+([a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)\s+(.*)/) ||
+                          cleaned.match(/^([a-zA-Z_][a-zA-Z0-9_]*(?:::[a-zA-Z_][a-zA-Z0-9_]*)*)\s+(.*)/)
+    
+    if (codePathMatch) {
+      const [, codePath, messageBody] = codePathMatch
+      return `${time} - ${messageBody} PM-[${level.toUpperCase()} ${codePath}]`
+    }
+    
+    // Remove log level indicators if no code path found
+    cleaned = cleaned.replace(/^(INFO|ERROR|WARN|DEBUG)\s+/, '')
+    
+    // If no code path found, just add timestamp and level
+    return `${time} - ${cleaned} PM-[${level.toUpperCase()}]`
   }
 
   const getSourceColor = (source: string) => {
@@ -122,7 +152,7 @@ const LogViewer: React.FC<LogViewerProps> = ({
 
   return (
     <div
-      className={`bg-gray-900 border border-gray-700 rounded-lg ${className}`}
+      className={`bg-gray-900 border border-gray-700 rounded-lg min-w-[800px] w-full max-w-6xl ${className}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-700">
@@ -154,27 +184,18 @@ const LogViewer: React.FC<LogViewerProps> = ({
             No {mode} logs yet. Start the eltord {mode} process to see logs here.
           </div>
         ) : (
-          logs?.map((log, index) => (
-            <div key={index} className="flex gap-2 py-1 hover:bg-gray-800">
-              <span className="text-gray-500 shrink-0">
-                {formatTimestamp(log.timestamp)}
-              </span>
-              <span
-                className={`shrink-0 font-bold ${getLevelColor(log.level)}`}
-              >
-                {log.level.toUpperCase()}
-              </span>
-              <span className={`shrink-0 ${getSourceColor(log.source)}`}>
-                [{log.source}]
-              </span>
-              {log.mode && (
-                <span className="shrink-0 text-blue-400 text-xs">
-                  [{log.mode}]
+          logs?.map((log, index) => {
+            const cleanedMessage = cleanLogMessage(log.message, log.level, log.timestamp)
+            const isError = log.level.toUpperCase() === 'ERROR'
+            
+            return (
+              <div key={index} className={`flex gap-2 py-1 hover:bg-gray-800 ${isError ? 'bg-red-900/20' : ''}`}>
+                <span className={`break-all ${getLevelColor(log.level)}`}>
+                  {cleanedMessage}
                 </span>
-              )}
-              <span className="text-gray-200 break-all" style={{color: getLevelColor(log.level)}}> {log.message}</span>
-            </div>
-          ))
+              </div>
+            )
+          })
         )}
         <span className="blink-cursor">&nbsp;</span>
         <div ref={logsEndRef} />
