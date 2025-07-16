@@ -1,5 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_paths;
+
+use app_paths::{get_torrc_path, initialize_torrc_files};
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
 use std::env;
@@ -310,7 +313,7 @@ async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, Stri
 #[command]
 async fn list_lightning_configs() -> Result<serde_json::Value, String> {
     // Parse the torrc file to get all lightning configurations
-    let torrc_path = get_bin_dir().join("data").join("torrc");
+    let torrc_path = get_torrc_path()?;
     
     match torrc_parser::get_all_payment_lightning_configs(&torrc_path) {
         Ok(configs) => {
@@ -355,7 +358,7 @@ async fn delete_lightning_config(
 ) -> Result<String, String> {
     println!("🗑️  delete_lightning_config called with config: {}", config);
     
-    let torrc_path = get_bin_dir().join("data").join("torrc");
+    let torrc_path = get_torrc_path()?;
     
     // Extract config values
     let node_type_str = config["node_type"]
@@ -412,7 +415,7 @@ async fn upsert_lightning_config(
 ) -> Result<String, String> {
     println!("💾 upsert_lightning_config called with config: {}", config);
     
-    let torrc_path = get_bin_dir().join("data").join("torrc");
+    let torrc_path = get_torrc_path()?;
     
     // Extract config values
     let node_type_str = config["node_type"]
@@ -472,7 +475,7 @@ async fn upsert_lightning_config(
 
 /// Helper function to reinitialize the lightning node when configs change
 async fn reinitialize_lightning_node(tauri_state: &TauriState) -> Result<(), String> {
-    let torrc_path = get_bin_dir().join("data").join("torrc");
+    let torrc_path = get_torrc_path()?;
     
     match lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {
@@ -620,6 +623,12 @@ fn main() {
         }
     }
 
+    // Initialize torrc files before starting the app
+    if let Err(e) = initialize_torrc_files() {
+        eprintln!("⚠️  Failed to initialize torrc files: {}", e);
+        eprintln!("   Continuing with startup...");
+    }
+
     Builder::default()
         .setup(|app| {
             setup_tray(app.handle())?;
@@ -662,7 +671,13 @@ fn main() {
                 }
 
                 // Initialize lightning node
-                let torrc_path = get_bin_dir().join("data").join("torrc");
+                let torrc_path = match get_torrc_path() {
+                    Ok(path) => path,
+                    Err(e) => {
+                        println!("❌ Failed to get torrc path: {}", e);
+                        return;
+                    }
+                };
                 println!("🔎 Lightning torrc path: {:?}", torrc_path);
                 match lightning::LightningNode::from_torrc(torrc_path) {
                     Ok(node) => {

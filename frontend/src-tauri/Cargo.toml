@@ -26,5 +26,6 @@ chrono = { version = "0.4", features = ["serde"] }
 # Import the backend as a local dependency
 eltor-backend = { path = "../../backend" }
 dotenv = "0.15.0"
+rand = { version = "0.9.1", features = ["std"] }
 
 
