@@ -138,8 +138,8 @@ export const Relay = () => {
       </Group>
       <Center>
         <Box
-          className="log-window"
           style={{
+            width: '100%',
             position: 'relative',
             padding: 4,
             borderRadius: 4,

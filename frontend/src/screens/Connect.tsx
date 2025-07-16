@@ -180,7 +180,6 @@ export const Connect = () => {
       <MapComponent h={500} />
       <Center>
         <Box
-          className="log-window"
           style={{
             position: 'relative',
             padding: 4,
@@ -207,7 +206,7 @@ export const Connect = () => {
           >
             <LogViewer
               height="300px"
-              className="mt-[-130px] z-10 relative max-w-full"
+              className="mt-[-130px] z-10 relative max-w-full log-window"
               mode="client"
               scroll={false}
             />
