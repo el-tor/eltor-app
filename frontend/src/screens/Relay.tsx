@@ -30,7 +30,6 @@ export const Relay = () => {
     activate,
     deactivate,
   } = useEltord({
-    torrcFile: 'torrc.relay',
     mode: 'relay',
   })
   const { logsRelay, relayActive, circuits, circuitInUse } = useSelector(

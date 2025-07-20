@@ -2,6 +2,8 @@ use rand::Rng;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+// TODO depreceiate for the backend/paths.rs
+
 /// Get the app data directory where we store configuration files
 pub fn get_app_data_dir() -> Result<PathBuf, String> {
     let app_data_dir = dirs::data_dir()

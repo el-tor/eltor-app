@@ -1,3 +1,4 @@
+use crate::paths::PathConfig;
 use crate::state::AppState;
 use std::env;
 use std::fs;
@@ -5,8 +6,11 @@ use std::process::Command;
 
 /// Default ports used by the application
 const DEFAULT_PHOENIXD_PORT: u16 = 9740;
-const DEFAULT_TOR_SOCKS_PORT: u16 = 18058;
+const DEFAULT_TOR_SOCKS_PORT: u16 =  18058;
 const DEFAULT_TOR_CONTROL_PORT: u16 = 9992;
+
+const DEFAULT_TOR_RELAY_SOCKS_PORT: u16 = 18057;
+const DEFAULT_TOR_RELAY_CONTROL_PORT: u16 = 7781;
 
 /// Represents a port that needs to be checked/killed
 #[derive(Debug, Clone)]
@@ -94,7 +98,8 @@ pub fn get_ports_to_check_with_torrc(torrc_filename: &str) -> Result<Vec<PortInf
     }
 
     // Parse torrc file for Tor ports
-    let torrc_path = format!("./bin/{}", torrc_filename);
+    let path_config = PathConfig::new().map_err(|e| e)?;
+    let torrc_path = path_config.get_torrc_path_for_ports(torrc_filename);
     match parse_torrc_ports(&torrc_path) {
         Ok(mut tor_ports) => ports.append(&mut tor_ports),
         Err(e) => {
@@ -114,6 +119,16 @@ pub fn get_ports_to_check_with_torrc(torrc_filename: &str) -> Result<Vec<PortInf
                 port: DEFAULT_TOR_CONTROL_PORT,
                 service_name: "tor".to_string(),
                 description: "Tor Control Port (default)".to_string(),
+            });
+             ports.push(PortInfo {
+                port: DEFAULT_TOR_RELAY_SOCKS_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor Relay SOCKS Port (default)".to_string(),
+            });
+            ports.push(PortInfo {
+                port: DEFAULT_TOR_RELAY_CONTROL_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor Relay Control Port (default)".to_string(),
             });
         }
     }
@@ -365,7 +380,8 @@ pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String>
     let mut ports = Vec::new();
 
     // Parse torrc file for Tor ports only (no phoenixd)
-    let torrc_path = format!("./bin/{}", torrc_filename);
+    let path_config = PathConfig::new().map_err(|e| e)?;
+    let torrc_path = path_config.get_torrc_path_for_ports(torrc_filename);
     match parse_torrc_ports(&torrc_path) {
         Ok(mut tor_ports) => ports.append(&mut tor_ports),
         Err(e) => {
@@ -385,6 +401,16 @@ pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String>
                 port: DEFAULT_TOR_CONTROL_PORT,
                 service_name: "tor".to_string(),
                 description: "Tor Control Port (default)".to_string(),
+            });
+            ports.push(PortInfo {
+                port: DEFAULT_TOR_RELAY_SOCKS_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor Relay SOCKS Port (default)".to_string(),
+            });
+            ports.push(PortInfo {
+                port: DEFAULT_TOR_RELAY_CONTROL_PORT,
+                service_name: "tor".to_string(),
+                description: "Tor Relay Control Port (default)".to_string(),
             });
         }
     }

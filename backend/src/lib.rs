@@ -1,7 +1,12 @@
 // Library entrypoint for eltor-backend
 // This allows the backend to be imported as a library by Tauri
 
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+pub mod eltor;
 pub mod lightning;
+pub mod paths;
 pub mod ports;
 pub mod routes;
 pub mod state;
@@ -10,15 +15,24 @@ pub mod torrc_parser;
 pub mod wallet;
 
 // Re-export commonly used types for convenience
-pub use lightning::{LightningNode, WalletBalanceResponse, ListTransactionsResponse};
-pub use state::{AppState, MessageResponse, StatusResponse, LogEntry, EltordStatusResponse};
-pub use routes::eltor::{activate_eltord as backend_activate, deactivate_eltord as backend_deactivate, get_eltord_status as backend_status, get_bin_dir, activate_eltord_internal};
-pub use ports::{get_ports_to_check, cleanup_ports, cleanup_ports_with_torrc, cleanup_ports_startup, cleanup_tor_ports_only, get_tor_ports_only};
-pub use wallet::{start_phoenixd, stop_phoenixd};
+pub use eltor::{
+    activate_eltor, deactivate_eltor, get_eltor_status, EltorActivateParams, EltorDeactivateParams,
+    EltorManager, EltorStatus,
+};
+pub use lightning::{LightningNode, ListTransactionsResponse, WalletBalanceResponse};
+pub use paths::PathConfig;
+pub use ports::{
+    cleanup_ports, cleanup_ports_startup, cleanup_ports_with_torrc, cleanup_tor_ports_only,
+    get_ports_to_check, get_tor_ports_only,
+};
+pub use state::{AppState, EltordStatusResponse, LogEntry, MessageResponse, StatusResponse};
 use tokio::sync::broadcast;
+pub use wallet::{start_phoenixd, stop_phoenixd};
 
 // Re-export IP location types and functions
-pub use routes::ip::{IpLocationResponse, lookup_ip_location, init_ip_database};
+pub use routes::ip::{init_ip_database, lookup_ip_location, IpLocationResponse};
+
+use crate::eltor::EltorMode;
 
 /// Create a new AppState for Tauri usage
 pub fn create_app_state(use_phoenixd_embedded: bool) -> AppState {
@@ -36,79 +50,47 @@ pub async fn initialize_phoenixd(state: AppState) -> Result<(), String> {
     }
 }
 
-/// Activate eltord using backend logic - thin wrapper for Tauri
-pub async fn activate_eltord_wrapper(state: AppState, torrc_file_name: Option<String>) -> Result<String, String> {
-    use axum::response::Json as ResponseJson;
-    
-    let result = activate_eltord_internal(state, "client".to_string(), torrc_file_name).await;
-    match result {
-        ResponseJson(message_response) => {
-            if message_response.message.starts_with("Error:") {
-                Err(message_response.message)
-            } else {
-                Ok(message_response.message)
-            }
-        }
-    }
+/// Activate eltord
+pub async fn activate_eltord(state: AppState, mode: EltorMode) -> Result<String, String> {
+    let state_arc = Arc::new(RwLock::new(state));
+    let path_config = PathConfig::new()?;
+    let manager = EltorManager::new(state_arc, path_config);
+    let params = EltorActivateParams { mode };
+    manager.activate(params).await
 }
 
-/// Deactivate eltord using backend logic - thin wrapper for Tauri
-pub async fn deactivate_eltord_wrapper(state: AppState) -> Result<String, String> {
-    use axum::extract::State as AxumState;
-    use axum::response::Json as ResponseJson;
-    
-    let result = backend_deactivate(AxumState(state)).await;
-    match result {
-        ResponseJson(message_response) => {
-            if message_response.message.starts_with("Error:") {
-                Err(message_response.message)
-            } else {
-                Ok(message_response.message)
-            }
-        }
-    }
+/// Deactivate eltord
+pub async fn deactivate_eltord(state: AppState, mode: EltorMode) -> Result<String, String> {
+    let state_arc = Arc::new(RwLock::new(state));
+    let path_config = PathConfig::new()?;
+    let manager = EltorManager::new(state_arc, path_config);
+    let params = EltorDeactivateParams { mode };
+    manager.deactivate(params).await
 }
 
-/// Deactivate eltord using backend logic with mode support - thin wrapper for Tauri
-pub async fn deactivate_eltord_wrapper_with_mode(state: AppState, mode: String) -> Result<String, String> {
-    use axum::response::Json as ResponseJson;
-    
-    let result = routes::eltor::deactivate_eltord_internal(state, Some(mode)).await;
-    match result {
-        ResponseJson(message_response) => {
-            if message_response.message.starts_with("Error:") {
-                Err(message_response.message)
-            } else {
-                Ok(message_response.message)
+/// Get eltord status
+pub async fn get_eltord_status(state: AppState) -> EltordStatusResponse {
+    let state_arc = Arc::new(RwLock::new(state));
+    let path_config = match PathConfig::new() {
+        Ok(config) => config,
+        Err(_) => {
+            return EltordStatusResponse {
+                running: false,
+                client_running: false,
+                relay_running: false,
+                pid: None,
+                recent_logs: vec![],
             }
         }
-    }
-}
-
-/// Get eltord status using backend logic - thin wrapper for Tauri
-pub async fn get_eltord_status_wrapper(state: AppState) -> EltordStatusResponse {
-    use axum::extract::State as AxumState;
-    use axum::response::Json as ResponseJson;
-    
-    let result = backend_status(AxumState(state)).await;
-    match result {
-        ResponseJson(status_response) => status_response,
-    }
-}
-
-/// Activate eltord using backend logic with mode support - thin wrapper for Tauri
-pub async fn activate_eltord_wrapper_with_mode(state: AppState, torrc_file_name: Option<String>, mode: String) -> Result<String, String> {
-    use axum::response::Json as ResponseJson;
-    
-    let result = routes::eltor::activate_eltord_internal(state, mode, torrc_file_name).await;
-    match result {
-        ResponseJson(message_response) => {
-            if message_response.message.starts_with("Error:") {
-                Err(message_response.message)
-            } else {
-                Ok(message_response.message)
-            }
-        }
+    };
+    let manager = EltorManager::new(state_arc, path_config);
+    let status = manager.get_status().await;
+    EltordStatusResponse {
+        running: status.running,
+        client_running: status.client_running,
+        relay_running: status.relay_running,
+        pid: None,
+        recent_logs: status.recent_logs,
     }
 }
 
@@ -120,20 +102,8 @@ pub fn get_log_receiver(state: &AppState) -> broadcast::Receiver<LogEntry> {
 /// Comprehensive shutdown function - cleans up all processes and ports
 pub async fn shutdown_cleanup(state: AppState) -> Result<(), String> {
     println!("🛑 Starting comprehensive app shutdown cleanup...");
-    
-    // Step 1: Stop both eltord processes if running
-    match deactivate_eltord_wrapper_with_mode(state.clone(), "client".to_string()).await {
-        Ok(msg) => println!("✅ Client: {}", msg),
-        Err(e) => {
-            if e.contains("No client eltord process") {
-                println!("ℹ️  No client eltord process to stop");
-            } else {
-                println!("⚠️  Client eltord cleanup warning: {}", e);
-            }
-        }
-    }
-    
-    match deactivate_eltord_wrapper_with_mode(state.clone(), "relay".to_string()).await {
+
+    match deactivate_eltord(state.clone(), EltorMode::Relay).await {
         Ok(msg) => println!("✅ Relay: {}", msg),
         Err(e) => {
             if e.contains("No relay eltord process") {
@@ -143,7 +113,7 @@ pub async fn shutdown_cleanup(state: AppState) -> Result<(), String> {
             }
         }
     }
-    
+
     // Step 2: Stop phoenixd process if running
     match stop_phoenixd(state.clone()).await {
         Ok(_) => println!("✅ Phoenixd stopped successfully"),
@@ -155,14 +125,14 @@ pub async fn shutdown_cleanup(state: AppState) -> Result<(), String> {
             }
         }
     }
-    
+
     // Step 3: Clean up all ports (including phoenixd)
     println!("🧹 Cleaning up all application ports...");
     match cleanup_ports_with_torrc(&state.torrc_file_name).await {
         Ok(_) => println!("✅ All ports cleaned up successfully"),
         Err(e) => println!("⚠️  Port cleanup warning: {}", e),
     }
-    
+
     println!("✨ App shutdown cleanup completed");
     Ok(())
 }

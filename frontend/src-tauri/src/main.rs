@@ -1,8 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod app_paths;
-
-use app_paths::{get_torrc_path, initialize_torrc_files};
+use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
 use std::env;
@@ -13,10 +11,9 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord_wrapper_with_mode, create_app_state, deactivate_eltord_wrapper,
-    deactivate_eltord_wrapper_with_mode, get_bin_dir, get_eltord_status_wrapper, get_log_receiver,
+    activate_eltord, create_app_state, deactivate_eltord, get_eltord_status, get_log_receiver,
     initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup, torrc_parser,
-    AppState as BackendAppState, IpLocationResponse, LogEntry,
+    AppState as BackendAppState, EltorStatus, IpLocationResponse, LogEntry, PathConfig,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -89,31 +86,11 @@ async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
 }
 
 #[command]
-async fn connect_tor() -> Result<String, String> {
-    println!("Connecting to Tor...");
-    Ok("Connected to Tor".to_string())
-}
-
-#[command]
-async fn disconnect_tor() -> Result<String, String> {
-    println!("Disconnecting from Tor...");
-    Ok("Disconnected from Tor".to_string())
-}
-
-#[command]
-async fn get_tor_status() -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "connected": false,
-        "circuit": null
-    }))
-}
-
-#[command]
-async fn activate_eltord(
+async fn activate_eltord_invoke(
     tauri_state: State<'_, TauriState>,
     app_handle: AppHandle,
-    torrc_file_name: Option<String>,
-    mode: Option<String>,
+    torrc_file_name: String,
+    mode: EltorMode,
 ) -> Result<String, String> {
     println!(
         "🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}",
@@ -128,8 +105,7 @@ async fn activate_eltord(
     );
 
     // Use backend wrapper function with mode parameter
-    let mode = mode.unwrap_or_else(|| "client".to_string());
-    match activate_eltord_wrapper_with_mode((*backend_state).clone(), torrc_file_name, mode).await {
+    match activate_eltord((*backend_state).clone(), mode).await {
         Ok(message) => {
             println!("✅ Backend activation successful: {}", message);
 
@@ -170,7 +146,7 @@ async fn activate_eltord(
 }
 
 #[command]
-async fn deactivate_eltord(
+async fn deactivate_eltord_invoke(
     tauri_state: State<'_, TauriState>,
     _app_handle: AppHandle,
 ) -> Result<String, String> {
@@ -179,33 +155,18 @@ async fn deactivate_eltord(
     let backend_state = tauri_state.backend_state.clone();
 
     // Use backend wrapper function
-    deactivate_eltord_wrapper((*backend_state).clone()).await
+    // TODO pass in mode from UX
+    deactivate_eltord((*backend_state).clone(), EltorMode::Client).await
 }
 
 #[command]
-async fn deactivate_eltord_with_mode(
-    tauri_state: State<'_, TauriState>,
-    mode: String,
-) -> Result<String, String> {
-    println!(
-        "deactivate_eltord_with_mode command called with mode: {}",
-        mode
-    );
-
-    let backend_state = tauri_state.backend_state.clone();
-
-    // Use backend wrapper function with mode support
-    deactivate_eltord_wrapper_with_mode((*backend_state).clone(), mode).await
-}
-
-#[command]
-async fn get_eltord_status(
+async fn get_eltord_status_invoke(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
     let backend_state = tauri_state.backend_state.clone();
 
     // Use backend wrapper function
-    let status = get_eltord_status_wrapper((*backend_state).clone()).await;
+    let status = get_eltord_status((*backend_state).clone()).await;
 
     // Convert backend logs to Tauri format
     let tauri_logs: Vec<TauriLogEntry> = status
@@ -222,9 +183,7 @@ async fn get_eltord_status(
 }
 
 #[command]
-async fn get_node_info(
-    tauri_state: State<'_, TauriState>,
-) -> Result<serde_json::Value, String> {
+async fn get_node_info(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
     // Get the lightning node from TauriState
     let lightning_node_guard = tauri_state.lightning_node.lock().await;
     let lightning_node = lightning_node_guard
@@ -313,19 +272,24 @@ async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, Stri
 #[command]
 async fn list_lightning_configs() -> Result<serde_json::Value, String> {
     // Parse the torrc file to get all lightning configurations
-    let torrc_path = get_torrc_path()?;
-    
+    let path_config = PathConfig::new()?;
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
+
     match torrc_parser::get_all_payment_lightning_configs(&torrc_path) {
         Ok(configs) => {
-            println!("✅ Retrieved {} lightning config(s) from torrc", configs.len());
-            
+            println!(
+                "✅ Retrieved {} lightning config(s) from torrc",
+                configs.len()
+            );
+
             let config_responses: Vec<serde_json::Value> = configs
                 .into_iter()
                 .map(|config| {
                     // Determine password type based on node type
                     let password_type = match config.node_type.as_str() {
                         "phoenixd" => "password",
-                        "cln" => "rune", 
+                        "cln" => "rune",
                         "lnd" => "macaroon",
                         _ => "password", // fallback
                     };
@@ -357,16 +321,18 @@ async fn delete_lightning_config(
     config: serde_json::Value,
 ) -> Result<String, String> {
     println!("🗑️  delete_lightning_config called with config: {}", config);
-    
-    let torrc_path = get_torrc_path()?;
-    
+
+    let path_config = PathConfig::new()?;
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
+
     // Extract config values
     let node_type_str = config["node_type"]
         .as_str()
         .ok_or("Missing node_type in config")?;
-    
+
     let url = config["url"].as_str().map(|s| s.to_string());
-    
+
     // Parse node type
     let node_type = match node_type_str {
         "phoenixd" => torrc_parser::NodeType::Phoenixd,
@@ -374,7 +340,7 @@ async fn delete_lightning_config(
         "lnd" => torrc_parser::NodeType::Lnd,
         _ => return Err(format!("Unsupported node type: {}", node_type_str)),
     };
-    
+
     // Use backend torrc parser to delete the config
     match torrc_parser::modify_payment_lightning_config(
         &torrc_path,
@@ -386,19 +352,25 @@ async fn delete_lightning_config(
     ) {
         Ok(_) => {
             let message = match url {
-                Some(url) => format!("Successfully deleted {} lightning config for {}", node_type_str, url),
+                Some(url) => format!(
+                    "Successfully deleted {} lightning config for {}",
+                    node_type_str, url
+                ),
                 None => format!("Successfully deleted {} lightning config", node_type_str),
             };
             println!("✅ {}", message);
-            
+
             // After deletion, try to reinitialize the lightning node in case there's a new default
             if let Err(e) = reinitialize_lightning_node(&tauri_state).await {
-                println!("⚠️  Failed to reinitialize lightning node after deletion: {}", e);
+                println!(
+                    "⚠️  Failed to reinitialize lightning node after deletion: {}",
+                    e
+                );
                 println!("   This is expected if no configs remain.");
             } else {
                 println!("🔄 Lightning node reinitialized after config deletion");
             }
-            
+
             Ok(message)
         }
         Err(e) => {
@@ -414,23 +386,21 @@ async fn upsert_lightning_config(
     config: serde_json::Value,
 ) -> Result<String, String> {
     println!("💾 upsert_lightning_config called with config: {}", config);
-    
-    let torrc_path = get_torrc_path()?;
-    
+
+    let path_config = PathConfig::new()?;
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
+
     // Extract config values
     let node_type_str = config["node_type"]
         .as_str()
         .ok_or("Missing node_type in config")?;
-    let url = config["url"]
-        .as_str()
-        .ok_or("Missing url in config")?;
+    let url = config["url"].as_str().ok_or("Missing url in config")?;
     let password = config["password"]
         .as_str()
         .ok_or("Missing password in config")?;
-    let set_as_default = config["set_as_default"]
-        .as_bool()
-        .unwrap_or(false);
-    
+    let set_as_default = config["set_as_default"].as_bool().unwrap_or(false);
+
     // Parse node type
     let node_type = match node_type_str {
         "phoenixd" => torrc_parser::NodeType::Phoenixd,
@@ -438,7 +408,7 @@ async fn upsert_lightning_config(
         "lnd" => torrc_parser::NodeType::Lnd,
         _ => return Err(format!("Unsupported node type: {}", node_type_str)),
     };
-    
+
     // Use backend torrc parser to upsert the config
     match torrc_parser::modify_payment_lightning_config(
         &torrc_path,
@@ -454,7 +424,7 @@ async fn upsert_lightning_config(
                 node_type_str, url
             );
             println!("✅ {}", message);
-            
+
             // If this config is being set as default, reinitialize the lightning node
             if set_as_default {
                 if let Err(e) = reinitialize_lightning_node(&tauri_state).await {
@@ -463,7 +433,7 @@ async fn upsert_lightning_config(
                     println!("🔄 Lightning node reinitialized with new default config");
                 }
             }
-            
+
             Ok(message)
         }
         Err(e) => {
@@ -475,25 +445,30 @@ async fn upsert_lightning_config(
 
 /// Helper function to reinitialize the lightning node when configs change
 async fn reinitialize_lightning_node(tauri_state: &TauriState) -> Result<(), String> {
-    let torrc_path = get_torrc_path()?;
-    
+    let path_config = PathConfig::new()?;
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
+
     match lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {
-            println!("✅ Lightning node reinitialized from torrc ({})", node.node_type());
-            
+            println!(
+                "✅ Lightning node reinitialized from torrc ({})",
+                node.node_type()
+            );
+
             // Store the new lightning node in TauriState
             let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
             *lightning_node_guard = Some(node);
-            
+
             Ok(())
         }
         Err(e) => {
             println!("❌ Failed to reinitialize Lightning node from torrc: {}", e);
-            
+
             // Clear the lightning node on error
             let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
             *lightning_node_guard = None;
-            
+
             Err(e)
         }
     }
@@ -624,9 +599,13 @@ fn main() {
     }
 
     // Initialize torrc files before starting the app
-    if let Err(e) = initialize_torrc_files() {
-        eprintln!("⚠️  Failed to initialize torrc files: {}", e);
-        eprintln!("   Continuing with startup...");
+    if let Ok(path_config) = PathConfig::new() {
+        if let Err(e) = path_config.ensure_torrc_files() {
+            eprintln!("⚠️  Failed to initialize torrc files: {}", e);
+            eprintln!("   Continuing with startup...");
+        }
+    } else {
+        eprintln!("⚠️  Failed to get path configuration, continuing with startup...");
     }
 
     Builder::default()
@@ -671,10 +650,16 @@ fn main() {
                 }
 
                 // Initialize lightning node
-                let torrc_path = match get_torrc_path() {
-                    Ok(path) => path,
+                let torrc_path = match PathConfig::new() {
+                    Ok(path_config) => {
+                        if let Err(e) = path_config.ensure_torrc_files() {
+                            println!("❌ Failed to ensure torrc files: {}", e);
+                            return;
+                        }
+                        path_config.get_torrc_path(None)
+                    },
                     Err(e) => {
-                        println!("❌ Failed to get torrc path: {}", e);
+                        println!("❌ Failed to get path config: {}", e);
                         return;
                     }
                 };
@@ -701,7 +686,13 @@ fn main() {
                 }
 
                 // Initialize IP database for Tauri
-                let ip_db_path = get_bin_dir().join("IP2LOCATION-LITE-DB3.BIN");
+                let ip_db_path = match PathConfig::new() {
+                    Ok(path_config) => path_config.get_executable_path("IP2LOCATION-LITE-DB3.BIN"),
+                    Err(e) => {
+                        eprintln!("⚠️  Failed to get path config: {}", e);
+                        return;
+                    }
+                };
                 if ip_db_path.exists() {
                     if let Err(e) = eltor_backend::init_ip_database(ip_db_path) {
                         eprintln!("⚠️  Failed to initialize IP database: {}", e);
@@ -725,13 +716,9 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
-            connect_tor,
-            disconnect_tor,
-            get_tor_status,
-            activate_eltord,
-            deactivate_eltord,
-            deactivate_eltord_with_mode,
-            get_eltord_status,
+            activate_eltord_invoke,
+            deactivate_eltord_invoke,
+            get_eltord_status_invoke,
             test_log_event,
             get_node_info,
             get_wallet_transactions,

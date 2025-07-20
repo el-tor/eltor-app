@@ -3,39 +3,47 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use eltor_backend::state::{AppState, MessageResponse, StatusResponse};
+use chrono::Utc;
+use eltor_backend::state::{AppState, LogEntry, MessageResponse, StatusResponse};
+use log::{Log, Metadata, Record};
 use std::env;
 use tower_http::cors::CorsLayer;
 
-use eltor_backend::routes::eltor::get_bin_dir;
 use eltor_backend::routes::ip;
 use eltor_backend::static_files;
 
-// Tor-related handlers
-async fn connect_tor() -> ResponseJson<StatusResponse> {
-    println!("🔗 Connecting to Tor...");
-    // TODO: Implement actual Tor connection logic
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
+// Custom logger that captures all log messages and sends them to the broadcast channel
+struct BroadcastLogger {
+    state: AppState,
 }
 
-async fn disconnect_tor() -> ResponseJson<StatusResponse> {
-    println!("🔌 Disconnecting from Tor...");
-    // TODO: Implement actual Tor disconnection logic
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
+impl BroadcastLogger {
+    fn new(state: AppState) -> Self {
+        Self { state }
+    }
 }
 
-async fn get_tor_status() -> ResponseJson<StatusResponse> {
-    // TODO: Implement actual Tor status check
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
+impl Log for BroadcastLogger {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true // Capture all log levels
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let log_entry = LogEntry {
+                timestamp: Utc::now(),
+                level: record.level().to_string(),
+                message: format!("{}", record.args()),
+                source: record.target().to_string(),
+                mode: Some("client".to_string()), // Default to client, could be enhanced
+            };
+            self.state.add_log(log_entry);
+        }
+    }
+
+    fn flush(&self) {
+        // No-op for our use case
+    }
 }
 
 async fn health_check() -> ResponseJson<MessageResponse> {
@@ -48,6 +56,28 @@ async fn health_check() -> ResponseJson<MessageResponse> {
 async fn main() {
     // Load environment variables from root .env file
     dotenv::from_path("../.env").ok();
+
+    // Read environment variables first to configure state properly
+    let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    // Create app state
+    let mut state = eltor_backend::create_app_state(use_phoenixd_embedded);
+
+    // Set up custom logger to capture ALL logs (including from eltor library) BEFORE anything else
+    let broadcast_logger = BroadcastLogger::new(state.clone());
+
+    // Initialize the custom logger FIRST to capture all subsequent log output
+    if let Err(e) = log::set_boxed_logger(Box::new(broadcast_logger)) {
+        eprintln!("⚠️  Failed to set custom logger: {}", e);
+        eprintln!("   Eltor logs will go to stdout, only manual logs will stream to SSE");
+    } else {
+        log::set_max_level(log::LevelFilter::Trace); // Capture all log levels
+        println!("🎯 Custom logger installed successfully - ALL logs will stream to SSE");
+    }
+
     // Print environment variables for debugging
     println!("🔧 Backend Environment variables:");
     for (key, value) in env::vars() {
@@ -72,25 +102,25 @@ async fn main() {
 
     let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
 
-    let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false);
-
     println!("🔧 Backend configuration:");
     println!("   Bind Address: {}", bind_address);
     println!("   Port: {}", backend_port);
     println!("   Phoenixd embedded: {}", use_phoenixd_embedded);
 
-    // Initialize shared state
-    let mut state = AppState::new(use_phoenixd_embedded);
-
     // Initialize Lightning node
     println!("⚡ Initializing Lightning node...");
 
-    // Initialize from torrc
-    let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("data").join("torrc");
+    // Initialize from torrc using PathConfig
+    let path_config = eltor_backend::PathConfig::new().unwrap_or_else(|e| {
+        eprintln!("⚠️  Warning: Failed to get path config: {}", e);
+        eprintln!("   Using default paths");
+        eltor_backend::PathConfig::with_overrides(
+            Some(std::env::current_dir().unwrap().join("bin")),
+            Some(std::env::current_dir().unwrap().join("bin/data")),
+        )
+        .unwrap()
+    });
+    let torrc_path = path_config.get_torrc_path(None);
     println!("🔍 Looking for torrc file at: {:?}", torrc_path);
     let lightning_node = match eltor_backend::lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {
@@ -112,6 +142,13 @@ async fn main() {
         state.set_lightning_node(node);
     }
 
+    // Initialize shared EltorManager
+    let eltor_manager = eltor_backend::eltor::EltorManager::new(
+        std::sync::Arc::new(tokio::sync::RwLock::new(state.clone())),
+        path_config.clone(),
+    );
+    state.set_eltor_manager(eltor_manager);
+
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {
         println!("🚀 Starting embedded phoenixd...");
@@ -126,8 +163,8 @@ async fn main() {
         println!("🔗 Using external phoenixd instance");
     }
 
-    // Initialize IP database
-    let ip_db_path = get_bin_dir().join("IP2LOCATION-LITE-DB3.BIN");
+    // Initialize IP location database
+    let ip_db_path = path_config.get_executable_path("IP2LOCATION-LITE-DB3.BIN");
     if ip_db_path.exists() {
         if let Err(e) = ip::init_ip_database(ip_db_path) {
             eprintln!("⚠️  Failed to initialize IP database: {}", e);
@@ -143,9 +180,6 @@ async fn main() {
     // Build the router
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/tor/connect", post(connect_tor))
-        .route("/api/tor/disconnect", post(disconnect_tor))
-        .route("/api/tor/status", get(get_tor_status))
         .route("/api/ip/:ip", get(ip::get_ip_location))
         .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
         .merge(eltor_backend::routes::eltor::create_routes())
@@ -179,19 +213,14 @@ async fn main() {
     println!("🌐 Frontend served at {}", local_url);
     println!("🔗 Health check: {}/health", local_url);
     println!("📋 API endpoints:");
-    println!("   POST /api/tor/connect");
-    println!("   POST /api/tor/disconnect");
-    println!("   GET  /api/tor/status");
-    println!("   POST /api/eltord/activate");
     println!("   POST /api/eltord/activate/:mode");
-    println!("   POST /api/eltord/activate/:mode/:torrc_file_name");
-    println!("   POST /api/eltord/deactivate");
+    println!("   POST /api/eltord/deactivate/:mode");
     println!("   GET  /api/eltord/status");
-    println!("   GET  /api/eltord/logs (SSE)");
+    println!("   GET  /api/eltord/logs");
     println!("   GET  /api/wallet/info");
     println!("   GET  /api/wallet/balance");
     println!("   POST /api/wallet/invoice");
-    println!("   POST /api/wallet/pay");
+    // println!("   POST /api/wallet/pay");
     println!("   POST /api/wallet/offer");
     println!("   GET  /api/wallet/status");
     println!("   GET  /api/wallet/transactions");

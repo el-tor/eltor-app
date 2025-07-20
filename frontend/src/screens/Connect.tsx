@@ -35,7 +35,7 @@ export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
   const dispatch = useDispatch()
-  const { isRunning, isAnyModeRunning, activate, deactivate } = useEltord()
+  const { isRunning, isAnyModeRunning, activate, deactivate } = useEltord({mode: 'client'})
   const {
     logsClient,
     logsRelay,

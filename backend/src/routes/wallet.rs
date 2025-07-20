@@ -6,17 +6,15 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-
 use crate::{
     lightning::{
         CreateInvoiceRequest, CreateInvoiceResponse, ListTransactionsParams,
         ListTransactionsResponse, NodeInfoResponse, PayInvoiceRequest, PayInvoiceResponse,
     },
-    routes::eltor::get_bin_dir,
     state::{AppState, MessageResponse},
     torrc_parser::{
         get_all_payment_lightning_configs, modify_payment_lightning_config, NodeType, Operation,
-    },
+    }, PathConfig,
 };
 
 // Request types for lightning config management
@@ -51,7 +49,8 @@ pub struct ListLightningConfigsResponse {
 // Helper function to get the current lightning node from torrc
 // This ensures we always use the latest configuration
 fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
-    let bin_dir = get_bin_dir();
+    let path_config = PathConfig::new()?;
+    let bin_dir = path_config.bin_dir;
     let torrc_path = bin_dir.join("data").join("torrc");
     crate::lightning::LightningNode::from_torrc(&torrc_path)
 }
@@ -201,8 +200,8 @@ async fn upsert_lightning_config(
     };
 
     // Get torrc file path
-    let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("data").join("torrc");
+    let path_config = PathConfig::new().unwrap();
+    let torrc_path = path_config.data_dir.join("torrc");
 
     // Modify the payment lightning config
     match modify_payment_lightning_config(
@@ -245,8 +244,8 @@ async fn delete_lightning_config(
     };
 
     // Get torrc file path
-    let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("data").join("torrc");
+    let path_config = PathConfig::new().unwrap();
+    let torrc_path = path_config.data_dir.join("torrc");
 
     // Delete the lightning config
     match modify_payment_lightning_config(
@@ -282,8 +281,8 @@ async fn list_lightning_configs(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListLightningConfigsResponse>, (StatusCode, String)> {
     // Get torrc file path
-    let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("data").join("torrc");
+    let path_config = PathConfig::new().unwrap();
+    let torrc_path = path_config.data_dir.join("torrc");
 
     // Get all payment lightning configs
     match get_all_payment_lightning_configs(&torrc_path) {

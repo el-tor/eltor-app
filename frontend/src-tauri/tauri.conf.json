@@ -43,7 +43,6 @@
     "resources": [
       "../../backend/bin/torrc.template",
       "../../backend/bin/torrc.relay.template",
-      "../../backend/bin/eltord",
       "../../backend/bin/phoenix-cli",
       "../../backend/bin/phoenixd",
       "../../backend/bin/IP2LOCATION-LITE-DB3.BIN"
