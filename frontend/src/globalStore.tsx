@@ -23,6 +23,8 @@ export {
   setRelays,
   setCircuitInUse,
   setMyIp,
+  setRelayEnabled,
+  setClientEnabled,
 }
 
 
@@ -39,6 +41,8 @@ interface GlobalState {
   circuitInUse: Circuit
   relays: Array<Relay>
   myIp: string
+  relayEnabled: boolean
+  clientEnabled: boolean
 }
 
 const initialState: GlobalState = {
@@ -59,6 +63,8 @@ const initialState: GlobalState = {
   circuitInUse: {} as Circuit,
   relays: [],
   myIp: '166.205.90.66',
+  relayEnabled: false,
+  clientEnabled: true,
 }
 
 // 2. Slice and Reducers
@@ -130,6 +136,12 @@ const globalStore = createSlice({
     setMyIp: (state, action: PayloadAction<string>) => {
       state.myIp = action.payload
     },
+    setRelayEnabled: (state, action: PayloadAction<boolean>) => {
+      state.relayEnabled = action.payload
+    },
+    setClientEnabled: (state, action: PayloadAction<boolean>) => {
+      state.clientEnabled = action.payload
+    },
   },
   extraReducers: (builder) => {},
 })
@@ -152,6 +164,8 @@ const {
   setRelays,
   setCircuitInUse,
   setMyIp,
+  setRelayEnabled,
+  setClientEnabled,
 } = globalStore.actions
 
 type Circuit = {

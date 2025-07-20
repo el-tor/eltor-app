@@ -35,14 +35,7 @@ export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
   const dispatch = useDispatch()
-  const {
-    isRunning,
-    loading: isLoadingActivate,
-    isLoadingDeactivate,
-    isAnyModeRunning,
-    activate,
-    deactivate,
-  } = useEltord({ mode: 'client' })
+
   const {
     logsClient,
     logsRelay,
@@ -51,7 +44,21 @@ export const Connect = () => {
     circuits,
     circuitInUse,
     activeMode,
+    relayEnabled,
+    clientEnabled,
   } = useSelector((state) => state.global)
+  const mode =
+    relayEnabled && clientEnabled ? 'both' : relayEnabled ? 'relay' : 'client'
+  const {
+    isRunning,
+    loading: isLoadingActivate,
+    isLoadingDeactivate,
+    activate,
+    deactivate,
+  } = useEltord({
+    mode,
+  })
+
   const preRef = useRef<HTMLPreElement>(null)
   // const [logs, setLogs] = useState<LogEntry[]>([])
 
@@ -93,7 +100,7 @@ export const Connect = () => {
             color="green"
             loading={loading || isLoadingActivate}
           >
-            {isRunning ? 'Client Active' : 'Activate Client'}
+            {isRunning ? 'Active' : 'Activate'}
           </Button>
 
           <Button
@@ -122,8 +129,10 @@ export const Connect = () => {
             color="red"
             loading={loading || isLoadingDeactivate}
           >
-            Deactivate Client
+            Deactivate
           </Button>
+
+          {mode}
 
           {isTauri() && (
             <Button
@@ -144,7 +153,7 @@ export const Connect = () => {
             </Button>
           )}
 
-          <Button
+          {/* <Button
             onClick={() => {
               console.log('🧪 Debug: Current Redux state:')
               console.log('  - Client logs:', logsClient?.length)
@@ -158,7 +167,7 @@ export const Connect = () => {
             size="sm"
           >
             Debug Clear All
-          </Button>
+          </Button> */}
         </Group>
 
         {/* <Title order={3}>{clientActive ? "Connected" : "Not connected"}</Title>
@@ -177,11 +186,24 @@ export const Connect = () => {
         /> */}
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
-          {circuitInUse.id && isRunning && (
-            <Text>Circuit: {circuitInUse.id}</Text>
-          )}
-          <Text>Client Status: {isRunning ? 'Running' : 'Stopped'}</Text>
-          <Circle color={isRunning ? 'lightgreen' : '#FF6347'} />
+
+          <Stack align="left" gap="2px">
+            <Group>
+              <Text>Client</Text>
+              <Circle
+                color={isRunning && clientEnabled ? 'lightgreen' : '#FF6347'}
+              />
+            </Group>
+            <Group>
+              <Text>Relay</Text>
+              <Circle
+                color={isRunning && relayEnabled ? 'lightgreen' : '#FF6347'}
+              />
+            </Group>
+            {circuitInUse.id && isRunning && (
+              <Text>Circuit: {circuitInUse.id}</Text>
+            )}
+          </Stack>
         </Group>
       </Group>
       <MapComponent h={500} />
@@ -201,7 +223,7 @@ export const Connect = () => {
             ref={preRef}
             style={{
               backgroundColor: '#1e1e1e',
-              height: '300px',
+              height: '260px',
               borderRadius: 4,
               fontFamily: 'monospace',
               color: '#d4d4d4',
@@ -213,7 +235,7 @@ export const Connect = () => {
             }}
           >
             <LogViewer
-              height="300px"
+              height="260px"
               className="mt-[-130px] z-10 relative max-w-full"
               mode="client"
               scroll={false}

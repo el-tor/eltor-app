@@ -11,9 +11,10 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord, create_app_state, deactivate_eltord, get_eltord_status, get_log_receiver,
-    initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup, torrc_parser,
-    AppState as BackendAppState, EltorStatus, IpLocationResponse, LogEntry, PathConfig,
+    activate_eltord, initialize_app_state, deactivate_eltord, get_eltord_status, get_log_receiver,
+    init_ip_database, initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup, torrc_parser,
+    AppState, EltordStatusResponse, IpLocationResponse, ListTransactionsResponse, LogEntry,
+    MessageResponse, WalletBalanceResponse, PathConfig, EltorStatus,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -41,14 +42,14 @@ impl From<LogEntry> for TauriLogEntry {
 // Simplified state wrapper for Tauri
 #[derive(Clone)]
 struct TauriState {
-    backend_state: Arc<BackendAppState>,
+    backend_state: Arc<AppState>,
     log_listener_active: Arc<tokio::sync::Mutex<bool>>,
     lightning_node: Arc<tokio::sync::Mutex<Option<lightning::LightningNode>>>,
 }
 
 impl TauriState {
     fn new() -> Self {
-        let backend_state = create_app_state(true); // Enable embedded phoenixd for Tauri
+        let backend_state = eltor_backend::create_app_state(true); // Enable embedded phoenixd for Tauri
         Self {
             backend_state: Arc::new(backend_state),
             log_listener_active: Arc::new(tokio::sync::Mutex::new(false)),
@@ -90,12 +91,19 @@ async fn activate_eltord_invoke(
     tauri_state: State<'_, TauriState>,
     app_handle: AppHandle,
     torrc_file_name: String,
-    mode: EltorMode,
+    mode: String, // Accept as string and convert to EltorMode
 ) -> Result<String, String> {
     println!(
         "🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}",
         torrc_file_name, mode
     );
+
+    // Convert string mode to EltorMode
+    let eltor_mode = match mode.as_str() {
+        "client" => EltorMode::Client,
+        "relay" => EltorMode::Relay,
+        _ => return Err(format!("Invalid mode: {}. Expected 'client' or 'relay'", mode)),
+    };
 
     let backend_state = tauri_state.backend_state.clone();
 
@@ -105,7 +113,7 @@ async fn activate_eltord_invoke(
     );
 
     // Use backend wrapper function with mode parameter
-    match activate_eltord((*backend_state).clone(), mode).await {
+    match activate_eltord((*backend_state).clone(), eltor_mode).await {
         Ok(message) => {
             println!("✅ Backend activation successful: {}", message);
 
@@ -531,14 +539,8 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
-                    match activate_eltord(
-                        tauri_state,
-                        app_handle.clone(),
-                        None,
-                        Some("client".to_string()),
-                    )
-                    .await
-                    {
+                    let backend_state = tauri_state.backend_state.clone();
+                    match activate_eltord((*backend_state).clone(), EltorMode::Client).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-activated", &msg);
@@ -554,7 +556,8 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
-                    match deactivate_eltord(tauri_state, app_handle.clone()).await {
+                    let backend_state = tauri_state.backend_state.clone();
+                    match deactivate_eltord((*backend_state).clone(), EltorMode::Client).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-deactivated", &msg);
@@ -618,9 +621,10 @@ fn main() {
             // Initialize phoenixd asynchronously after the runtime is available
             let app_handle = app.handle().clone();
             let state_for_init = tauri_state.clone();
-            let backend_state = tauri_state.backend_state.clone();
 
             tauri::async_runtime::spawn(async move {
+                let backend_state = state_for_init.backend_state.clone();
+
                 // Clean up any processes using our ports
                 println!("🧹 Starting port cleanup...");
                 if let Err(e) = ports::cleanup_ports(&*backend_state).await {
