@@ -26,6 +26,8 @@ export const Relay = () => {
   const [loading, setLoading] = useState(false)
   const {
     isRunning: isRelayRunning,
+    loading: isRelayLoading,
+    isLoadingDeactivate,
     isAnyModeRunning,
     activate,
     deactivate,
@@ -80,7 +82,7 @@ export const Relay = () => {
           onClick={activate}
           disabled={isRelayRunning || loading}
           color="green"
-          loading={loading}
+          loading={loading || isRelayLoading}
         >
           {isRelayRunning ? 'Relay Active' : 'Activate Relay'}
         </Button>
@@ -109,7 +111,7 @@ export const Relay = () => {
           }}
           disabled={!isRelayRunning || loading}
           color="red"
-          loading={loading}
+          loading={loading || isLoadingDeactivate}
         >
           Deactivate Relay
         </Button>

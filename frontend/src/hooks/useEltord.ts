@@ -11,6 +11,7 @@ interface UseEltordOptions {
 export function useEltord(options: UseEltordOptions) {
   const [isRunning, setIsRunning] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [isLoadingDeactivate, setLoadingDeactivate] = useState(false)
   const dispatch = useDispatch()
   const { clientActive, relayActive } = useSelector((state) => state.global)
 
@@ -73,7 +74,7 @@ export function useEltord(options: UseEltordOptions) {
 
   const deactivate = async () => {
     console.log(`🛑 [useEltord] Starting deactivation for mode: ${mode}`)
-    setLoading(true)
+    setLoadingDeactivate(true)
     try {
       // Both Tauri and web mode now support mode-specific deactivation
       console.log(`📡 [useEltord] Calling apiService.deactivateEltord for ${mode}`)
@@ -102,7 +103,7 @@ export function useEltord(options: UseEltordOptions) {
       
       throw error
     } finally {
-      setLoading(false)
+      setLoadingDeactivate(false)
       console.log(`🏁 [useEltord] Finished deactivation attempt for ${mode}`)
     }
   }
@@ -206,6 +207,7 @@ export function useEltord(options: UseEltordOptions) {
     isRunning: isModeActive, // This specific mode is running
     isAnyModeRunning, // Any mode is running  
     loading, 
+    isLoadingDeactivate,
     activate, 
     deactivate, 
     checkStatus 

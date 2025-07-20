@@ -35,7 +35,14 @@ export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
   const dispatch = useDispatch()
-  const { isRunning, isAnyModeRunning, activate, deactivate } = useEltord({mode: 'client'})
+  const {
+    isRunning,
+    loading: isLoadingActivate,
+    isLoadingDeactivate,
+    isAnyModeRunning,
+    activate,
+    deactivate,
+  } = useEltord({ mode: 'client' })
   const {
     logsClient,
     logsRelay,
@@ -84,7 +91,7 @@ export const Connect = () => {
             onClick={activate}
             disabled={isRunning || loading}
             color="green"
-            loading={loading}
+            loading={loading || isLoadingActivate}
           >
             {isRunning ? 'Client Active' : 'Activate Client'}
           </Button>
@@ -113,7 +120,7 @@ export const Connect = () => {
             }}
             disabled={!isRunning || loading}
             color="red"
-            loading={loading}
+            loading={loading || isLoadingDeactivate}
           >
             Deactivate Client
           </Button>
