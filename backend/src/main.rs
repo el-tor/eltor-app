@@ -3,48 +3,12 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use chrono::Utc;
-use eltor_backend::state::{AppState, LogEntry, MessageResponse, StatusResponse};
-use log::{Log, Metadata, Record};
+use eltor_backend::{setup_broadcast_logger, state::MessageResponse};
 use std::env;
 use tower_http::cors::CorsLayer;
 
 use eltor_backend::routes::ip;
 use eltor_backend::static_files;
-
-// Custom logger that captures all log messages and sends them to the broadcast channel
-struct BroadcastLogger {
-    state: AppState,
-}
-
-impl BroadcastLogger {
-    fn new(state: AppState) -> Self {
-        Self { state }
-    }
-}
-
-impl Log for BroadcastLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true // Capture all log levels
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            let log_entry = LogEntry {
-                timestamp: Utc::now(),
-                level: record.level().to_string(),
-                message: format!("{}", record.args()),
-                source: record.target().to_string(),
-                mode: Some("client".to_string()), // Default to client, could be enhanced
-            };
-            self.state.add_log(log_entry);
-        }
-    }
-
-    fn flush(&self) {
-        // No-op for our use case
-    }
-}
 
 async fn health_check() -> ResponseJson<MessageResponse> {
     ResponseJson(MessageResponse {
@@ -67,15 +31,9 @@ async fn main() {
     let mut state = eltor_backend::create_app_state(use_phoenixd_embedded);
 
     // Set up custom logger to capture ALL logs (including from eltor library) BEFORE anything else
-    let broadcast_logger = BroadcastLogger::new(state.clone());
-
-    // Initialize the custom logger FIRST to capture all subsequent log output
-    if let Err(e) = log::set_boxed_logger(Box::new(broadcast_logger)) {
-        eprintln!("⚠️  Failed to set custom logger: {}", e);
+    if let Err(e) = setup_broadcast_logger(state.clone()) {
+        eprintln!("⚠️  Failed to set up broadcast logger: {}", e);
         eprintln!("   Eltor logs will go to stdout, only manual logs will stream to SSE");
-    } else {
-        log::set_max_level(log::LevelFilter::Trace); // Capture all log levels
-        println!("🎯 Custom logger installed successfully - ALL logs will stream to SSE");
     }
 
     // Print environment variables for debugging
@@ -99,6 +57,13 @@ async fn main() {
         .unwrap_or_else(|_| "5174".to_string())
         .parse::<u16>()
         .unwrap_or(5174);
+
+    // Kill any process using the backend port before starting
+    println!("🔧 Cleaning up backend port {}...", backend_port);
+    if let Err(e) = eltor_backend::ports::cleanup_backend_port(backend_port).await {
+        eprintln!("⚠️  Backend port cleanup failed: {}", e);
+        eprintln!("   Continuing with startup... server may fail to bind if port is still in use");
+    }
 
     let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
 
@@ -143,8 +108,9 @@ async fn main() {
     }
 
     // Initialize shared EltorManager
+    let state_arc = std::sync::Arc::new(tokio::sync::RwLock::new(state.clone()));
     let eltor_manager = eltor_backend::eltor::EltorManager::new(
-        std::sync::Arc::new(tokio::sync::RwLock::new(state.clone())),
+        state_arc,
         path_config.clone(),
     );
     state.set_eltor_manager(eltor_manager);

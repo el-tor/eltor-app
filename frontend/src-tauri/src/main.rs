@@ -5,6 +5,7 @@ use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
 use std::env;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
@@ -12,9 +13,9 @@ use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, Sta
 // Import backend library
 use eltor_backend::{
     activate_eltord, initialize_app_state, deactivate_eltord, get_eltord_status, get_log_receiver,
-    init_ip_database, initialize_phoenixd, lightning, lookup_ip_location, ports, shutdown_cleanup, torrc_parser,
-    AppState, EltordStatusResponse, IpLocationResponse, ListTransactionsResponse, LogEntry,
-    MessageResponse, WalletBalanceResponse, PathConfig, EltorStatus,
+    initialize_phoenixd, lightning, lookup_ip_location, ports, setup_broadcast_logger, 
+    shutdown_cleanup, torrc_parser, AppState, IpLocationResponse, LogEntry,
+    PathConfig,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -42,7 +43,7 @@ impl From<LogEntry> for TauriLogEntry {
 // Simplified state wrapper for Tauri
 #[derive(Clone)]
 struct TauriState {
-    backend_state: Arc<AppState>,
+    backend_state: Arc<RwLock<AppState>>,
     log_listener_active: Arc<tokio::sync::Mutex<bool>>,
     lightning_node: Arc<tokio::sync::Mutex<Option<lightning::LightningNode>>>,
 }
@@ -50,15 +51,34 @@ struct TauriState {
 impl TauriState {
     fn new() -> Self {
         let backend_state = eltor_backend::create_app_state(true); // Enable embedded phoenixd for Tauri
+        
+        // Set up the broadcast logger to capture ALL logs (including from eltor library)
+        if let Err(e) = setup_broadcast_logger(backend_state.clone()) {
+            eprintln!("⚠️  Failed to set up broadcast logger: {}", e);
+            eprintln!("   Eltor logs will go to stdout, only manual logs will stream to frontend");
+        }
+        
         Self {
-            backend_state: Arc::new(backend_state),
+            backend_state: Arc::new(RwLock::new(backend_state)),
             log_listener_active: Arc::new(tokio::sync::Mutex::new(false)),
             lightning_node: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
 
+    async fn initialize(&self) -> Result<(), String> {
+        initialize_app_state(self.backend_state.clone()).await?;
+        self.initialize_phoenixd().await
+    }
+
     async fn initialize_phoenixd(&self) -> Result<(), String> {
-        initialize_phoenixd((*self.backend_state).clone()).await
+        let app_state = self.backend_state.read().await;
+        if app_state.wallet_state.use_phoenixd_embedded {
+            drop(app_state);
+            initialize_phoenixd(self.backend_state.clone()).await
+        } else {
+            println!("🔗 Using external phoenixd instance");
+            Ok(())
+        }
     }
 }
 
@@ -90,30 +110,23 @@ async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
 async fn activate_eltord_invoke(
     tauri_state: State<'_, TauriState>,
     app_handle: AppHandle,
-    torrc_file_name: String,
     mode: String, // Accept as string and convert to EltorMode
 ) -> Result<String, String> {
-    println!(
-        "🚀 activate_eltord command called with torrc_file_name: {:?}, mode: {:?}",
-        torrc_file_name, mode
-    );
-
     // Convert string mode to EltorMode
     let eltor_mode = match mode.as_str() {
         "client" => EltorMode::Client,
         "relay" => EltorMode::Relay,
-        _ => return Err(format!("Invalid mode: {}. Expected 'client' or 'relay'", mode)),
+        "both" => EltorMode::Both,
+        _ => return Err(format!("Invalid mode: {}. Expected 'client', 'relay', or 'both'", mode)),
     };
 
     let backend_state = tauri_state.backend_state.clone();
 
-    println!(
-        "🔧 Current working directory: {:?}",
-        std::env::current_dir()
-    );
+    println!("🔧 Current working directory: {:?}", std::env::current_dir());
+    println!("🚀 Starting activation with mode: {:?}", eltor_mode);
 
-    // Use backend wrapper function with mode parameter
-    match activate_eltord((*backend_state).clone(), eltor_mode).await {
+    // Use the backend activate function directly
+    match activate_eltord(backend_state.clone(), eltor_mode).await {
         Ok(message) => {
             println!("✅ Backend activation successful: {}", message);
 
@@ -125,20 +138,39 @@ async fn activate_eltord_invoke(
 
                 // Set up single log listener for this activation
                 let listener_flag = tauri_state.log_listener_active.clone();
-                let backend_state_clone = (*backend_state).clone();
+                let backend_state_clone = backend_state.clone();
                 tokio::spawn(async move {
-                    let mut log_receiver = get_log_receiver(&backend_state_clone);
-                    while let Ok(log_entry) = log_receiver.recv().await {
-                        let tauri_log: TauriLogEntry = log_entry.into();
-                        if let Err(e) = app_handle.emit("eltord-log", &tauri_log) {
-                            println!("Failed to emit log event: {}", e);
-                            break;
+                    println!("📡 Log listener task starting...");
+                    let mut log_receiver = get_log_receiver(backend_state_clone).await;
+                    println!("📡 Log receiver obtained, starting listen loop...");
+                    
+                    let mut log_count = 0;
+                    loop {
+                        match log_receiver.recv().await {
+                            Ok(log_entry) => {
+                                log_count += 1;
+                                println!("📡 Log #{}: Received log entry from backend: {:?}", log_count, log_entry.message);
+                                let tauri_log: TauriLogEntry = log_entry.into();
+                                match app_handle.emit("eltord-log", &tauri_log) {
+                                    Ok(_) => {
+                                        println!("📡 Log #{}: Successfully emitted eltord-log event", log_count);
+                                    }
+                                    Err(e) => {
+                                        println!("❌ Log #{}: Failed to emit log event: {}", log_count, e);
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                println!("❌ Log receiver error: {}", e);
+                                break;
+                            }
                         }
                     }
 
                     // Reset flag when listener stops
                     *listener_flag.lock().await = false;
-                    println!("📡 Log listener task stopped");
+                    println!("📡 Log listener task stopped after receiving {} logs", log_count);
                 });
             } else {
                 println!("📡 Log listener already active, skipping spawn");
@@ -157,14 +189,33 @@ async fn activate_eltord_invoke(
 async fn deactivate_eltord_invoke(
     tauri_state: State<'_, TauriState>,
     _app_handle: AppHandle,
+    mode: String, // Add mode parameter
 ) -> Result<String, String> {
-    println!("deactivate_eltord command called");
+    println!("deactivate_eltord command called with mode: {:?}", mode);
+
+    // Convert string mode to EltorMode
+    let eltor_mode = match mode.as_str() {
+        "client" => EltorMode::Client,
+        "relay" => EltorMode::Relay,
+        "both" => EltorMode::Both,
+        _ => return Err(format!("Invalid mode: {}. Expected 'client', 'relay', or 'both'", mode)),
+    };
 
     let backend_state = tauri_state.backend_state.clone();
 
-    // Use backend wrapper function
-    // TODO pass in mode from UX
-    deactivate_eltord((*backend_state).clone(), EltorMode::Client).await
+    println!("🛑 Starting deactivation with mode: {:?}", eltor_mode);
+
+    // Use the backend deactivate function directly
+    match deactivate_eltord(backend_state.clone(), eltor_mode).await {
+        Ok(message) => {
+            println!("✅ Backend deactivation successful: {}", message);
+            Ok(message)
+        }
+        Err(e) => {
+            println!("❌ Backend deactivation failed: {}", e);
+            Err(e)
+        }
+    }
 }
 
 #[command]
@@ -174,7 +225,7 @@ async fn get_eltord_status_invoke(
     let backend_state = tauri_state.backend_state.clone();
 
     // Use backend wrapper function
-    let status = get_eltord_status((*backend_state).clone()).await;
+    let status = get_eltord_status(backend_state.clone()).await;
 
     // Convert backend logs to Tauri format
     let tauri_logs: Vec<TauriLogEntry> = status
@@ -183,9 +234,11 @@ async fn get_eltord_status_invoke(
         .map(|log| log.into())
         .collect();
 
+    // Return the new status structure with client_running and relay_running
     Ok(serde_json::json!({
         "running": status.running,
-        "pid": status.pid,
+        "client_running": status.client_running,
+        "relay_running": status.relay_running,
         "recent_logs": tauri_logs
     }))
 }
@@ -272,7 +325,7 @@ async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, Stri
     let backend_state = tauri_state.backend_state.clone();
 
     // Perform comprehensive cleanup
-    shutdown_cleanup((*backend_state).clone()).await?;
+    shutdown_cleanup(backend_state.clone()).await?;
 
     Ok("App shutdown cleanup completed".to_string())
 }
@@ -540,7 +593,8 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
                     let backend_state = tauri_state.backend_state.clone();
-                    match activate_eltord((*backend_state).clone(), EltorMode::Client).await {
+                    // Use Client mode as default for tray activation
+                    match activate_eltord(backend_state.clone(), EltorMode::Client).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-activated", &msg);
@@ -557,7 +611,8 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
                     let backend_state = tauri_state.backend_state.clone();
-                    match deactivate_eltord((*backend_state).clone(), EltorMode::Client).await {
+                    // Use Client mode as default for tray deactivation
+                    match deactivate_eltord(backend_state.clone(), EltorMode::Client).await {
                         Ok(msg) => {
                             println!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-deactivated", &msg);
@@ -623,11 +678,15 @@ fn main() {
             let state_for_init = tauri_state.clone();
 
             tauri::async_runtime::spawn(async move {
-                let backend_state = state_for_init.backend_state.clone();
+                // Initialize the state with EltorManager first
+                if let Err(e) = state_for_init.initialize().await {
+                    eprintln!("❌ Failed to initialize Tauri state: {}", e);
+                    return;
+                }
 
                 // Clean up any processes using our ports
                 println!("🧹 Starting port cleanup...");
-                if let Err(e) = ports::cleanup_ports(&*backend_state).await {
+                if let Err(e) = ports::cleanup_ports_with_torrc("torrc").await {
                     eprintln!("⚠️  Port cleanup failed: {}", e);
                     eprintln!("   Continuing with startup...");
                 }
@@ -698,9 +757,7 @@ fn main() {
                     }
                 };
                 if ip_db_path.exists() {
-                    if let Err(e) = eltor_backend::init_ip_database(ip_db_path) {
-                        eprintln!("⚠️  Failed to initialize IP database: {}", e);
-                    }
+                    println!("✅ IP database file found at: {:?}", ip_db_path);
                 } else {
                     eprintln!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
                 }
@@ -718,7 +775,6 @@ fn main() {
             }
         })
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_log::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             activate_eltord_invoke,
             deactivate_eltord_invoke,

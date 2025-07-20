@@ -11,7 +11,7 @@ import {
   Badge,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
 import {
@@ -35,6 +35,7 @@ export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
   const dispatch = useDispatch()
+  const navigate = useNavigate();
 
   const {
     logsClient,
@@ -131,10 +132,14 @@ export const Connect = () => {
           >
             Deactivate
           </Button>
-
-          {mode}
-
-          {isTauri() && (
+            <Badge 
+            ml="xl" 
+            style={{ cursor: 'pointer' }} 
+            onClick={() => navigate('/relay')}
+            >
+            Mode: {mode === "both" ? "Client+Relay" : mode}
+            </Badge>
+          {/* {isTauri() && (
             <Button
               onClick={async () => {
                 try {
@@ -151,7 +156,8 @@ export const Connect = () => {
             >
               Test Tauri Event
             </Button>
-          )}
+          )} */}
+         
 
           {/* <Button
             onClick={() => {
@@ -169,7 +175,7 @@ export const Connect = () => {
             Debug Clear All
           </Button> */}
         </Group>
-
+       
         {/* <Title order={3}>{clientActive ? "Connected" : "Not connected"}</Title>
         <Switch
           checked={clientActive}
@@ -195,7 +201,7 @@ export const Connect = () => {
               />
             </Group>
             <Group>
-              <Text>Relay</Text>
+              <Text>Relay&nbsp;</Text>
               <Circle
                 color={isRunning && relayEnabled ? 'lightgreen' : '#FF6347'}
               />

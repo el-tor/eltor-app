@@ -417,3 +417,50 @@ pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String>
 
     Ok(ports)
 }
+
+/// Kill any process using the backend server port
+pub async fn cleanup_backend_port(port: u16) -> Result<(), String> {
+    println!("🔍 Checking if backend port {} is in use...", port);
+    
+    match is_port_in_use(port) {
+        Ok(false) => {
+            println!("✅ Backend port {} is available", port);
+            Ok(())
+        }
+        Ok(true) => {
+            println!("⚠️  Backend port {} is in use, attempting to free it...", port);
+            
+            match get_pid_using_port(port) {
+                Ok(Some(pid)) => {
+                    println!("🔍 Found process {} using backend port {}", pid, port);
+                    match kill_process(pid) {
+                        Ok(_) => {
+                            println!("✅ Successfully killed process {} on backend port {}", pid, port);
+                            Ok(())
+                        }
+                        Err(e) => {
+                            let error = format!("Failed to kill process {} on backend port {}: {}", pid, port, e);
+                            println!("❌ {}", error);
+                            Err(error)
+                        }
+                    }
+                }
+                Ok(None) => {
+                    let error = format!("Backend port {} is in use but no PID found", port);
+                    println!("⚠️  {}", error);
+                    Err(error)
+                }
+                Err(e) => {
+                    let error = format!("Failed to get PID for backend port {}: {}", port, e);
+                    println!("❌ {}", error);
+                    Err(error)
+                }
+            }
+        }
+        Err(e) => {
+            let error = format!("Failed to check backend port {}: {}", port, e);
+            println!("❌ {}", error);
+            Err(error)
+        }
+    }
+}
