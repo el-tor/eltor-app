@@ -215,6 +215,7 @@ impl EltorManager {
 
         let mode_str = mode.to_string().to_string();
         let torrc_path_str = torrc_path.to_string_lossy().to_string();
+        let app_data_dir = self.path_config.app_data_dir.clone();
 
         // Spawn the eltor library as an abortable Tokio task
         let task_handle = tokio::spawn(async move {
@@ -228,6 +229,14 @@ impl EltorManager {
             ];
 
             info!("🚀 Task starting eltor library {} with args: {:?}", mode_str, args);
+
+            // Set working directory to app data directory to ensure eltor library can write files
+            if let Some(data_dir) = app_data_dir.as_ref() {
+                if let Err(e) = std::env::set_current_dir(data_dir) {
+                    warn!("⚠️ Failed to set working directory for eltor task: {}", e);
+                    warn!("   Eltor library may fail to write files in DMG context");
+                }
+            }
 
             // Run eltor library - this will block until shutdown or abort
             eltor::run_with_args(args).await;

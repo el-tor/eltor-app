@@ -111,7 +111,15 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
     
     println!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
     
+    // Set phoenixd working directory to app data directory to ensure it can write files
+    let phoenixd_working_dir = path_config.data_dir.join("phoenixd");
+    if let Err(e) = std::fs::create_dir_all(&phoenixd_working_dir) {
+        println!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
+        println!("   Phoenixd will use current directory for data files");
+    }
+    
     let mut child = TokioCommand::new(&phoenixd_binary)
+        .current_dir(&phoenixd_working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

@@ -75,18 +75,25 @@ impl PathConfig {
     /// Ensure torrc files exist, creating from templates if needed
     pub fn ensure_torrc_files(&self) -> Result<(), String> {
         // Create data directory if it doesn't exist
-        fs::create_dir_all(&self.data_dir)
-            .map_err(|e| format!("Failed to create data directory: {}", e))?;
+        if let Err(e) = fs::create_dir_all(&self.data_dir) {
+            eprintln!("⚠️ Warning: Failed to create data directory {:?}: {}", self.data_dir, e);
+            return Err(format!("Failed to create data directory: {}", e));
+        }
 
         // Create Tor subdirectories that will be needed for logs and other data
         let tor_data_dir = self.data_dir.join("tor_data");
         let client_dir = tor_data_dir.join("client");
         let relay_dir = tor_data_dir.join("relay");
         
-        fs::create_dir_all(&client_dir)
-            .map_err(|e| format!("Failed to create client directory: {}", e))?;
-        fs::create_dir_all(&relay_dir)
-            .map_err(|e| format!("Failed to create relay directory: {}", e))?;
+        if let Err(e) = fs::create_dir_all(&client_dir) {
+            eprintln!("⚠️ Warning: Failed to create client directory {:?}: {}", client_dir, e);
+            return Err(format!("Failed to create client directory: {}", e));
+        }
+        
+        if let Err(e) = fs::create_dir_all(&relay_dir) {
+            eprintln!("⚠️ Warning: Failed to create relay directory {:?}: {}", relay_dir, e);
+            return Err(format!("Failed to create relay directory: {}", e));
+        }
 
         let torrc_path = self.get_torrc_path(None);
         let torrc_relay_path = self.get_torrc_relay_path();
@@ -107,8 +114,8 @@ impl PathConfig {
     /// Get the data directory for a specific torrc file
     pub fn get_torrc_data_dir(&self, torrc_filename: &str) -> PathBuf {
         // For backward compatibility with existing code that uses "./bin/{torrc_filename}"
-        if torrc_filename.starts_with("data/") {
-            self.data_dir.join(&torrc_filename[5..])
+        if let Some(filename) = torrc_filename.strip_prefix("data/") {
+            self.data_dir.join(filename)
         } else {
             self.data_dir.join(torrc_filename)
         }
@@ -190,9 +197,17 @@ fn find_backend_dir(current_dir: &Path) -> Result<PathBuf, String> {
     } else if current_dir.join("backend").exists() {
         Ok(current_dir.join("backend"))
     } else if current_dir.ends_with("src-tauri") {
-        Ok(current_dir.parent().unwrap().parent().unwrap().join("backend"))
+        // Safely navigate parent directories with error handling
+        current_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.join("backend"))
+            .ok_or_else(|| "Cannot navigate to backend directory from src-tauri".to_string())
     } else if current_dir.ends_with("frontend") {
-        Ok(current_dir.parent().unwrap().join("backend"))
+        current_dir
+            .parent()
+            .map(|p| p.join("backend"))
+            .ok_or_else(|| "Cannot navigate to backend directory from frontend".to_string())
     } else if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let path = Path::new(&manifest_dir);
         if path.ends_with("backend") {
@@ -222,10 +237,22 @@ fn get_app_data_dir() -> Result<PathBuf, String> {
         .ok_or("Failed to get data directory")?
         .join("eltor");
 
-    fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-
-    Ok(app_data_dir)
+    // Try to create app data directory with fallback to temp directory for DMG compatibility
+    match fs::create_dir_all(&app_data_dir) {
+        Ok(_) => Ok(app_data_dir),
+        Err(e) => {
+            eprintln!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
+            eprintln!("   This might be due to running from a read-only DMG. Using temp directory fallback...");
+            
+            // Fallback to temporary directory
+            let temp_dir = std::env::temp_dir().join("eltor");
+            fs::create_dir_all(&temp_dir)
+                .map_err(|e| format!("Failed to create temp data directory: {}", e))?;
+            
+            eprintln!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
+            Ok(temp_dir)
+        }
+    }
 }
 
 fn create_torrc_from_template(torrc_path: &Path, bin_dir: &Path) -> Result<(), String> {
@@ -280,7 +307,15 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
 
     // Get the appropriate app data directory for Tor data
     let default_tor_data_dir = get_app_data_dir()
-        .map(|dir| dir.join("tor_data").to_string_lossy().to_string())
+        .map(|dir| {
+            let tor_data_path = dir.join("tor_data");
+            // Ensure the directory exists and is writable
+            if let Err(e) = fs::create_dir_all(&tor_data_path) {
+                println!("⚠️ Warning: Could not create tor data directory {:?}: {}", tor_data_path, e);
+                return "/tmp/tor".to_string();
+            }
+            tor_data_path.to_string_lossy().to_string()
+        })
         .unwrap_or_else(|_| "/tmp/tor".to_string());
 
     // Use environment variables or defaults

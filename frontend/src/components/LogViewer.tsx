@@ -184,7 +184,9 @@ const LogViewer: React.FC<LogViewerProps> = ({
             No {mode} logs yet. Start the eltord {mode} process to see logs here.
           </div>
         ) : (
-          logs?.map((log, index) => {
+          logs
+            ?.filter((log) => !log.message.includes('`window'))
+            ?.map((log, index) => {
             const cleanedMessage = cleanLogMessage(log.message, log.level, log.timestamp)
             const isError = log.level.toUpperCase() === 'ERROR'
             

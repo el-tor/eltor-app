@@ -689,9 +689,42 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
         .ok_or("Failed to get app data directory")?
         .join("eltor");
 
-    // Ensure app data directory exists
-    std::fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    // Ensure app data directory exists with fallback to temp directory
+    if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
+        println!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
+        println!("   This might be due to running from a read-only DMG. Trying temp directory fallback...");
+        
+        // Fallback to temporary directory
+        let temp_dir = std::env::temp_dir().join("eltor");
+        std::fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp data directory: {}", e))?;
+        println!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
+        
+        // Use temp directory for both data and app_data
+        let bin_dir = if let Some(app_handle) = app_handle {
+            match app_handle.path().resource_dir() {
+                Ok(resource_dir) => resource_dir,
+                Err(_) => {
+                    // Fallback to a safe default when resource directory is not accessible
+                    match std::env::current_dir() {
+                        Ok(current_dir) => current_dir.join("../../backend/bin"),
+                        Err(_) => std::env::temp_dir().join("eltor-bin"), // Final fallback
+                    }
+                }
+            }
+        } else {
+            match std::env::current_dir() {
+                Ok(current_dir) => current_dir.join("../../backend/bin"),
+                Err(_) => std::env::temp_dir().join("eltor-bin"), // Final fallback
+            }
+        };
+        
+        return Ok(PathConfig {
+            bin_dir,
+            data_dir: temp_dir.clone(),
+            app_data_dir: Some(temp_dir),
+        });
+    }
 
     if let Some(app_handle) = app_handle {
         // Try to use Tauri's resource directory for bundled resources (bins, templates)
