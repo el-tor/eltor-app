@@ -4,7 +4,7 @@ import {
   Text,
   Loader,
   Group,
-  Switch,
+  Collapse,
   Center,
   Button,
   Box,
@@ -14,28 +14,24 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
-import {
-  setLogsClient,
-  setCircuits,
-  setCircuitInUse,
-  Circuit,
-  clearLogsClient,
-  clearAllLogs,
-} from '../globalStore'
+import { clearLogsClient } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
 // @ts-ignore
 import styles from '../globals.module.css'
 import MapComponent from '../components/Map/MapComponent'
 import './Connect.css'
 import { useEltord } from '../hooks/useEltord'
-import { isTauri } from '../utils/platform'
-import { LogEntry, apiService } from '../services/apiService'
+import { apiService } from '../services/apiService'
+import { useDisclosure } from '@mantine/hooks'
+import { IconChevronDown, IconExternalLink } from '@tabler/icons-react'
 
 export const Connect = () => {
   const params: any = useParams()
   const [loading, setLoading] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
   const dispatch = useDispatch()
-  const navigate = useNavigate();
+  const navigate = useNavigate()
+  const [opened, { toggle }] = useDisclosure(false)
 
   const {
     logsClient,
@@ -78,6 +74,21 @@ export const Connect = () => {
     console.log('  - Relay active:', relayActive)
     console.log('  - Active mode:', activeMode)
   }, [logsClient, logsRelay, clientActive, relayActive, activeMode])
+
+  // Fetch debug info on component mount
+  useEffect(() => {
+    const fetchDebugInfo = async () => {
+      try {
+        const info = await apiService.getDebugInfo()
+        setDebugInfo(info)
+        console.log('📋 Debug info loaded:', info)
+      } catch (error) {
+        console.error('❌ Failed to fetch debug info:', error)
+      }
+    }
+
+    fetchDebugInfo()
+  }, [])
 
   return (
     <Stack>
@@ -132,13 +143,13 @@ export const Connect = () => {
           >
             Deactivate
           </Button>
-            <Badge 
-            ml="xl" 
-            style={{ cursor: 'pointer' }} 
+          <Badge
+            ml="xl"
+            style={{ cursor: 'pointer' }}
             onClick={() => navigate('/relay')}
-            >
-            Mode: {mode === "both" ? "Client+Relay" : mode}
-            </Badge>
+          >
+            Mode: {mode === 'both' ? 'Client+Relay' : mode}
+          </Badge>
           {/* {isTauri() && (
             <Button
               onClick={async () => {
@@ -157,7 +168,6 @@ export const Connect = () => {
               Test Tauri Event
             </Button>
           )} */}
-         
 
           {/* <Button
             onClick={() => {
@@ -175,7 +185,7 @@ export const Connect = () => {
             Debug Clear All
           </Button> */}
         </Group>
-       
+
         {/* <Title order={3}>{clientActive ? "Connected" : "Not connected"}</Title>
         <Switch
           checked={clientActive}
@@ -256,6 +266,37 @@ export const Connect = () => {
           </Button>
         </Box>
       </Center>
+      <Box mx="auto" mb="xl">
+        <Group mb={5}>
+          <Button onClick={toggle} rightSection={<IconChevronDown size={14} />}>
+            Show Debug Info
+          </Button>
+          {debugInfo?.torrc_path && (
+            <Text size="sm" c="dimmed" style={{ cursor: 'pointer' }}>
+              Edit your config at the torrc path:{' '}
+              {mode === 'client'
+                ? debugInfo.torrc_path
+                : `${debugInfo.torrc_path}.relay`}
+            </Text>
+          )}
+        </Group>
+
+        <Collapse in={opened}>
+          <Text>
+            <pre
+              style={{
+                padding: '16px',
+                borderRadius: '4px',
+                overflow: 'auto',
+                fontSize: '14px',
+                fontFamily: 'monospace',
+              }}
+            >
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          </Text>
+        </Collapse>
+      </Box>
     </Stack>
   )
 }

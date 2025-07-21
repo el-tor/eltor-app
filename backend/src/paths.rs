@@ -1,7 +1,9 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use rand::Rng;
+
+use log::info;
+use crate::ip;
 
 /// Central path configuration for the application
 #[derive(Debug, Clone)]
@@ -31,12 +33,24 @@ impl PathConfig {
         if let (Some(bin_dir), Some(data_dir)) = (bin_dir_override, data_dir_override) {
             Ok(PathConfig {
                 bin_dir,
-                data_dir,
-                app_data_dir: None,
+                data_dir: data_dir.clone(),
+                app_data_dir: Some(data_dir),
             })
         } else {
             Self::new()
         }
+    }
+
+    /// Create a PathConfig specifically for Tauri applications with a resource directory
+    /// This is the main entry point for Tauri apps
+    pub fn for_tauri_with_resource_dir(resource_dir: PathBuf) -> Result<Self, String> {
+        let app_data_dir = get_app_data_dir()?;
+        
+        Ok(PathConfig {
+            bin_dir: resource_dir,
+            data_dir: app_data_dir.clone(),
+            app_data_dir: Some(app_data_dir),
+        })
     }
 
     /// Get the path to a torrc file
@@ -64,14 +78,26 @@ impl PathConfig {
         fs::create_dir_all(&self.data_dir)
             .map_err(|e| format!("Failed to create data directory: {}", e))?;
 
+        // Create Tor subdirectories that will be needed for logs and other data
+        let tor_data_dir = self.data_dir.join("tor_data");
+        let client_dir = tor_data_dir.join("client");
+        let relay_dir = tor_data_dir.join("relay");
+        
+        fs::create_dir_all(&client_dir)
+            .map_err(|e| format!("Failed to create client directory: {}", e))?;
+        fs::create_dir_all(&relay_dir)
+            .map_err(|e| format!("Failed to create relay directory: {}", e))?;
+
         let torrc_path = self.get_torrc_path(None);
         let torrc_relay_path = self.get_torrc_relay_path();
 
         if !torrc_path.exists() {
+            info!("path.rs torrc file does not exist. Creating torrc file at: {:?}", torrc_path);
             create_torrc_from_template(&torrc_path, &self.bin_dir)?;
         }
 
         if !torrc_relay_path.exists() {
+            info!("path.rs torrc.relay file does not exist. Creating torrc.relay file at: {:?}", torrc_relay_path);
             create_torrc_relay_from_template(&torrc_relay_path, &self.bin_dir)?;
         }
 
@@ -121,6 +147,27 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
         return Ok((base.join("bin"), base.join("bin/data"), None));
     }
 
+    // Check if we're in a Tauri bundled app context
+    if let Ok(exe_path) = env::current_exe() {
+        let exe_dir = exe_path.parent().ok_or("Failed to get executable directory")?;
+        
+        // Check if we're in a macOS app bundle
+        if exe_path.to_string_lossy().contains(".app/Contents/MacOS/") {
+            let app_data_dir = get_app_data_dir()?;
+            // In a macOS app bundle, resources are in ../Resources/
+            let resources_dir = exe_dir.join("../Resources");
+            if resources_dir.exists() {
+                return Ok((resources_dir, app_data_dir.clone(), Some(app_data_dir)));
+            }
+        }
+        
+        // Check if we're in a general bundled context (resources in same directory)
+        if exe_dir.join("torrc.template").exists() || exe_dir.join("phoenixd").exists() {
+            let app_data_dir = get_app_data_dir()?;
+            return Ok((exe_dir.to_path_buf(), app_data_dir.clone(), Some(app_data_dir)));
+        }
+    }
+
     // Development environment detection
     let backend_dir = find_backend_dir(&current_dir)?;
     let bin_dir = backend_dir.join("bin");
@@ -161,7 +208,12 @@ fn find_backend_dir(current_dir: &Path) -> Result<PathBuf, String> {
 fn is_tauri_context() -> bool {
     env::var("TAURI_ENV").is_ok() || 
     env::current_exe()
-        .map(|exe| exe.to_string_lossy().contains("tauri"))
+        .map(|exe| {
+            let exe_str = exe.to_string_lossy();
+            exe_str.contains("tauri") || 
+            exe_str.contains(".app/Contents/MacOS/") ||
+            exe_str.contains("eltor") // Our app name
+        })
         .unwrap_or(false)
 }
 
@@ -216,41 +268,48 @@ fn create_torrc_relay_from_template(torrc_relay_path: &Path, bin_dir: &Path) -> 
 fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
     use rand::Rng;
 
-    // Generate random nickname if not provided
-    let random_nickname: String = (0..12)
+    // Generate random nickname if not provided (12-19 chars, alphanumeric only)
+    let mut rng = rand::thread_rng();
+    let nickname_length = rng.gen_range(12..=19);
+    let random_nickname: String = (0..nickname_length)
         .map(|_| {
-            let mut rng = rand::thread_rng();
-            rng.gen_range(b'a'..=b'z') as char
+            let charset = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            charset[rng.gen_range(0..charset.len())] as char
         })
         .collect();
+
+    // Get the appropriate app data directory for Tor data
+    let default_tor_data_dir = get_app_data_dir()
+        .map(|dir| dir.join("tor_data").to_string_lossy().to_string())
+        .unwrap_or_else(|_| "/tmp/tor".to_string());
 
     // Use environment variables or defaults
     content = content.replace(
         "$APP_ELTOR_TOR_NICKNAME",
         &env::var("APP_ELTOR_TOR_NICKNAME")
-            .unwrap_or_else(|_| format!("eltor-{}", random_nickname)),
+            .unwrap_or(random_nickname),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_DATA_DIRECTORY",
         &env::var("APP_ELTOR_TOR_DATA_DIRECTORY")
-            .unwrap_or_else(|_| "/tmp/tor".to_string()),
+            .unwrap_or_else(|_| default_tor_data_dir.clone()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_SOCKS_PORT",
-        &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "9050".to_string()),
+        &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "18058".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_CONTROL_PORT",
-        &env::var("APP_ELTOR_TOR_CONTROL_PORT").unwrap_or_else(|_| "9051".to_string()),
+        &env::var("APP_ELTOR_TOR_CONTROL_PORT").unwrap_or_else(|_| "9992".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD",
         &env::var("APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD")
-            .unwrap_or_else(|_| "16:872860B76453A77D60CA2BB8C1A7042072093276A3D701AD684053EC4C".to_string()),
+            .unwrap_or_else(|_| "16:281EC5644A4F548A60D50A0DD4DF835FFD50EDED062FD270D7269943DA".to_string()),
     );
     
     content = content.replace(
@@ -278,41 +337,58 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
 
 /// Substitute variables in torrc.relay template
 fn substitute_torrc_relay_variables(mut content: String) -> Result<String, String> {
+    use rand::Rng;
+
+    // Generate random relay nickname if not provided (12-19 chars, alphanumeric only)
+    let mut rng = rand::thread_rng();
+    let nickname_length = rng.gen_range(12..=19);
+    let random_relay_nickname: String = (0..nickname_length)
+        .map(|_| {
+            let charset = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            charset[rng.gen_range(0..charset.len())] as char
+        })
+        .collect();
+
+    // Get the appropriate app data directory for Tor relay data
+    let default_tor_relay_data_dir = get_app_data_dir()
+        .map(|dir| dir.join("tor_data").join("relay").to_string_lossy().to_string())
+        .unwrap_or_else(|_| "/tmp/tor-relay".to_string());
+
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_NICKNAME",
-        &env::var("APP_ELTOR_TOR_RELAY_NICKNAME").unwrap_or_else(|_| "eltor-relay".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_NICKNAME").unwrap_or(random_relay_nickname),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_DATA_DIRECTORY",
         &env::var("APP_ELTOR_TOR_RELAY_DATA_DIRECTORY")
-            .unwrap_or_else(|_| "/tmp/tor-relay".to_string()),
+            .unwrap_or_else(|_| default_tor_relay_data_dir.clone()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_OR_PORT",
-        &env::var("APP_ELTOR_TOR_RELAY_OR_PORT").unwrap_or_else(|_| "9001".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_OR_PORT").unwrap_or_else(|_| "9996".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_CONTROL_PORT",
-        &env::var("APP_ELTOR_TOR_RELAY_CONTROL_PORT").unwrap_or_else(|_| "9052".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_CONTROL_PORT").unwrap_or_else(|_| "7781".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_SOCKS_PORT",
-        &env::var("APP_ELTOR_TOR_RELAY_SOCKS_PORT").unwrap_or_else(|_| "9150".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_SOCKS_PORT").unwrap_or_else(|_| "18057".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_HASHED_CONTROL_PASSWORD",
         &env::var("APP_ELTOR_TOR_RELAY_HASHED_CONTROL_PASSWORD")
-            .unwrap_or_else(|_| "16:872860B76453A77D60CA2BB8C1A7042072093276A3D701AD684053EC4C".to_string()),
+            .unwrap_or_else(|_| "16:281EC5644A4F548A60D50A0DD4DF835FFD50EDED062FD270D7269943DA".to_string()),
     );
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_ADDRESS",
-        &env::var("APP_ELTOR_TOR_RELAY_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_ADDRESS").unwrap_or_else(|_| ip::get_public_ip()),
     );
     
     content = content.replace(

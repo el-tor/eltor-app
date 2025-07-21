@@ -319,6 +319,21 @@ class ApiService {
       })
     }
   }
+
+  // Debug info
+  async getDebugInfo(): Promise<any> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      return await tauriInvoke('get_debug_info')
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/debug`)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to get debug info')
+      }
+      return await response.json()
+    }
+  }
 }
 
 export const apiService = new ApiService()

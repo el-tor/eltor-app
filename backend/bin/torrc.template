@@ -33,7 +33,7 @@ Log info file $APP_ELTOR_TOR_DATA_DIRECTORY/client/info.log
 Log debug file $APP_ELTOR_TOR_DATA_DIRECTORY/client/debug.log
 
 # Data directory - configurable via environment
-DataDirectory $APP_ELTOR_TOR_DATA_DIRECTORY
+DataDirectory $APP_ELTOR_TOR_DATA_DIRECTORY/client
 
 # TODO REMOVE
 ElTorPayHashHop1 16f204dcccacb21fa3866285f02ac5d4b51eaa89a1146655515ba3c4d3aad01b

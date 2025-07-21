@@ -7,6 +7,7 @@ use log::{Log, Metadata, Record};
 use chrono::Utc;
 
 pub mod eltor;
+pub mod ip;
 pub mod lightning;
 pub mod paths;
 pub mod ports;
@@ -15,6 +16,7 @@ pub mod state;
 pub mod static_files;
 pub mod torrc_parser;
 pub mod wallet;
+pub mod debug_info;
 
 // Re-export commonly used types for convenience
 pub use eltor::{
@@ -30,6 +32,7 @@ pub use ports::{
 pub use state::{AppState, EltordStatusResponse, LogEntry, MessageResponse, StatusResponse};
 use tokio::sync::broadcast;
 pub use wallet::{start_phoenixd, stop_phoenixd};
+pub use debug_info::DebugInfo;
 
 // Re-export IP location types and functions
 pub use routes::ip::{init_ip_database, lookup_ip_location, IpLocationResponse};
@@ -143,6 +146,17 @@ pub fn setup_broadcast_logger(state: AppState) -> Result<(), String> {
 pub async fn initialize_app_state(state: Arc<RwLock<AppState>>) -> Result<(), String> {
     let mut app_state = state.write().await;
     let path_config = PathConfig::new().map_err(|e| format!("Failed to create PathConfig: {}", e))?;
+    let manager = eltor::EltorManager::new(state.clone(), path_config);
+    app_state.set_eltor_manager(manager);
+    Ok(())
+}
+
+/// Initialize app state with EltorManager using a custom PathConfig - for Tauri with resource directory
+pub async fn initialize_app_state_with_path_config(
+    state: Arc<RwLock<AppState>>, 
+    path_config: PathConfig
+) -> Result<(), String> {
+    let mut app_state = state.write().await;
     let manager = eltor::EltorManager::new(state.clone(), path_config);
     app_state.set_eltor_manager(manager);
     Ok(())

@@ -418,8 +418,8 @@ mod tests {
 
     #[test]
     fn test_modify_payment_lightning_config_upsert_new() {
-        let content = r#"SocksPort 9050
-ControlPort 9051
+        let content = r#"SocksPort 18058
+ControlPort 9992
 DataDirectory /var/lib/tor
 "#;
         let torrc_path = create_test_torrc(content);
@@ -443,10 +443,10 @@ DataDirectory /var/lib/tor
 
     #[test]
     fn test_modify_payment_lightning_config_upsert_existing() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://old.url password=oldpass default=true
 PaymentLightningNodeConfig type=phoenixd url=http://old2.url password=old2pass
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -473,11 +473,11 @@ ControlPort 9051
 
     #[test]
     fn test_modify_payment_lightning_config_upsert_multiple_same_type() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix3.url password=pass3
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -515,12 +515,12 @@ ControlPort 9051
 
     #[test]
     fn test_modify_payment_lightning_config_delete_by_url() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix3.url password=pass3
 PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -553,11 +553,11 @@ ControlPort 9051
 
     #[test]
     fn test_modify_payment_lightning_config_delete_without_url() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
 PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -589,9 +589,9 @@ ControlPort 9051
 
     #[test]
     fn test_modify_payment_lightning_config_upsert_new_when_url_not_found() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://existing.url password=existing_pass default=true
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -619,11 +619,11 @@ ControlPort 9051
 
     #[test]
     fn test_modify_payment_lightning_config_delete() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://127.0.0.1:9740 password=secret123 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://127.0.0.2:9740 password=secret2
 PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
-ControlPort 9051
+ControlPort 9992
 "#;
         let torrc_path = create_test_torrc(content);
 
@@ -684,7 +684,7 @@ PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
 
     #[test]
     fn test_ignore_commented_lines() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 #PaymentLightningNodeConfig type=phoenixd url=http://commented.url password=commented_pass default=true
 # PaymentLightningNodeConfig type=cln url=https://also.commented rune=also_commented
 PaymentLightningNodeConfig type=lnd url=https://active.lnd macaroon=active_macaroon
@@ -718,7 +718,7 @@ PaymentLightningNodeConfig type=lnd url=https://active.lnd macaroon=active_macar
 
     #[test]
     fn test_get_all_payment_lightning_configs() {
-        let content = r#"SocksPort 9050
+        let content = r#"SocksPort 18058
 #PaymentLightningNodeConfig type=phoenixd url=http://commented.url password=commented_pass
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix.url password=phoenix_pass default=true
 PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune

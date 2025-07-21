@@ -5,7 +5,7 @@
   "identifier": "dev.eltor.app",
   "build": {
     "beforeBuildCommand": "pnpm build",
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "pnpm dev:web",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173"
   },
