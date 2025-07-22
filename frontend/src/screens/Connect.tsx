@@ -9,6 +9,7 @@ import {
   Button,
   Box,
   Badge,
+  Notification,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -23,7 +24,8 @@ import './Connect.css'
 import { useEltord } from '../hooks/useEltord'
 import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
-import { IconChevronDown, IconExternalLink } from '@tabler/icons-react'
+import { IconChevronDown, IconPlug } from '@tabler/icons-react'
+import CopyableTextBox from '../components/CopyableTextBox'
 
 export const Connect = () => {
   const params: any = useParams()
@@ -32,6 +34,7 @@ export const Connect = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
+  const [showSocksModal, setShowSocksModal] = useState(false)
 
   const {
     logsClient,
@@ -46,6 +49,10 @@ export const Connect = () => {
   } = useSelector((state) => state.global)
   const mode =
     relayEnabled && clientEnabled ? 'both' : relayEnabled ? 'relay' : 'client'
+  const socksPort =
+    mode === 'client'
+      ? debugInfo?.torrc_socks_port
+      : debugInfo?.torrc_relay_socks_port
   const {
     isRunning,
     loading: isLoadingActivate,
@@ -107,7 +114,10 @@ export const Connect = () => {
 
         <Group>
           <Button
-            onClick={activate}
+            onClick={async () => {
+              await activate()
+              setShowSocksModal(true)
+            }}
             disabled={isRunning || loading}
             color="green"
             loading={loading || isLoadingActivate}
@@ -119,6 +129,7 @@ export const Connect = () => {
             onClick={async () => {
               try {
                 await deactivate()
+                setShowSocksModal(false)
               } catch (error) {
                 console.error('❌ [Connect] Deactivate error:', error)
                 // Handle the case where backend says "No eltord client process is currently running"
@@ -222,6 +233,24 @@ export const Connect = () => {
           </Stack>
         </Group>
       </Group>
+      {showSocksModal && (
+        <Center>
+          <Notification
+            title="Connected! Socks5 Proxy Ready"
+            icon={<IconPlug />}
+            onClose={() => setShowSocksModal(false)}
+          >
+            <Text mb="xs" mt="xs">
+              Open a browser and configure it to use a Socks5 proxy at:
+            </Text>
+            <CopyableTextBox
+              text={`${window.location.hostname}:${socksPort}`}
+              h="44px"
+            />
+          </Notification>
+        </Center>
+      )}
+
       <MapComponent h={500} />
       <Center>
         <Box
@@ -266,13 +295,13 @@ export const Connect = () => {
           </Button>
         </Box>
       </Center>
-      <Box mx="auto" mb="xl">
-        <Group mb={5}>
+      <Box mb="xl">
+        <Group mb={5} mt="xs">
           <Button onClick={toggle} rightSection={<IconChevronDown size={14} />}>
             Show Debug Info
           </Button>
           {debugInfo?.torrc_path && (
-            <Text size="sm" c="dimmed" style={{ cursor: 'pointer' }}>
+            <Text size="lg" c="dimmed" style={{ cursor: 'pointer' }}>
               Edit your config at the torrc path:{' '}
               {mode === 'client'
                 ? debugInfo.torrc_path
@@ -282,19 +311,45 @@ export const Connect = () => {
         </Group>
 
         <Collapse in={opened}>
-          <Text>
-            <pre
-              style={{
-                padding: '16px',
-                borderRadius: '4px',
-                overflow: 'auto',
-                fontSize: '14px',
-                fontFamily: 'monospace',
-              }}
-            >
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </Text>
+          <Box
+            mt="lg"
+            style={{
+              backgroundColor: '#1e1e1e',
+              borderRadius: 4,
+              fontFamily: 'monospace',
+              color: '#d4d4d4',
+              padding: 6,
+              paddingTop: 0,
+              display: 'block',
+              position: 'relative',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Title order={5}>Settings</Title>
+            <Title order={5}>=======</Title>
+            <Text>
+              <pre
+                style={{
+                  padding: '16px',
+                  borderRadius: '4px',
+                  overflow: 'auto',
+                  fontSize: '14px',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {JSON.stringify(
+                  { ...debugInfo, torrc_file: 'see below' },
+                  null,
+                  2,
+                )}
+              </pre>
+            </Text>
+            <Title order={5}>Raw torrc File</Title>
+            <Title order={5}>============</Title>
+            <pre>{debugInfo?.torrc_file ?? ''}</pre>
+          </Box>
         </Collapse>
       </Box>
     </Stack>

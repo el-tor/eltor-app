@@ -8,6 +8,7 @@ interface CopyableTextBoxProps {
   maxWidth?: string;
   limitChars?: number;
   bg?: string;
+  h?: number | string;
 }
 
 const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
@@ -15,6 +16,7 @@ const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
   maxWidth = styles.maxWidth,
   limitChars,
   bg,
+  h,
 }) => {
   const clipboard = useClipboard({ timeout: 500 });
 
@@ -22,6 +24,7 @@ const CopyableTextBox: React.FC<CopyableTextBoxProps> = ({
     <Box
       style={{ maxWidth, position: "relative", padding: 6, borderRadius: 4 }}
       bg={bg ?? "#1e1e1e"}
+      h={h}
     >
       <Text
         style={{

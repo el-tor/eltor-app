@@ -1,6 +1,49 @@
 use std::fs;
 use std::path::Path;
 
+/// Get all values for a specific torrc configuration key
+/// Returns an array of values found for the given key
+/// 
+/// Example: get_torrc_config(torrc_path, "SocksPort") -> vec!["18057", "127.0.0.1:18058"]
+pub fn get_torrc_config<P: AsRef<Path>>(torrc_path: P, config_key: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    
+    if let Ok(content) = fs::read_to_string(torrc_path) {
+        for line in content.lines() {
+            let line = line.trim();
+            // Skip comments and empty lines
+            if line.starts_with('#') || line.is_empty() {
+                continue;
+            }
+            
+            // Check if line starts with the config key followed by space
+            if let Some(config_line) = line.strip_prefix(&format!("{} ", config_key)) {
+                values.push(config_line.trim().to_string());
+            }
+        }
+    }
+    
+    values
+}
+
+/// Parse port number from a config value (handles formats like "18057" or "127.0.0.1:18057")
+pub fn parse_port_from_config(config_value: &str) -> Option<u16> {
+    if let Some(colon_pos) = config_value.rfind(':') {
+        // Format: "127.0.0.1:18057"
+        let port_str = &config_value[colon_pos + 1..];
+        port_str.parse::<u16>().ok()
+    } else {
+        // Format: "18057"
+        config_value.parse::<u16>().ok()
+    }
+}
+
+/// Read the entire torrc file as text
+/// Returns the raw file content as a string, or an error if the file cannot be read
+pub fn get_torrc_txt<P: AsRef<Path>>(torrc_path: P) -> Result<String, String> {
+    fs::read_to_string(torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))
+}
+
 /// Configuration structure for Lightning node from torrc
 #[derive(Debug, Clone)]
 pub struct LightningConfig {
@@ -361,6 +404,84 @@ mod tests {
         temp_file.push(format!("test_torrc_{}", std::process::id()));
         fs::write(&temp_file, content).unwrap();
         temp_file
+    }
+
+    #[test]
+    fn test_get_torrc_config() {
+        let content = r#"
+# Test torrc file
+SocksPort 18057
+SocksPort 127.0.0.1:18058
+ControlPort 9992
+Log notice stdout
+# Comment about logs
+Log info file /tmp/test.log
+"#;
+        
+        let test_file = create_test_torrc(content);
+        
+        // Test SocksPort - should return multiple values
+        let socks_ports = get_torrc_config(&test_file, "SocksPort");
+        assert_eq!(socks_ports, vec!["18057", "127.0.0.1:18058"]);
+        
+        // Test ControlPort - should return single value
+        let control_ports = get_torrc_config(&test_file, "ControlPort");
+        assert_eq!(control_ports, vec!["9992"]);
+        
+        // Test Log - should return multiple values
+        let log_configs = get_torrc_config(&test_file, "Log");
+        assert_eq!(log_configs, vec!["notice stdout", "info file /tmp/test.log"]);
+        
+        // Test non-existent config
+        let missing = get_torrc_config(&test_file, "NonExistent");
+        assert_eq!(missing, Vec::<String>::new());
+        
+        // Clean up
+        let _ = fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_get_torrc_txt() {
+        let content = r#"# Test torrc file
+SocksPort 18057
+SocksPort 127.0.0.1:18058
+ControlPort 9992
+Log notice stdout
+# Comment about logs
+Log info file /tmp/test.log
+"#;
+        
+        let test_file = create_test_torrc(content);
+        
+        // Test reading entire file content
+        let file_content = get_torrc_txt(&test_file).unwrap();
+        assert_eq!(file_content, content);
+        
+        // Clean up
+        let _ = fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_get_torrc_txt_nonexistent_file() {
+        let nonexistent_path = "/tmp/nonexistent_torrc_file_12345";
+        
+        // Test error handling for nonexistent file
+        let result = get_torrc_txt(nonexistent_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read torrc file"));
+    }
+    
+    #[test]
+    fn test_parse_port_from_config() {
+        // Test simple port
+        assert_eq!(parse_port_from_config("18057"), Some(18057));
+        
+        // Test IP:port format
+        assert_eq!(parse_port_from_config("127.0.0.1:18058"), Some(18058));
+        
+        // Test invalid formats
+        assert_eq!(parse_port_from_config("invalid"), None);
+        assert_eq!(parse_port_from_config("127.0.0.1:invalid"), None);
     }
 
     #[test]
