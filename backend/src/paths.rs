@@ -333,7 +333,7 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
     
     content = content.replace(
         "$APP_ELTOR_TOR_SOCKS_PORT",
-        &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "18058".to_string()),
+        &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "0.0.0.0:18058".to_string()),
     );
     
     content = content.replace(
@@ -412,7 +412,7 @@ fn substitute_torrc_relay_variables(mut content: String) -> Result<String, Strin
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_SOCKS_PORT",
-        &env::var("APP_ELTOR_TOR_RELAY_SOCKS_PORT").unwrap_or_else(|_| "18057".to_string()),
+        &env::var("APP_ELTOR_TOR_RELAY_SOCKS_PORT").unwrap_or_else(|_| "0.0.0.0:18057".to_string()),
     );
     
     content = content.replace(
