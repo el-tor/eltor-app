@@ -45,7 +45,7 @@ RUN git clone https://github.com/el-tor/eltor.git /root/code/eltor && \
 
 # Checkout specific branches
 # TODO change to master
-RUN cd /root/code/eltord && git checkout master && \
+RUN cd /root/code/eltord && git checkout lib && \
     cd /root/code/lni && git checkout search
 
 # Build libeltor-sys
@@ -172,7 +172,7 @@ WORKDIR /home/user/code/eltor-app
 
 # Expose ports (now using environment variables)
 # Note: Frontend is now served by the backend, so only backend port is needed
-EXPOSE 5174 9740 18058 9996
+EXPOSE 5174 9740 18058 18057 9996 7781
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

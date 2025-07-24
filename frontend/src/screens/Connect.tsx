@@ -301,7 +301,7 @@ export const Connect = () => {
             Show Debug Info
           </Button>
           {debugInfo?.torrc_path && (
-            <Text size="lg" c="dimmed" style={{ cursor: 'pointer' }}>
+            <Text size="lg" c="dimmed">
               Edit your config at the torrc path:{' '}
               {mode === 'client'
                 ? debugInfo.torrc_path

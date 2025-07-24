@@ -1,12 +1,12 @@
 services:
   eltor:
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   platforms:
-    #     # - linux/amd64
-    #     - linux/arm64
-    image: eltor/eltor@sha256:254ad18c53cdf3e2000d4c3d5518eddc2096cc0197afbde15c853e595343765c
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        # - linux/amd64
+        - linux/arm64
+    # image: eltor/eltor@sha256:254ad18c53cdf3e2000d4c3d5518eddc2096cc0197afbde15c853e595343765c
     container_name: app
     hostname: eltor
     user: '1000:2000' # UID 1000, GID 2000 (datagroup)
@@ -14,6 +14,7 @@ services:
       - '0.0.0.0:5174:5174' # Integrated backend + frontend server
       - '0.0.0.0:9740:9740' # Lightning node - explicitly bind to all interfaces
       - '0.0.0.0:18058:18058' # Tor SOCKS proxy - explicitly bind to all interfaces
+      - '0.0.0.0:18057:18057' # Tor Relay SOCKS proxy - explicitly bind to all interfaces
       - '0.0.0.0:9996:9996' # Tor relay OR port
     volumes:
       # Todo use ~/.eltor for data storage (need to update the eltord project to use this path)
