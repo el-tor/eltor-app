@@ -104,7 +104,13 @@ cargo build       # Build binary
 cargo run         # Start HTTP server
 
 # Docker
+# run locally
 npm run docker
+# package (remember to increment the version first in package.json)
+npm run docker:build:arm
+npm run docker:build:amd
+npm run docker:push
+npm run docker:manifest
 ```
 
 ### Environment Setup

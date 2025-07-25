@@ -1,6 +1,6 @@
 {
   "name": "eltor-app-monorepo",
-  "version": "1.0.0",
+  "version": "0.0.11",
   "private": true,
   "description": "Monorepo for eltor-app",
   "scripts": {
@@ -19,10 +19,10 @@
     
     "env": "source scripts/exports.sh",
     "docker": "npm run build:frontend && DOCKER_BUILDKIT=1 docker-compose up --build",
-    "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor:latest-arm64 .",
-    "docker:build:amd": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=amd64 -t eltor/eltor:latest-amd64 .",
-    "docker:push": "docker push eltor/eltor:latest-arm64 && docker push eltor/eltor:latest-amd64",
-    "docker:manifest": "docker manifest create eltor/eltor:latest eltor/eltor:latest-amd64 eltor/eltor:latest-arm64 && docker manifest push eltor/eltor:latest",
+    "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor:latest-arm64 -t eltor/eltor:${npm_package_version}-arm64 .",
+    "docker:build:amd": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=amd64 -t eltor/eltor:latest-amd64 -t eltor/eltor:${npm_package_version}-amd64 .",
+    "docker:push": "docker push eltor/eltor:latest-arm64 && docker push eltor/eltor:latest-amd64 && docker push eltor/eltor:${npm_package_version}-arm64 && docker push eltor/eltor:${npm_package_version}-amd64",
+    "docker:manifest": "docker manifest create eltor/eltor:latest eltor/eltor:latest-amd64 eltor/eltor:latest-arm64 --amend && docker manifest push eltor/eltor:latest",
     "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache",
 
     "actions:list": "act --list",
