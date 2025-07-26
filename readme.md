@@ -110,6 +110,8 @@ cp .env.example .env
 ```
 **Key Environment Variables:**
 ```
+BIND_ADDRESS="127.0.0.1"
+BACKEND_PORT="5174"
 APP_ELTOR_USE_PHOENIXD_EMBEDDED="false"
 APP_ELTOR_LN_IMPLEMENTATION="cln"
 APP_ELTOR_LN_CONFIG="type=cln url=https://YOURURL:PORT rune=YOUR_RUNE default=true"
