@@ -30,7 +30,7 @@
     "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache",
 
     "actions:list": "act --list",
-    "actions:build:linux:arm": "ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm -P self-hosted=skip --bind"
+    "actions:build:linux:arm": "ACT=true act workflow_dispatch --secret-file .secrets -j build-arm64 -P ubuntu-latest=catthehacker/ubuntu:act-latest --bind"
   },
   "workspaces": [
     "frontend",
