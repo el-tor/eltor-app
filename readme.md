@@ -130,8 +130,9 @@ Outputs platform-specific installers:
 - **macOS**: `.dmg`, `.app`
 - **Linux**: `.deb`, `.rpm`, `.AppImage`
 
-#### arm64 Docker Builds
-Arm builds on Github is super slow, instead of using Github actions, you can use "act" https://nektosact.com/ to locally build arm64 based images. This allows you to build locally on a Mac M-series and still push artifacts to Github.
+#### Arm Builds
+Arm builds on Github is super slow, instead of using Github actions, you can use "act" https://nektosact.com/ 
+to locally build arm64 based images. This allows you to build locally on a Mac M-series and still push artifacts to Github.
 
 1. Install Prereqs
   ```
@@ -153,9 +154,9 @@ Arm builds on Github is super slow, instead of using Github actions, you can use
   ```
 3. Run a actions build locally
 ```
-npm run actions
+npm run actions:build:linux:arm
 # or
-act push --secret-file .secrets --matrix platform:linux/arm64 -j build-docker-arm -P macos-latest=catthehacker/ubuntu:act-latest
+ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm -P self-hosted=skip --bind
 ```
 
 

@@ -1,0 +1,256 @@
+name: Build eltor-app for linux arm64
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux-arm:
+    name: Build eltor-app - ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - name: Linux ARM64
+            runs-on: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            os-name: linux-arm64
+            setup-script: setup-linux
+    
+    env:
+      PLATFORM_TARGET: ${{ matrix.target }}
+      PLATFORM_BIN: eltor-app
+      PLATFORM_OS_NAME: ${{ matrix.os-name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (Linux only)
+        if: matrix.setup-script == 'setup-linux'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux ARM64 cross-compilation tools
+        if: matrix.setup-script == 'setup-linux'
+        run: |
+          sudo apt-get update
+          
+          # Add ARM64 architecture
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          
+          # Install cross-compilation tools
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            musl-tools \
+            musl-dev
+          
+          # Install ARM64 GTK and other GUI libraries
+          sudo apt-get install -y \
+            libgtk-3-dev:arm64 \
+            libgdk-pixbuf-2.0-dev:arm64 \
+            libcairo-gobject2:arm64 \
+            libglib2.0-dev:arm64 \
+            libwebkit2gtk-4.0-dev:arm64 \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libappindicator3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            libsoup-3.0-dev:arm64 \
+            libjavascriptcoregtk-4.0-dev:arm64 \
+            libjavascriptcoregtk-4.1-dev:arm64 \
+            libpango1.0-dev:arm64 \
+            libharfbuzz-dev:arm64 \
+            libgdk-pixbuf2.0-dev:arm64 \
+            patchelf
+
+
+      - name: Setup Linux cross-compilation environment
+        if: matrix.setup-script == 'setup-linux'
+        run: |
+          # Set up environment variables for cross-compilation
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_SYSROOT_DIR=/" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
+          
+          # Set library path for ARM64 libraries
+          echo "LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          
+          # Create a pkg-config wrapper for cross-compilation
+          sudo tee /usr/local/bin/aarch64-linux-gnu-pkg-config > /dev/null << 'EOF'
+          #!/bin/bash
+          export PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/usr/lib/aarch64-linux-gnu/pkgconfig"
+          export PKG_CONFIG_SYSROOT_DIR="/"
+          exec pkg-config "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/aarch64-linux-gnu-pkg-config
+          
+          echo "PKG_CONFIG_aarch64_unknown_linux_gnu=/usr/local/bin/aarch64-linux-gnu-pkg-config" >> $GITHUB_ENV
+
+      - name: Verify Linux environment (Linux only)
+        if: matrix.setup-script == 'setup-linux'
+        run: |
+          echo "=== Linux Cross-Compilation Environment ==="
+          echo "Rust version:" && rustc --version
+          echo "Cargo version:" && cargo --version
+          echo "Cross-compiler:" && aarch64-linux-gnu-gcc --version
+          echo "Target installed:" && rustup target list --installed | grep aarch64-unknown-linux-gnu
+          echo
+          echo "=== Environment Variables ==="
+          echo "CC_aarch64_unknown_linux_gnu: $CC_aarch64_unknown_linux_gnu"
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: $CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER"
+          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+          echo "LIBRARY_PATH: $LIBRARY_PATH"
+          echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+          echo
+          echo "=== PKG-Config Test ==="
+          echo "Testing pkg-config for GTK..."
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists gdk-3.0 && echo "✓ gdk-3.0 found" || echo "✗ gdk-3.0 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists gtk+-3.0 && echo "✓ gtk+-3.0 found" || echo "✗ gtk+-3.0 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists libsoup-3.0 && echo "✓ libsoup-3.0 found" || echo "✗ libsoup-3.0 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists webkit2gtk-4.0 && echo "✓ webkit2gtk-4.0 found" || echo "✗ webkit2gtk-4.0 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists webkit2gtk-4.1 && echo "✓ webkit2gtk-4.1 found" || echo "✗ webkit2gtk-4.1 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists javascriptcoregtk-4.0 && echo "✓ javascriptcoregtk-4.0 found" || echo "✗ javascriptcoregtk-4.0 not found"
+          /usr/local/bin/aarch64-linux-gnu-pkg-config --exists javascriptcoregtk-4.1 && echo "✓ javascriptcoregtk-4.1 found" || echo "✗ javascriptcoregtk-4.1 not found"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Build eltor-app (Linux cross-compilation)
+        run: |
+          pwd
+          cd frontend
+          pnpm i
+          # Build for the gnu target with explicit target specification
+          pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Build Debian package
+        run: |
+          cd frontend
+          # Build Debian package specifically
+          pnpm tauri build --target ${{ matrix.target }} --bundles deb
+          
+      - name: Copy artifacts
+        run: |
+          # Create artifacts directory in workspace (persists locally with act)
+          mkdir -p artifacts/${{ matrix.os-name }}
+          
+          # Copy the main binary
+          if [ -f "frontend/src-tauri/target/${{ matrix.target }}/release/eltor-app" ]; then
+            cp frontend/src-tauri/target/${{ matrix.target }}/release/eltor-app artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}
+          fi
+          
+          # Copy Debian packages
+          if [ -d "frontend/src-tauri/target/${{ matrix.target }}/release/bundle/deb" ]; then
+            cp frontend/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb artifacts/${{ matrix.os-name }}/
+          fi
+          
+          # For local runs (act or self-hosted), also copy to a persistent cache directory in the workspace
+          if [ "$ACT" = "true" ]; then
+            CACHE_DIR="cache/eltor-app-build-artifacts"
+            mkdir -p "$CACHE_DIR/${{ matrix.os-name }}"
+            
+            # Copy binary if it exists
+            if [ -f "frontend/src-tauri/target/${{ matrix.target }}/release/eltor-app" ]; then
+              cp frontend/src-tauri/target/${{ matrix.target }}/release/eltor-app "$CACHE_DIR/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}"
+            fi
+            
+            # Copy Debian packages if they exist
+            if [ -d "frontend/src-tauri/target/${{ matrix.target }}/release/bundle/deb" ]; then
+              cp frontend/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb "$CACHE_DIR/${{ matrix.os-name }}/" 2>/dev/null || true
+            fi
+            
+            echo "Cached artifacts to: $(pwd)/$CACHE_DIR/${{ matrix.os-name }}/"
+            
+            # Ensure binaries are executable
+            if [ -f "$CACHE_DIR/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}" ]; then
+              chmod +x "$CACHE_DIR/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}"
+            fi
+            if [ -f "artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}" ]; then
+              chmod +x "artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}"
+            fi
+          fi
+
+      # - name: Cleanup
+      #   run: |
+      #     # Clean up temporary build directory
+      #     rm -rf $BUILD_DIR
+      #     echo "Cleaned up temporary build directory: $BUILD_DIR"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !env.ACT }}  # Skip artifact upload when running with act
+        with:
+          name: eltor-app-${{ matrix.os-name }}
+          path: |
+            artifacts
+          if-no-files-found: error
+
+      - name: Show local artifacts (act)
+        if: ${{ env.ACT }}  # Run for act only
+        run: |
+          echo "=== Local Build Artifacts - ${{ matrix.name }} ==="
+          echo "📁 Workspace artifacts:"
+          ls -la artifacts/
+          ls -la artifacts/${{ matrix.os-name }}/
+          echo
+          
+          CACHE_DIR="cache/eltor-app-build-artifacts"
+          if [ -d "$CACHE_DIR" ]; then
+            echo "🗃️  Cached artifacts (persistent between runs):"
+            ls -la "$CACHE_DIR"
+            if [ -d "$CACHE_DIR/${{ matrix.os-name }}" ]; then
+              ls -la "$CACHE_DIR/${{ matrix.os-name }}/"
+            fi
+            echo
+          fi
+          
+          echo "🎉 Build completed successfully!"
+          echo "📦 Workspace artifact: $(pwd)/artifacts/${{ matrix.os-name }}/"
+          if [ -f "artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}" ]; then
+            echo "� Binary: $(pwd)/artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }}"
+            echo "📏 Binary size: $(ls -lh artifacts/${{ matrix.os-name }}/${{ env.PLATFORM_BIN }} | awk '{print $5}')"
+          fi
+          
+          # Show Debian packages
+          if ls artifacts/${{ matrix.os-name }}/*.deb 1> /dev/null 2>&1; then
+            echo "📦 Debian packages:"
+            ls -la artifacts/${{ matrix.os-name }}/*.deb
+          fi
+          
+          if [ -d "$CACHE_DIR/${{ matrix.os-name }}" ]; then
+            echo "🗃️  Cached artifacts: $(pwd)/$CACHE_DIR/${{ matrix.os-name }}/"
+            if ls "$CACHE_DIR/${{ matrix.os-name }}"/*.deb 1> /dev/null 2>&1; then
+              echo "🗃️  Cached Debian packages:"
+              ls -la "$CACHE_DIR/${{ matrix.os-name }}"/*.deb
+            fi
+          fi
+          
+          echo "🏗️  Architecture: ${{ matrix.target }}"
+
+      # - name: Release binary
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: |
+      #       artifacts/${{ matrix.os-name }}/*
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
