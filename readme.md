@@ -9,10 +9,11 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 - **Rust** 1.70+
 - **eltord** project at `~/code/eltord/`
 - setup [env vars](#environment-setup)
+- install nix
 
-todo: nix
 ### 🌐 Web Mode
 ```bash
+cd frontend && pnpm run dev:web
 npm run web
 # Frontend runs on `http://localhost:5173` (with vite proxy to backend at /api)
 # Backend API on `http://localhost:5174`
@@ -20,6 +21,7 @@ npm run web
 Open http://localhost:5173
 ### 🖥️ Desktop Mode
 ```bash
+nix-shell
 npm run tauri
 ```
 
