@@ -5,10 +5,11 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 
 ## 🚀 Quick Start
 ### Prerequisites
-- **Node.js** 18+ with pnpm
+- **Node.js** 20+ with pnpm
 - **Rust** 1.70+
 - **eltord** project at `~/code/eltord/`
 - setup [env vars](#environment-setup)
+- tauri https://v2.tauri.app/start/prerequisites/
 - install nix
 
 ### 🌐 Web Mode
@@ -128,11 +129,45 @@ ACCEPT_INVALID_CERTS=true
 ## 📦 Release (CI)
 
 Outputs platform-specific installers:
-- **Windows**: `.msi`, `.exe`
-- **macOS**: `.dmg`, `.app`
-- **Linux**: `.deb`, `.rpm`, `.AppImage`
+- **Linux**: `.deb`
+- **Mac**: `.dmg`
+- **Windows**: `.exe`
 
-#### Arm Builds
+### Tauri Build
+Right now builds works locally on each platform, Windows, Linux and Mac.
+
+#### Linux
+```
+cd frontend 
+pnpm i
+pnpm run deb
+# this outputs to ./frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb
+# to install on linux
+sudo apt install ./eltor_0.1.0_amd64.deb 
+# uninstall
+sudo apt purge eltor
+# *troubleshooting - if you installed vscode or terminal using snap you might run into issues, just run the commands in the native os terminal
+```
+
+#### Mac
+```
+# run on a mac arm or x86_64
+cd frontend 
+pnpm i
+pnpm run dmg
+# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.1.0_aarch64.dmg
+```
+
+### Windows
+```
+cd frontend 
+pnpm i
+pnpm run win
+```
+
+### Github Actions
+TODO: this does not fully work yet
+
 Arm builds on Github is super slow, instead of using Github actions, you can use "act" https://nektosact.com/ 
 to locally build arm64 based images. This allows you to build locally on a Mac M-series and still push artifacts to Github.
 

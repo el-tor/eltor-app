@@ -19,8 +19,11 @@
     "serve": "python3 -m http.server 5173 --directory dist",
     "clean": "rm -rf src-tauri/target && rm -rf node_modules/.cache && rm -rf dist",
     
+    "dmg:debug": "tauri build --bundles dmg --debug",
     "dmg": "tauri build --bundles dmg",
-    "dmg:debug": "tauri build --bundles dmg --debug"
+    "deb": "pnpm tauri build --target x86_64-unknown-linux-gnu --bundles deb",
+    "win": "pnpm tauri build --target x86_64-pc-windows-msvc --bundles windows"
+
   },
   "devDependencies": {
     "@redux-devtools/extension": "^3.3.0",
