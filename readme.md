@@ -121,6 +121,11 @@ APP_ELTOR_LN_CONFIG="type=cln url=https://YOURURL:PORT rune=YOUR_RUNE default=tr
 APP_ELTOR_LN_BOLT12="lno***"
 APP_ELTOR_USER_DIR="$PWD"
 APP_ELTOR_ELTORRC_PATH="$PWD/backend/bin/data"
+
+# Tor Control Passwords (for authentication to Tor control ports)
+APP_ELTOR_TOR_CONTROL_PASSWORD="password1234_"          # Client mode password
+APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD="password1234_"    # Relay mode password
+
 ACCEPT_INVALID_CERTS=true
 ```
 

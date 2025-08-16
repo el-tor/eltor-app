@@ -4,6 +4,22 @@ use tokio::sync::RwLock;
 
 use crate::paths::PathConfig;
 use crate::state::{AppState, LogEntry};
+use crate::torrc_parser;
+
+/// Get the Tor control password from environment variables
+///
+/// This function looks for different environment variables based on the mode:
+/// - For relay mode: APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD
+/// - For client mode: APP_ELTOR_TOR_CONTROL_PASSWORD
+/// - Fallback: "password1234_" as default
+fn get_tor_control_password(mode: &EltorMode) -> String {
+    let env_var = match mode {
+        EltorMode::Client => "APP_ELTOR_TOR_CONTROL_PASSWORD",
+        EltorMode::Relay | EltorMode::Both => "APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD",
+    };
+
+    std::env::var(env_var).unwrap_or_else(|_| "password1234_".to_string())
+}
 
 /// Parameters for eltor activation
 #[derive(Debug, Clone)]
@@ -41,13 +57,13 @@ pub struct EltorProcessHandle {
 impl EltorProcessHandle {
     async fn stop(&mut self) -> Result<(), String> {
         info!("🛑 Stopping {} process", self.mode);
-        
+
         // ONLY abort the task - NO process killing at all
         self.abort_handle.abort();
-        
+
         // Brief wait for task to abort
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        
+
         info!("✅ {} process stopped", self.mode);
         Ok(())
     }
@@ -87,12 +103,28 @@ impl EltorMode {
         }
     }
 
-    // TODO get from torrc file
-    pub fn get_control_port(&self) -> &str {
-        match self {
-            EltorMode::Client => "9992",
-            EltorMode::Relay => "7781",
-            EltorMode::Both => "7781",
+    /// Get the control port from torrc file configuration
+    pub fn get_control_port(&self, path_config: &PathConfig) -> String {
+        // Get the appropriate torrc file for this mode
+        let torrc_file = self.get_torrc_file();
+        let torrc_path = path_config.get_torrc_path(Some(torrc_file));
+
+        // Read the control port from the torrc file
+        let control_ports = torrc_parser::get_torrc_config(&torrc_path, "ControlPort");
+
+        if let Some(control_port) = control_ports.first() {
+            // Parse port from config value (handles formats like "9992" or "127.0.0.1:9992")
+            if let Some(port_num) = torrc_parser::parse_port_from_config(control_port) {
+                return port_num.to_string();
+            }
+            // If parsing fails, return the original value
+            control_port.clone()
+        } else {
+            // Fallback to hardcoded defaults if not found in torrc
+            match self {
+                EltorMode::Client => "9992".to_string(),
+                EltorMode::Relay | EltorMode::Both => "7781".to_string(),
+            }
         }
     }
 }
@@ -179,7 +211,7 @@ impl EltorManager {
                 if let Some(mut handle) = relay_guard.take() {
                     // Stop the task (this aborts it immediately)
                     handle.stop().await?;
-                    // Clean up any residual Tor state  
+                    // Clean up any residual Tor state
                     self.cleanup_tor_port(EltorMode::Relay).await;
                     Ok("Eltor relay deactivated".to_string())
                 } else {
@@ -192,7 +224,7 @@ impl EltorManager {
                 if let Some(mut handle) = relay_guard.take() {
                     // Stop the task (this aborts it immediately)
                     handle.stop().await?;
-                    // Clean up any residual Tor state  
+                    // Clean up any residual Tor state
                     self.cleanup_tor_port(EltorMode::Both).await;
                     Ok("Eltor both mode deactivated".to_string())
                 } else {
@@ -207,7 +239,10 @@ impl EltorManager {
         let torrc_file = mode.get_torrc_file().to_string();
         let torrc_path = self.path_config.get_torrc_path(Some(&torrc_file));
 
-        info!("🚀 Starting eltor {} as Tokio task with torrc: {:?}", mode, torrc_path);
+        info!(
+            "🚀 Starting eltor {} as Tokio task with torrc: {:?}",
+            mode, torrc_path
+        );
 
         // Clean up any residual state first
         info!("🧹 Pre-start cleanup for {} mode", mode);
@@ -216,6 +251,7 @@ impl EltorManager {
         let mode_str = mode.to_string().to_string();
         let torrc_path_str = torrc_path.to_string_lossy().to_string();
         let app_data_dir = self.path_config.app_data_dir.clone();
+        let control_password = get_tor_control_password(&mode);
 
         // Spawn the eltor library as an abortable Tokio task
         let task_handle = tokio::spawn(async move {
@@ -225,10 +261,13 @@ impl EltorManager {
                 "-f".to_string(),
                 torrc_path_str.clone(),
                 "-pw".to_string(),
-                "password1234_".to_string(), // TODO read password from env or config
+                control_password,
             ];
 
-            info!("🚀 Task starting eltor library {} with args: {:?}", mode_str, args);
+            info!(
+                "🚀 Task starting eltor library {} with args: {:?}",
+                mode_str, args
+            );
 
             // Set working directory to app data directory to ensure eltor library can write files
             if let Some(data_dir) = app_data_dir.as_ref() {
@@ -240,7 +279,7 @@ impl EltorManager {
 
             // Run eltor library - this will block until shutdown or abort
             eltor::run_with_args(args).await;
-            
+
             info!("✅ Eltor {} library completed", mode_str);
         });
 
@@ -259,27 +298,33 @@ impl EltorManager {
 
     /// Cleanup Tor daemon for specific mode - MINIMAL and SAFE cleanup
     async fn cleanup_tor_port(&self, mode: EltorMode) {
-        let port = mode.get_control_port();
-        
+        let port = mode.get_control_port(&self.path_config);
+
         info!("🧹 Minimal cleanup for {} mode", mode);
-        
+
         // ONLY try Tor control commands - NO process killing!
-        if let Err(e) = self.send_tor_shutdown_on_port(port).await {
-            warn!("⚠️ Failed to send Tor shutdown command on port {}: {}", port, e);
+        if let Err(e) = self.send_tor_shutdown_on_port(&port).await {
+            warn!(
+                "⚠️ Failed to send Tor shutdown command on port {}: {}",
+                port, e
+            );
         }
-        
+
         // For Both mode, also try cleaning up client port
         if mode == EltorMode::Both {
-            if let Err(e) = self.send_tor_shutdown_on_port("9992").await {
-                warn!("⚠️ Failed to send Tor shutdown command on client port 9992: {}", e);
+            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            if let Err(e) = self.send_tor_shutdown_on_port(&client_port).await {
+                warn!(
+                    "⚠️ Failed to send Tor shutdown command on client port {}: {}",
+                    client_port, e
+                );
             }
         }
-        
+
         // Wait a moment for Tor to process shutdown
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         info!("✅ Minimal cleanup completed for {} mode", mode);
     }
-    
 
     /// Send a SHUTDOWN command to a specific Tor control port
     async fn send_tor_shutdown_on_port(
@@ -289,12 +334,17 @@ impl EltorManager {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::TcpStream;
 
-        info!("🔌 Connecting to Tor control port {} to send shutdown...", port);
+        info!(
+            "🔌 Connecting to Tor control port {} to send shutdown...",
+            port
+        );
 
         let mut stream = match tokio::time::timeout(
             tokio::time::Duration::from_secs(2),
-            TcpStream::connect(format!("127.0.0.1:{}", port))
-        ).await {
+            TcpStream::connect(format!("127.0.0.1:{}", port)),
+        )
+        .await
+        {
             Ok(Ok(stream)) => stream,
             Ok(Err(e)) => {
                 warn!("⚠️ Could not connect to Tor control port {}: {}", port, e);
@@ -306,26 +356,44 @@ impl EltorManager {
             }
         };
 
+        // Determine the mode based on the port to get the correct password
+        // We need to check which mode uses this port
+        let client_port = EltorMode::Client.get_control_port(&self.path_config);
+        let relay_port = EltorMode::Relay.get_control_port(&self.path_config);
+
+        let mode = if port == client_port {
+            EltorMode::Client
+        } else if port == relay_port {
+            EltorMode::Relay
+        } else {
+            // Default to relay mode if we can't determine
+            EltorMode::Relay
+        };
+
+        let password = get_tor_control_password(&mode);
+
         // Authenticate
-        let auth_command = "AUTHENTICATE \"password1234_\"\r\n"; // TODO read password from env or config
+        let auth_command = format!("AUTHENTICATE \"{}\"\r\n", password);
         stream.write_all(auth_command.as_bytes()).await?;
 
         let mut buf = vec![0; 1024];
-        let n = tokio::time::timeout(
-            tokio::time::Duration::from_secs(2),
-            stream.read(&mut buf)
-        ).await??;
+        let n = tokio::time::timeout(tokio::time::Duration::from_secs(2), stream.read(&mut buf))
+            .await??;
         let response = String::from_utf8_lossy(&buf[..n]);
 
         if response.contains("250 OK") {
             let shutdown_command = "SIGNAL SHUTDOWN\r\n";
             stream.write_all(shutdown_command.as_bytes()).await?;
             info!("🛑 Sent shutdown command to Tor on port {}", port);
-            
+
             // Give Tor a moment to process the shutdown command
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         } else {
-            warn!("⚠️ Failed to authenticate with Tor control port {}: {}", port, response.trim());
+            warn!(
+                "⚠️ Failed to authenticate with Tor control port {}: {}",
+                port,
+                response.trim()
+            );
         }
 
         Ok(())
@@ -335,15 +403,16 @@ impl EltorManager {
     pub async fn get_status(&self) -> EltorStatus {
         let client_guard = self.client_process.read().await;
         let relay_guard = self.relay_process.read().await;
-        
+
         let client_running = client_guard.is_some();
         let relay_running = relay_guard.is_some();
-        
+
         // If relay_guard contains a "both" mode process, then both client and relay are running
-        let both_mode_running = relay_guard.as_ref()
+        let both_mode_running = relay_guard
+            .as_ref()
             .map(|handle| handle.mode == EltorMode::Both)
             .unwrap_or(false);
-            
+
         let running = client_running || relay_running;
 
         let state = self.state.read().await;
