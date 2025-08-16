@@ -423,7 +423,7 @@ fn substitute_torrc_relay_variables(mut content: String) -> Result<String, Strin
     
     content = content.replace(
         "$APP_ELTOR_TOR_RELAY_ADDRESS",
-        &env::var("APP_ELTOR_TOR_RELAY_ADDRESS").unwrap_or_else(|_| ip::get_public_ip()),
+        &env::var("APP_ELTOR_TOR_RELAY_ADDRESS").unwrap_or_else(|_| ip::get_public_ip_blocking()),
     );
     
     content = content.replace(

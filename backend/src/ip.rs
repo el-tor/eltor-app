@@ -1,46 +1,76 @@
-use std::process::Command;
+use std::time::Duration;
 
-/// Get the public IP address of the current machine
+/// Get the public IP address of the current machine (async version)
 /// Falls back to 127.0.0.1 if unable to determine public IP
-pub fn get_public_ip() -> String {
+pub async fn get_public_ip() -> String {
+    // Create a reqwest client with timeout
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+    
     // Try multiple methods to get public IP
+    let services = [
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip", 
+        "https://icanhazip.com",
+    ];
     
-    // Method 1: Try using curl with ipify.org
-    if let Ok(output) = Command::new("curl")
-        .args(["-s", "--max-time", "5", "https://api.ipify.org"])
-        .output()
-    {
-        if output.status.success() {
-            let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if is_valid_ip(&ip) {
-                return ip;
+    for service in &services {
+        match client.get(*service).send().await {
+            Ok(response) => {
+                if response.status().is_success() {
+                    match response.text().await {
+                        Ok(ip_text) => {
+                            let ip = ip_text.trim().to_string();
+                            if is_valid_ip(&ip) {
+                                return ip;
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
             }
+            Err(_) => continue,
         }
     }
     
-    // Method 2: Try using curl with ifconfig.me
-    if let Ok(output) = Command::new("curl")
-        .args(["-s", "--max-time", "5", "https://ifconfig.me/ip"])
-        .output()
-    {
-        if output.status.success() {
-            let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if is_valid_ip(&ip) {
-                return ip;
-            }
-        }
-    }
+    // Fallback: return localhost
+    "127.0.0.1".to_string()
+}
+
+/// Get the public IP address of the current machine (blocking version)
+/// Falls back to 127.0.0.1 if unable to determine public IP
+pub fn get_public_ip_blocking() -> String {
+    // Create a blocking reqwest client with timeout
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap_or_else(|_| reqwest::blocking::Client::new());
     
-    // Method 3: Try using curl with icanhazip.com
-    if let Ok(output) = Command::new("curl")
-        .args(["-s", "--max-time", "5", "https://icanhazip.com"])
-        .output()
-    {
-        if output.status.success() {
-            let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if is_valid_ip(&ip) {
-                return ip;
+    // Try multiple methods to get public IP
+    let services = [
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip", 
+        "https://icanhazip.com",
+    ];
+    
+    for service in &services {
+        match client.get(*service).send() {
+            Ok(response) => {
+                if response.status().is_success() {
+                    match response.text() {
+                        Ok(ip_text) => {
+                            let ip = ip_text.trim().to_string();
+                            if is_valid_ip(&ip) {
+                                return ip;
+                            }
+                        }
+                        Err(_) => continue,
+                    }
+                }
             }
+            Err(_) => continue,
         }
     }
     
@@ -68,9 +98,16 @@ mod tests {
         assert!(!is_valid_ip("999.999.999.999"));
     }
 
+    #[tokio::test]
+    async fn test_get_public_ip_returns_something() {
+        let ip = get_public_ip().await;
+        assert!(!ip.is_empty());
+        assert!(is_valid_ip(&ip));
+    }
+
     #[test]
-    fn test_get_public_ip_returns_something() {
-        let ip = get_public_ip();
+    fn test_get_public_ip_blocking_returns_something() {
+        let ip = get_public_ip_blocking();
         assert!(!ip.is_empty());
         assert!(is_valid_ip(&ip));
     }
