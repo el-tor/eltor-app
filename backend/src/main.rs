@@ -3,40 +3,12 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use eltor_backend::state::{AppState, MessageResponse, StatusResponse};
+use eltor_backend::{setup_broadcast_logger, state::MessageResponse};
 use std::env;
 use tower_http::cors::CorsLayer;
 
-use eltor_backend::routes::eltor::get_bin_dir;
 use eltor_backend::routes::ip;
 use eltor_backend::static_files;
-
-// Tor-related handlers
-async fn connect_tor() -> ResponseJson<StatusResponse> {
-    println!("🔗 Connecting to Tor...");
-    // TODO: Implement actual Tor connection logic
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
-}
-
-async fn disconnect_tor() -> ResponseJson<StatusResponse> {
-    println!("🔌 Disconnecting from Tor...");
-    // TODO: Implement actual Tor disconnection logic
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
-}
-
-async fn get_tor_status() -> ResponseJson<StatusResponse> {
-    // TODO: Implement actual Tor status check
-    ResponseJson(StatusResponse {
-        connected: false,
-        circuit: None,
-    })
-}
 
 async fn health_check() -> ResponseJson<MessageResponse> {
     ResponseJson(MessageResponse {
@@ -48,6 +20,22 @@ async fn health_check() -> ResponseJson<MessageResponse> {
 async fn main() {
     // Load environment variables from root .env file
     dotenv::from_path("../.env").ok();
+
+    // Read environment variables first to configure state properly
+    let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
+        .unwrap_or_else(|_| "false".to_string())
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    // Create app state
+    let mut state = eltor_backend::create_app_state(use_phoenixd_embedded);
+
+    // Set up custom logger to capture ALL logs (including from eltor library) BEFORE anything else
+    if let Err(e) = setup_broadcast_logger(state.clone()) {
+        eprintln!("⚠️  Failed to set up broadcast logger: {}", e);
+        eprintln!("   Eltor logs will go to stdout, only manual logs will stream to SSE");
+    }
+
     // Print environment variables for debugging
     println!("🔧 Backend Environment variables:");
     for (key, value) in env::vars() {
@@ -70,28 +58,34 @@ async fn main() {
         .parse::<u16>()
         .unwrap_or(5174);
 
-    let bind_address = env::var("BIND_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    // Kill any process using the backend port before starting
+    println!("🔧 Cleaning up backend port {}...", backend_port);
+    if let Err(e) = eltor_backend::ports::cleanup_backend_port(backend_port).await {
+        eprintln!("⚠️  Backend port cleanup failed: {}", e);
+        eprintln!("   Continuing with startup... server may fail to bind if port is still in use");
+    }
 
-    let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
-        .unwrap_or_else(|_| "false".to_string())
-        .parse::<bool>()
-        .unwrap_or(false);
+    let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     println!("🔧 Backend configuration:");
     println!("   Bind Address: {}", bind_address);
     println!("   Port: {}", backend_port);
     println!("   Phoenixd embedded: {}", use_phoenixd_embedded);
 
-    // Initialize shared state
-    let mut state = AppState::new(use_phoenixd_embedded);
-
     // Initialize Lightning node
     println!("⚡ Initializing Lightning node...");
 
-    // Initialize from torrc
-    let bin_dir = get_bin_dir();
-    let torrc_path = bin_dir.join("data").join("torrc");
+    // Initialize from torrc using PathConfig
+    let path_config = eltor_backend::PathConfig::new().unwrap_or_else(|e| {
+        eprintln!("⚠️  Warning: Failed to get path config: {}", e);
+        eprintln!("   Using default paths");
+        eltor_backend::PathConfig::with_overrides(
+            Some(std::env::current_dir().unwrap().join("bin")),
+            Some(std::env::current_dir().unwrap().join("bin/data")),
+        )
+        .unwrap()
+    });
+    let torrc_path = path_config.get_torrc_path(None);
     println!("🔍 Looking for torrc file at: {:?}", torrc_path);
     let lightning_node = match eltor_backend::lightning::LightningNode::from_torrc(&torrc_path) {
         Ok(node) => {
@@ -113,6 +107,14 @@ async fn main() {
         state.set_lightning_node(node);
     }
 
+    // Initialize shared EltorManager
+    let state_arc = std::sync::Arc::new(tokio::sync::RwLock::new(state.clone()));
+    let eltor_manager = eltor_backend::eltor::EltorManager::new(
+        state_arc,
+        path_config.clone(),
+    );
+    state.set_eltor_manager(eltor_manager);
+
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {
         println!("🚀 Starting embedded phoenixd...");
@@ -127,8 +129,8 @@ async fn main() {
         println!("🔗 Using external phoenixd instance");
     }
 
-    // Initialize IP database
-    let ip_db_path = get_bin_dir().join("IP2LOCATION-LITE-DB3.BIN");
+    // Initialize IP location database
+    let ip_db_path = path_config.get_executable_path("IP2LOCATION-LITE-DB3.BIN");
     if ip_db_path.exists() {
         if let Err(e) = ip::init_ip_database(ip_db_path) {
             eprintln!("⚠️  Failed to initialize IP database: {}", e);
@@ -144,13 +146,11 @@ async fn main() {
     // Build the router
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/api/tor/connect", post(connect_tor))
-        .route("/api/tor/disconnect", post(disconnect_tor))
-        .route("/api/tor/status", get(get_tor_status))
         .route("/api/ip/:ip", get(ip::get_ip_location))
         .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
         .merge(eltor_backend::routes::eltor::create_routes())
         .merge(eltor_backend::routes::wallet::create_routes())
+        .merge(eltor_backend::routes::debug::create_routes())
         // Serve static frontend files (this should be last to catch all non-API routes)
         .fallback(static_files::serve_static)
         .layer(cors)
@@ -158,46 +158,50 @@ async fn main() {
 
     // Start the server
     let full_bind_address = format!("{}:{}", bind_address, backend_port);
-    let listener = tokio::net::TcpListener::bind(&full_bind_address).await.unwrap();
-    
+    let listener = tokio::net::TcpListener::bind(&full_bind_address)
+        .await
+        .unwrap();
+
     // Determine the display URL based on bind address
     let display_address = if bind_address == "0.0.0.0" {
         format!("http://0.0.0.0:{}", backend_port)
     } else {
         format!("http://{}:{}", bind_address, backend_port)
     };
-    
+
     let local_url = if bind_address == "0.0.0.0" {
         format!("http://localhost:{}", backend_port)
     } else {
         format!("http://{}:{}", bind_address, backend_port)
     };
-    
+
     println!("🚀 El Tor Backend Server");
     println!("📡 Running on {}", display_address);
     println!("🌐 Frontend served at {}", local_url);
     println!("🔗 Health check: {}/health", local_url);
     println!("📋 API endpoints:");
-    println!("   POST /api/tor/connect");
-    println!("   POST /api/tor/disconnect");
-    println!("   GET  /api/tor/status");
-    println!("   POST /api/eltord/activate");
     println!("   POST /api/eltord/activate/:mode");
-    println!("   POST /api/eltord/activate/:mode/:torrc_file_name");
-    println!("   POST /api/eltord/deactivate");
+    println!("   POST /api/eltord/deactivate/:mode");
     println!("   GET  /api/eltord/status");
-    println!("   GET  /api/eltord/logs (SSE)");
+    println!("   GET  /api/eltord/logs");
     println!("   GET  /api/wallet/info");
     println!("   GET  /api/wallet/balance");
     println!("   POST /api/wallet/invoice");
-    println!("   POST /api/wallet/pay");
+    // println!("   POST /api/wallet/pay");
     println!("   POST /api/wallet/offer");
     println!("   GET  /api/wallet/status");
     println!("   GET  /api/wallet/transactions");
+    println!("   PUT  /api/wallet/config");
+    println!("   DELETE /api/wallet/config");
+    println!("   GET  /api/wallet/configs");
+    println!("   GET  /api/debug");
     println!("📁 Static files served from frontend/dist/");
     println!("🔧 Environment variables injected into frontend:");
     println!("   BACKEND_PORT: {}", backend_port);
-    println!("   BACKEND_URL: {}", env::var("BACKEND_URL").unwrap_or_else(|_| local_url.clone()));
+    println!(
+        "   BACKEND_URL: {}",
+        env::var("BACKEND_URL").unwrap_or_else(|_| local_url.clone())
+    );
     println!("   BIND_ADDRESS: {}", bind_address);
 
     axum::serve(listener, app).await.unwrap();

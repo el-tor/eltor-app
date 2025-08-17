@@ -1,6 +1,32 @@
 # El Tor App
 
-A modern desktop and web application for connecting to the El Tor network - a privacy-focused network that allows users to share bandwidth as relays or consume bandwidth as clients, with built-in payment capabilities.
+A modern VPN-like desktop and web app for connecting to the El Tor network - a privacy-focused network (Tor fork) that allows users to share bandwidth, as relays, or consume bandwidth as clients. Built-in payment capabilities using Lightning.
+
+
+## 🚀 Quick Start
+### Prerequisites
+- **Node.js** 20+ with pnpm
+- **Rust** 1.70+
+- **eltord** project at `~/code/eltord/`
+- setup [env vars](#environment-setup)
+- tauri https://v2.tauri.app/start/prerequisites/
+- install nix
+
+### 🌐 Web Mode
+```bash
+cd frontend && pnpm run dev:web
+npm run web
+# Frontend runs on `http://localhost:5173` (with vite proxy to backend at /api)
+# Backend API on `http://localhost:5174`
+```
+Open http://localhost:5173
+### 🖥️ Desktop Mode
+```bash
+nix-shell
+npm run tauri
+```
+
+
 
 ## 🌐 Architecture
 
@@ -11,10 +37,10 @@ This project supports **dual deployment modes**:
 
 ```
 ┌─────────────────┐    ┌─────────────────┐
-│   React Frontend │    │   Rust Backend  │
+│  React Frontend │    │   Rust Backend  │
 │                 │    │                 │
 │ • UI Components │◄──►│ • Tor Control   │
-│ • State Mgmt    │    │ • Eltord Mgmt   │
+│ • State Mgmt    │    │ • eltord mgmt   │
 │ • Routing       │    │ • Process Ctrl  │
 └─────────────────┘    └─────────────────┘
         │                       │
@@ -25,33 +51,9 @@ This project supports **dual deployment modes**:
 └─────────────┘         └─────────────┘
 ```
 
-## 🚀 Quick Start
 
-### Prerequisites
-- **Node.js** 18+ with pnpm
-- **Rust** 1.70+
-- **Eltord** project at `~/code/eltord/`
-
-### 🌐 Web Mode
-```bash
-# Terminal 1: Start Rust backend
-cd backend
-cargo run
-
-# Terminal 2: Start React frontend
-cd frontend
-pnpm dev:web
-```
-Open http://localhost:5173
-
-### 🖥️ Desktop Mode
-```bash
-cd frontend
-pnpm dev:tauri
-```
 
 ## 📁 Project Structure
-
 ```
 eltor-app/
 ├── frontend/              # React Frontend (Vite + Tauri)
@@ -69,22 +71,9 @@ eltor-app/
 └── README.md
 ```
 
-## 🔧 Features
 
-### Core Functionality
-- **Tor Network Control**: Connect/disconnect from Tor
-- **Eltord Process Management**: Start/stop eltord client processes
-- **Dual Mode Support**: Web browser OR native desktop app
-- **System Tray Integration**: (Desktop mode only)
-- **Real-time Status Updates**: Process monitoring and notifications
-
-### Platform Detection
-The app automatically detects whether it's running in web or desktop mode and uses the appropriate API layer:
-- **Desktop**: Direct IPC calls to embedded Rust backend
-- **Web**: HTTP requests to standalone Rust server
 
 ## 🛠️ Development
-
 ### Available Scripts
 
 ```bash
@@ -97,229 +86,149 @@ npm run web       # quick start to run web frontend with rust rest backend
 cd frontend
 pnpm dev:web      # Web development mode  
 pnpm dev:tauri    # Desktop development mode
+pnpm build:web    # Bundle prod dist web
+pnpm build:tauri  # Bundle tauri app
 
 # Backend
 cd backend
-cargo build       # Build binary
-cargo run         # Start HTTP server
+cargo build             # Build debug
+cargo build --release   # Build release target 
+cargo run               # Start HTTP server. Alternative command ./run.sh
 
 # Docker
-npm run docker
+npm run docker # to run locally
+# package - remember to increment the version in package.json and cargo.toml
+npm run docker:build:arm
+npm run docker:build:amd
+npm run docker:push
+npm run docker:manifest
 ```
 
 ### Environment Setup
-
-**Web Development:**
-- Frontend runs on `http://localhost:5173`
-- Backend API on `http://localhost:5174`
-- Supports hot reload for both frontend and backend
-
-**Desktop Development:**
-- Single command starts both frontend and embedded backend
-- System tray integration with menu controls
-- Native file system access
-
-## 📦 Building for Production
-
-### Web App
-```bash
-# Build frontend
-cd frontend && pnpm build:web
-
-# Build backend
-cd backend && cargo build --release
-
-# Deploy frontend to static hosting (Vercel, Netlify)
-# Deploy backend to cloud service (Railway, Fly.io)
-```
-
-### Desktop App
-```bash
-cd frontend
-pnpm build:tauri
-```
-
-Outputs platform-specific installers:
-- **Windows**: `.msi`, `.exe`
-- **macOS**: `.dmg`, `.app`
-- **Linux**: `.deb`, `.rpm`, `.AppImage`
-
-# Eltor App
-
-## Development & Production
-
-### Quick Start
-
-```bash
-# Development mode (separate frontend/backend)
-npm run web
-
-# Production mode (integrated backend serves frontend)
-npm run prod
-```
-
-### Production Commands
-
-```bash
-# Build and start production server
-npm run prod
-
-# Or run steps separately:
-npm run build:prod  # Build frontend + backend
-npm run start:prod  # Start integrated server
-```
-
-### Environment Configuration
-
 Copy `.env.example` to `.env` and configure:
 
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
-
 **Key Environment Variables:**
-- `BIND_ADDRESS`: `127.0.0.1` (localhost) or `0.0.0.0` (all interfaces)
-- `BACKEND_PORT` or `PORT`: Port number (default: 5174)
-- `BACKEND_URL`: Base URL for API calls
-
-### Docker Deployment
-
-Mult Arch Build Prereqs
-
 ```
-docker buildx create --name mybuilder --driver docker-container --use 
-docker buildx inspect --bootstrap 
-docker run --privileged --rm tonistiigi/binfmt --install all
-# if you get errors you might need to turn off (or on) rosetta 
-orb config set rosetta false
-```
+BIND_ADDRESS="127.0.0.1"
+BACKEND_PORT="5174"
+APP_ELTOR_USE_PHOENIXD_EMBEDDED="false"
+APP_ELTOR_LN_IMPLEMENTATION="cln"
+APP_ELTOR_LN_CONFIG="type=cln url=https://YOURURL:PORT rune=YOUR_RUNE default=true"
+APP_ELTOR_LN_BOLT12="lno***"
+APP_ELTOR_USER_DIR="$PWD"
+APP_ELTOR_ELTORRC_PATH="$PWD/backend/bin/data"
 
-```bash
-# Build and run with Docker Compose
-npm run docker
+# Tor Control Passwords (for authentication to Tor control ports)
+APP_ELTOR_TOR_CONTROL_PASSWORD="password1234_"          # Client mode password
+APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD="password1234_"    # Relay mode password
 
-# Or manually:
-docker-compose up --build
+ACCEPT_INVALID_CERTS=true
 ```
 
-### Production Examples
 
-```bash
-# Localhost only (secure)
-npm run prod
 
-# External access on port 80
-BIND_ADDRESS=0.0.0.0 PORT=80 BACKEND_PORT=80 BACKEND_URL=https://yourdomain.com npm run prod
+## 📦 Release (CI)
 
-# Behind reverse proxy
-BIND_ADDRESS=127.0.0.1 PORT=3000 BACKEND_URL=https://api.yourdomain.com npm run prod
+Outputs platform-specific installers:
+- **Linux**: `.deb`
+- **Mac**: `.dmg`
+- **Windows**: `.exe`
+
+### Tauri Build
+Right now builds works locally on each platform, Windows, Linux and Mac.
+
+#### Linux
+```
+cd frontend 
+pnpm i
+pnpm run deb
+# this outputs to ./frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb
+# to install on linux
+sudo apt install ./eltor_0.1.0_amd64.deb 
+# uninstall
+sudo apt purge eltor
+# *troubleshooting - if you installed vscode or terminal using snap you might run into issues, just run the commands in the native os terminal
 ```
 
-## 🌐 El Tor Network
-
-### Browser Configuration
-
-Configure Tor Browser to use the El Tor network:
-
-**macOS:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/mac/install.sh | bash
+#### Mac
+```
+# run on a mac arm or x86_64
+cd frontend 
+pnpm i
+pnpm run dmg
+# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.1.0_aarch64.dmg
 ```
 
-**Linux:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/install.sh | bash
+### Windows
+```
+cd frontend 
+pnpm i
+pnpm run win
 ```
 
-### Network Testing
+### Github Actions
+TODO: this does not fully work yet
 
-**Connectivity Check:**
-1. Open Tor Browser
-2. Navigate to Circuit info (lock icon in URL bar)
-3. Look for IP `170.75.160.21` in the circuit
+Arm builds on Github is super slow, instead of using Github actions, you can use "act" https://nektosact.com/ 
+to locally build arm64 based images. This allows you to build locally on a Mac M-series and still push artifacts to Github.
 
-**Hidden Service Test:**
+1. Install Prereqs
+  ```
+  docker buildx create --name mybuilder --driver docker-container --use 
+  docker buildx inspect --bootstrap 
+  docker run --privileged --rm tonistiigi/binfmt --install all
+  # if you use orbstack and get errors you might need to turn off (or on?) rosetta 
+  orb config set rosetta false
+
+  brew install act
+  docker info | grep Architecture
+  ```
+
+2. Create ./secrets
+  ```
+  GITHUB_TOKEN=ghp_yourtokenhere
+  DOCKER_USERNAME=yourdockerusername
+  DOCKER_PASSWORD=dckr_pat_yourtokenhere
+  ```
+3. Run a actions build locally
 ```
-http://3zlcerfvzmmdj2zv5j2lnz32762dwukcznrimbxllve4dzbjhmxkc4id.onion
-```
-
-### Running as Relay
-
-**Linux Relay Setup:**
-```bash
-curl -L https://bitbucket.org/eltordev/eltor-app/raw/master/scripts/linux/relay.sh | bash
-```
-
-**Start Relay:**
-```bash
-./tor -f torrc
-```
-
-**Run as Systemd Service:**
-```bash
-sudo tee /etc/systemd/system/tor.service << EOF
-[Unit]
-Description=ElTorRelay
-After=network.target
-
-[Service]
-User=root
-ExecStart=/home/root/eltor/tor -f /home/root/eltor/torrc
-PIDFile=/var/run/tor/tor.pid
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable tor
-sudo systemctl start tor
+npm run actions:build:linux:arm
+# or
+ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm -P self-hosted=skip --bind
 ```
 
-**Monitor Relay:**
-```bash
-sudo apt install nyx
-nyx -i 127.0.0.1:8061
-```
 
-## 🔒 Security & Privacy
 
-- **No data collection**: All processing happens locally
-- **Tor integration**: Built-in privacy protection
-- **Process isolation**: Eltord runs in separate processes
-- **System tray**: Minimal UI footprint
+## 🔧 Features
+### Core Functionality
+- **Tor Network Control**: Connect/disconnect from Tor
+- **Eltord Process Management**: Start/stop eltord client processes
+- **Dual Mode Support**: Web browser OR native desktop app
+- **System Tray Integration**: (Desktop mode only)
+- **Real-time Status Updates**: Process monitoring and notifications
+### Platform Detection
+The app automatically detects whether it's running in web or desktop mode and uses the appropriate API layer:
+- **Desktop**: Direct IPC calls to embedded Rust backend
+- **Web**: HTTP requests to standalone Rust server
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test in both web and desktop modes
-5. Submit a pull request
 
-## 📜 License
+## Umbrel
+Community App Store
+https://github.com/el-tor/eltor-store
 
-MIT License - see LICENSE file for details
+
 
 ## 🖼️ Screenshots
-
 <div align="center">
-  <img src="./src/renderer/assets/eltor-home.png" alt="Home Screen" width="400"/>
-  <img src="./src/renderer/assets/eltor-pay-relays.png" alt="Relay Payment" width="400"/>
-  <img src="./src/renderer/assets/eltor-flow.png" alt="Network Flow" width="400"/>
-  <img src="./src/renderer/assets/eltor-user.png" alt="User Interface" width="400"/>
+  <img src="./frontend/src/assets/eltor-home.png" alt="Home Screen" width="90%"/><br/>
+  <img src="./frontend/src/assets/eltor-flow.png" alt="Network Flow" width="90%"/>
 </div>
 
----
 
-**El Tor**: Privacy-first networking with economic incentives 🚀
-
-Umbrel
-=======
-
-To copy local phoenix conf folder over to umbrel via ssh for testing:
-```
-scp ~/.phoenix/* umbrel@umbrel.local:~/umbrel/app-data/eltor-app/data/phoenix
-```
+## 📜 License
+MIT License

@@ -4,6 +4,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use crate::lightning::LightningNode;
+use crate::eltor::EltorManager;
 
 // Log entry structure
 #[derive(Debug, Clone, Serialize)]
@@ -31,34 +32,40 @@ impl WalletState {
     }
 }
 
-// Shared state for tracking eltord processes and logs
+// Shared state for tracking eltord tasks and logs
 #[derive(Clone)]
 pub struct AppState {
-    pub client_process: Arc<Mutex<Option<tokio::process::Child>>>,
-    pub relay_process: Arc<Mutex<Option<tokio::process::Child>>>,
+    pub client_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    pub relay_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     pub log_sender: broadcast::Sender<LogEntry>,
     pub recent_logs: Arc<Mutex<VecDeque<LogEntry>>>,
     pub wallet_state: WalletState,
     pub lightning_node: Option<Arc<LightningNode>>,
     pub torrc_file_name: String,
+    pub eltor_manager: Option<Arc<EltorManager>>,
 }
 
 impl AppState {
     pub fn new(use_phoenixd_embedded: bool) -> Self {
         let (log_sender, _) = broadcast::channel(1000);
         Self {
-            client_process: Arc::new(Mutex::new(None)),
-            relay_process: Arc::new(Mutex::new(None)),
+            client_task: Arc::new(Mutex::new(None)),
+            relay_task: Arc::new(Mutex::new(None)),
             log_sender,
             recent_logs: Arc::new(Mutex::new(VecDeque::with_capacity(100))),
             wallet_state: WalletState::new(use_phoenixd_embedded),
             lightning_node: None,
             torrc_file_name: "torrc".to_string(),
+            eltor_manager: None,
         }
     }
 
     pub fn set_lightning_node(&mut self, node: LightningNode) {
         self.lightning_node = Some(Arc::new(node));
+    }
+
+    pub fn set_eltor_manager(&mut self, manager: EltorManager) {
+        self.eltor_manager = Some(Arc::new(manager));
     }
 
     pub fn add_log(&self, entry: LogEntry) {
@@ -90,6 +97,8 @@ pub struct StatusResponse {
 #[derive(Serialize)]
 pub struct EltordStatusResponse {
     pub running: bool,
+    pub client_running: bool,
+    pub relay_running: bool,
     pub pid: Option<u32>,
     pub recent_logs: Vec<LogEntry>,
 }

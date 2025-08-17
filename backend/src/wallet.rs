@@ -3,6 +3,7 @@ use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as TokioCommand;
 use chrono::Utc;
 
+use crate::paths::PathConfig;
 use crate::state::{AppState, LogEntry};
 
 // Function to read phoenixd logs from stdout
@@ -97,38 +98,28 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
     }
 
     // Get the path to the phoenixd binary
-    let current_dir = std::env::current_dir().map_err(|e| {
-        format!("Error getting current directory: {}", e)
+    // Use PathConfig to find the phoenixd binary
+    let path_config = PathConfig::new().map_err(|e| {
+        format!("Error getting path configuration: {}", e)
     })?;
     
-    // Check multiple possible locations for the phoenixd binary
-    let possible_paths = vec![
-        current_dir.join("bin").join("phoenixd"),                    // Backend standalone
-        current_dir.join("..").join("..").join("backend").join("bin").join("phoenixd"), // Tauri context
-        current_dir.join("..").join("backend").join("bin").join("phoenixd"), // Alternative Tauri path
-    ];
+    let phoenixd_binary = path_config.get_executable_path("phoenixd");
     
-    let mut phoenixd_binary = None;
-    for path in possible_paths {
-        if path.exists() {
-            phoenixd_binary = Some(path);
-            break;
-        }
+    if !phoenixd_binary.exists() {
+        return Err(format!("Phoenixd binary not found at: {:?}", phoenixd_binary));
     }
-    
-    let phoenixd_binary = phoenixd_binary.ok_or_else(|| {
-        format!("Phoenixd binary not found. Searched paths: {:?}", 
-            vec![
-                current_dir.join("bin").join("phoenixd"),
-                current_dir.join("..").join("..").join("backend").join("bin").join("phoenixd"),
-                current_dir.join("..").join("backend").join("bin").join("phoenixd"),
-            ]
-        )
-    })?;
     
     println!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
     
+    // Set phoenixd working directory to app data directory to ensure it can write files
+    let phoenixd_working_dir = path_config.data_dir.join("phoenixd");
+    if let Err(e) = std::fs::create_dir_all(&phoenixd_working_dir) {
+        println!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
+        println!("   Phoenixd will use current directory for data files");
+    }
+    
     let mut child = TokioCommand::new(&phoenixd_binary)
+        .current_dir(&phoenixd_working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

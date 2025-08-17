@@ -26,6 +26,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
   const dispatch = useDispatch()
   const { myIp, circuitInUse: circuit } = useSelector((state) => state.global)
+  const [exitCountry, setExitCountry] = useState<string | null>(null) 
 
   const [markers, setMarkers] = useState<
     {
@@ -53,6 +54,7 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
       console.log(
         `📍 IP ${ip} located at: ${result.city}, ${result.country} (${result.latitude}, ${result.longitude})`,
       )
+      setExitCountry(result.country)
       return [result.longitude, result.latitude] // [lng, lat] for your map
     } catch (error) {
       console.warn(`Failed to lookup IP ${ip}:`, error)
@@ -157,6 +159,24 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
           ))
         }
       </Geographies>
+      {/* Exit Country Label */}
+      {exitCountry && (
+        <g>
+          <text
+            x="50%"
+            y="35"
+            textAnchor="middle"
+            style={{
+              fontSize: '14px',
+              fontWeight: 'bold',
+              fill: '#ffffff',
+              fontFamily: 'Arial, sans-serif'
+            }}
+          >
+            Exit: {exitCountry}
+          </text>
+        </g>
+      )}
       {markers.map((marker, i) => {
         if (i === markers.length - 1) return null
         const nextMarker = markers[i + 1]

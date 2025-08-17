@@ -1,6 +1,11 @@
 // frontend/src/utils/platform.ts
 export const isTauri = () => {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  const result = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  console.log('🔍 [isTauri] Platform check result:', result)
+  if (typeof window !== 'undefined') {
+    console.log('🔍 [isTauri] Available window properties:', Object.keys(window).filter(k => k.includes('TAURI')))
+  }
+  return result
 }
 
 export const isWeb = () => !isTauri()

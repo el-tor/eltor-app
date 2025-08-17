@@ -5,22 +5,17 @@ import { useDispatch, useSelector } from '../hooks'
 import { setClientActive, setRelayActive, addLogClient, addLogRelay } from '../globalStore'
 
 interface UseEltordOptions {
-  torrcFile?: string
-  mode?: 'client' | 'relay'
+  mode: 'client' | 'relay' | 'both'
 }
 
-export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
+export function useEltord(options: UseEltordOptions) {
   const [isRunning, setIsRunning] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [isLoadingDeactivate, setLoadingDeactivate] = useState(false)
   const dispatch = useDispatch()
   const { clientActive, relayActive } = useSelector((state) => state.global)
 
-  // Handle both old and new API signatures
-  const options: UseEltordOptions = typeof torrcFileOrOptions === 'string' 
-    ? { torrcFile: torrcFileOrOptions, mode: 'client' }
-    : torrcFileOrOptions || { mode: 'client' }
-
-  const { torrcFile, mode = 'client' } = options
+  const { mode } = options
 
   // Check if this specific mode is currently active
   const isModeActive = mode === 'client' ? clientActive : relayActive
@@ -30,10 +25,24 @@ export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
   const checkStatus = async () => {
     try {
       const status = await apiService.getEltordStatus()
-      // The global status only tells us about the client process (legacy)
-      // We'll rely on our Redux state to track individual modes
-      // Only update local isRunning state, don't touch Redux states here
-      setIsRunning(isModeActive)
+      
+      // Update Redux state to match backend reality
+      if (status.client_running !== clientActive) {
+        dispatch(setClientActive(status.client_running))
+        console.log(`📊 [useEltord] Synced clientActive to ${status.client_running}`)
+      }
+      
+      if (status.relay_running !== relayActive) {
+        dispatch(setRelayActive(status.relay_running))
+        console.log(`📊 [useEltord] Synced relayActive to ${status.relay_running}`)
+      }
+      
+      // Update local isRunning state based on this specific mode
+      const modeRunning = mode === 'client' ? status.client_running : status.relay_running
+      if (modeRunning !== isRunning) {
+        setIsRunning(modeRunning)
+        console.log(`🔄 [useEltord] Synced local isRunning to ${modeRunning} for ${mode}`)
+      }
     } catch (error) {
       console.error('Failed to check eltord status:', error)
     }
@@ -46,22 +55,14 @@ export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
       // Since processes can now run independently, we don't need to check
       // if another mode is running. Each mode can be activated independently.
       
-      console.log(`📡 [useEltord] Calling apiService.activateEltord with torrcFile: ${torrcFile}, mode: ${mode}`)
-      await apiService.activateEltord(torrcFile, mode)
+      console.log(`📡 [useEltord] Calling apiService.activateEltord mode: ${mode}`)
+      await apiService.activateEltord( mode)
       console.log(`✅ [useEltord] Successfully activated ${mode} mode`)
       
-      // Update Redux state to reflect this mode is now active
-      if (mode === 'client') {
-        dispatch(setClientActive(true))
-        console.log(`📊 [useEltord] Set clientActive to true`)
-      } else {
-        dispatch(setRelayActive(true))
-        console.log(`📊 [useEltord] Set relayActive to true`)
-      }
+      // Check status from backend to sync state
+      await checkStatus()
       
-      // Update local isRunning state immediately
-      setIsRunning(true)
-      console.log(`🔄 [useEltord] Set local isRunning to true for ${mode}`)
+      console.log(`📊 [useEltord] Status checked after activation`)
     } catch (error) {
       console.error(`❌ [useEltord] Failed to activate eltord (${mode}):`, error)
       throw error
@@ -73,45 +74,27 @@ export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
 
   const deactivate = async () => {
     console.log(`🛑 [useEltord] Starting deactivation for mode: ${mode}`)
-    setLoading(true)
+    setLoadingDeactivate(true)
     try {
       // Both Tauri and web mode now support mode-specific deactivation
-      console.log(`📡 [useEltord] Calling apiService.deactivateEltordWithMode for ${mode}`)
-      await apiService.deactivateEltordWithMode(mode)
+      console.log(`📡 [useEltord] Calling apiService.deactivateEltord for ${mode}`)
+      await apiService.deactivateEltord(mode)
       
-      // Clear only this mode's active state
-      if (mode === 'client') {
-        dispatch(setClientActive(false))
-        console.log(`📊 [useEltord] Set clientActive to false`)
-      } else {
-        dispatch(setRelayActive(false))
-        console.log(`📊 [useEltord] Set relayActive to false`)
-      }
+      // Check status from backend to sync state
+      await checkStatus()
       
-      // Update local isRunning state immediately
-      setIsRunning(false)
-      console.log(`🔄 [useEltord] Set local isRunning to false for ${mode}`)
+      console.log(`📊 [useEltord] Status checked after deactivation`)
     } catch (error) {
       console.error(`❌ [useEltord] Failed to deactivate eltord (${mode}):`, error)
       
       // Handle the specific case where backend says "No eltord process is currently running"
       // This indicates the frontend state is out of sync with the backend
       const errorMessage = error instanceof Error ? error.message : String(error)
-      if (errorMessage.includes(`No eltord ${mode} process is currently running`)) {
+      if (errorMessage.includes(`No eltor ${mode} task is currently running`)) {
         console.log(`🔄 [useEltord] Backend says ${mode} not running, syncing frontend state`)
         
-        // Update Redux state to match backend reality
-        if (mode === 'client') {
-          dispatch(setClientActive(false))
-          console.log(`📊 [useEltord] Synced clientActive to false`)
-        } else {
-          dispatch(setRelayActive(false))
-          console.log(`📊 [useEltord] Synced relayActive to false`)
-        }
-        
-        // Update local isRunning state
-        setIsRunning(false)
-        console.log(`🔄 [useEltord] Synced local isRunning to false for ${mode}`)
+        // Check status from backend to sync state
+        await checkStatus()
         
         // Don't re-throw the error since we've handled the state sync
         console.log(`✅ [useEltord] State synchronized for ${mode}`)
@@ -120,7 +103,7 @@ export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
       
       throw error
     } finally {
-      setLoading(false)
+      setLoadingDeactivate(false)
       console.log(`🏁 [useEltord] Finished deactivation attempt for ${mode}`)
     }
   }
@@ -224,6 +207,7 @@ export function useEltord(torrcFileOrOptions?: string | UseEltordOptions) {
     isRunning: isModeActive, // This specific mode is running
     isAnyModeRunning, // Any mode is running  
     loading, 
+    isLoadingDeactivate,
     activate, 
     deactivate, 
     checkStatus 

@@ -17,7 +17,10 @@ const getApiBaseUrl = () => {
   // Just use the current location's protocol, hostname, and port
   // This works because the frontend is served from the same server as the API
   const currentUrl = `${window.location.protocol}//${window.location.host}`
-  console.log('walletApiService - Using current location as API base:', currentUrl)
+  console.log(
+    'walletApiService - Using current location as API base:',
+    currentUrl,
+  )
   return currentUrl
 }
 
@@ -51,8 +54,36 @@ interface ListTransactionsResponse {
   transactions: TransactionResponse[]
 }
 
-class WalletApiService {
+// Lightning config interfaces
+export interface LightningConfigRequest {
+  node_type: 'phoenixd' | 'cln' | 'lnd'
+  url: string
+  password: string
+  set_as_default: boolean
+}
 
+export interface DeleteLightningConfigRequest {
+  node_type: 'phoenixd' | 'cln' | 'lnd'
+  url?: string // Optional - if not provided, deletes first match of node_type
+}
+
+export interface LightningConfigResponse {
+  node_type: string
+  url: string
+  password_type: 'password' | 'rune' | 'macaroon'
+  password: string // The actual credential value
+  is_default: boolean
+}
+
+export interface ListLightningConfigsResponse {
+  configs: LightningConfigResponse[]
+}
+
+export interface MessageResponse {
+  message: string
+}
+
+class WalletApiService {
   // Get node info (can be used to derive channel info)
   async getNodeInfo(): Promise<NodeInfoResponse> {
     if (isTauri()) {
@@ -132,6 +163,89 @@ class WalletApiService {
         throw new Error(error)
       }
       return await response.json()
+    }
+  }
+
+  // Upsert (create/update) lightning configuration
+  async upsertLightningConfig(
+    config: LightningConfigRequest,
+  ): Promise<MessageResponse> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('upsert_lightning_config', { config })
+      } catch (error) {
+        throw new Error(`Failed to upsert lightning config: ${error}`)
+      }
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
+    }
+  }
+
+  // Delete lightning configuration
+  async deleteLightningConfig(
+    config: DeleteLightningConfigRequest,
+  ): Promise<MessageResponse> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('delete_lightning_config', { config })
+      } catch (error) {
+        throw new Error(`Failed to delete lightning config: ${error}`)
+      }
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/config`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config),
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
+    }
+  }
+
+  // List all lightning configurations
+  async listLightningConfigs(): Promise<LightningConfigResponse[]> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        const data: ListLightningConfigsResponse = await tauriInvoke(
+          'list_lightning_configs',
+        )
+        return data.configs
+      } catch (error) {
+        throw new Error(`Failed to list lightning configs: ${error}`)
+      }
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/wallet/configs`)
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      const data: ListLightningConfigsResponse = await response.json()
+      return data.configs
     }
   }
 }

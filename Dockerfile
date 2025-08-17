@@ -45,8 +45,7 @@ RUN git clone https://github.com/el-tor/eltor.git /root/code/eltor && \
 
 # Checkout specific branches
 # TODO change to master
-RUN cd /root/code/eltord && git checkout master && \
-    cd /root/code/lni && git checkout search
+RUN cd /root/code/lni && git checkout search
 
 # Build libeltor-sys
 RUN cd /root/code/libeltor-sys && \
@@ -148,11 +147,10 @@ COPY backend/bin/torrc.template /home/user/code/eltor-app/backend/bin/
 COPY backend/bin/torrc.relay.template /home/user/code/eltor-app/backend/bin/
 COPY backend/run.sh /home/user/code/eltor-app/backend/
 COPY scripts/start.sh /home/user/start.sh
-COPY scripts/exports.sh /home/user/exports.sh
 
 # Set ownership for all copied files (use shared group)
 RUN chown -R user:datagroup /home/user/code \
-    && chown user:datagroup /home/user/start.sh /home/user/exports.sh \
+    && chown user:datagroup /home/user/start.sh \
     && chmod -R g+rw /home/user/code
 
 # Set permissions
@@ -161,8 +159,7 @@ RUN chmod +x /home/user/code/eltor-app/backend/bin/eltord \
              /home/user/code/eltor-app/backend/bin/phoenix-cli \
              /home/user/code/eltor-app/backend/bin/eltor-backend \
              /home/user/code/eltor-app/backend/run.sh \
-             /home/user/start.sh \
-             /home/user/exports.sh
+             /home/user/start.sh
 
 # Switch to non-root user
 USER user
@@ -172,7 +169,7 @@ WORKDIR /home/user/code/eltor-app
 
 # Expose ports (now using environment variables)
 # Note: Frontend is now served by the backend, so only backend port is needed
-EXPOSE 5174 9740 18058 9996
+EXPOSE 5174 9740 18058 18068 18057 18067 9996 9997 7781
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

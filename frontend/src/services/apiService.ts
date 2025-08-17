@@ -26,6 +26,8 @@ const getApiBaseUrl = () => {
 
 export interface EltordStatus {
   running: boolean
+  client_running: boolean
+  relay_running: boolean
   pid?: number
   recent_logs?: LogEntry[]
 }
@@ -141,29 +143,24 @@ class ApiService {
     this.isEventSystemSetup = false
   }
   // Eltord methods
-  async activateEltord(torrcFile?: string, mode?: 'client' | 'relay'): Promise<string> {
+  async activateEltord(
+    mode: 'client' | 'relay' | 'both',
+  ): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
-      return await tauriInvoke('activate_eltord', { 
-        torrcFileName: torrcFile,
-        mode: mode || 'client'
+      return await tauriInvoke('activate_eltord_invoke', {
+        mode: mode || 'client',
       })
     } else {
       // Build endpoint based on provided parameters
       let endpoint = `${getApiBaseUrl()}/api/eltord/activate`
       
-      if (mode && torrcFile) {
-        // Both mode and torrc file specified
-        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}/${encodeURIComponent(torrcFile)}`
-      } else if (mode) {
         // Only mode specified
-        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}`
-      } else if (torrcFile) {
-        // Only torrc file specified (use default client mode)
-        endpoint = `${getApiBaseUrl()}/api/eltord/activate/client/${encodeURIComponent(torrcFile)}`
-      }
-      // If neither specified, use default endpoint
+        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(
+          mode,
+        )}`
       
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -179,44 +176,21 @@ class ApiService {
     }
   }
 
-  // Enhanced Eltord activation with explicit mode support
-  async activateEltordWithMode(options: {
-    mode: 'client' | 'relay'
-    torrcFile?: string
-  }): Promise<string> {
-    return this.activateEltord(options.torrcFile, options.mode)
-  }
-
-  async deactivateEltord(): Promise<string> {
+  async deactivateEltord(mode: 'client' | 'relay' | 'both'): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
-      return await tauriInvoke('deactivate_eltord')
+      console.log(
+        `📡 [API] Calling deactivate_eltord for mode: ${mode}`,
+      )
+      return await tauriInvoke('deactivate_eltord_invoke', { mode })
     } else {
-      const response = await fetch(`${getApiBaseUrl()}/api/eltord/deactivate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-
-      if (!response.ok) {
-        const error = await response.text()
-        throw new Error(error)
-      }
-
-      const data = await response.json()
-      return data.message
-    }
-  }
-
-  async deactivateEltordWithMode(mode: 'client' | 'relay'): Promise<string> {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      console.log(`📡 [API] Calling deactivate_eltord_with_mode for mode: ${mode}`)
-      return await tauriInvoke('deactivate_eltord_with_mode', { mode })
-    } else {
-      const response = await fetch(`${getApiBaseUrl()}/api/eltord/deactivate/${mode}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/eltord/deactivate/${mode}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
 
       if (!response.ok) {
         const error = await response.text()
@@ -231,50 +205,14 @@ class ApiService {
   async getEltordStatus(): Promise<EltordStatus> {
     if (isTauri()) {
       await loadTauriAPIs()
-      return await tauriInvoke('get_eltord_status')
+      return await tauriInvoke('get_eltord_status_invoke')
     } else {
       const response = await fetch(`${getApiBaseUrl()}/api/eltord/status`)
       return await response.json()
     }
   }
 
-  // Tor methods
-  async connectTor(): Promise<string> {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      return await tauriInvoke('connect_tor')
-    } else {
-      const response = await fetch(`${getApiBaseUrl()}/api/tor/connect`, {
-        method: 'POST',
-      })
-      const data = await response.json()
-      return data.message || 'Connected'
-    }
-  }
-
-  async disconnectTor(): Promise<string> {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      return await tauriInvoke('disconnect_tor')
-    } else {
-      const response = await fetch(`${getApiBaseUrl()}/api/tor/disconnect`, {
-        method: 'POST',
-      })
-      const data = await response.json()
-      return data.message || 'Disconnected'
-    }
-  }
-
-  async getTorStatus(): Promise<TorStatus> {
-    if (isTauri()) {
-      await loadTauriAPIs()
-      return await tauriInvoke('get_tor_status')
-    } else {
-      const response = await fetch(`${getApiBaseUrl()}/api/tor/status`)
-      return await response.json()
-    }
-  }
-
+  
   // Test method to verify event system
   async testLogEvent(): Promise<string> {
     if (isTauri()) {
@@ -379,6 +317,21 @@ class ApiService {
           return { error: result.Err || 'Unknown error' }
         }
       })
+    }
+  }
+
+  // Debug info
+  async getDebugInfo(): Promise<any> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      return await tauriInvoke('get_debug_info')
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/debug`)
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to get debug info')
+      }
+      return await response.json()
     }
   }
 }

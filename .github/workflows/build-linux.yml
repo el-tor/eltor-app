@@ -1,0 +1,196 @@
+name: Build eltor-app for Linux (ARM64 & x86_64)
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'Architecture to build'
+        required: true
+        default: 'x86_64'
+        type: choice
+        options:
+          - both
+          - arm64
+          - x86_64
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+jobs:
+  build-linux-arm64:
+    name: Build eltor-app - Linux ARM64
+    runs-on: ubuntu-latest
+    if: github.event.inputs.architecture == 'both' || github.event.inputs.architecture == 'arm64'
+    env:
+      PLATFORM_TARGET: aarch64-unknown-linux-gnu
+      PLATFORM_BIN: eltor-app
+      PLATFORM_OS_NAME: linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install Linux ARM64 cross-compilation tools
+        run: |
+          sudo apt-get update
+          
+          # Add ARM64 architecture
+          sudo dpkg --add-architecture arm64
+          sudo apt-get update
+          
+          # Install cross-compilation tools
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            libc6-dev-arm64-cross \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            musl-tools \
+            musl-dev
+          
+          # Install ARM64 GTK and other GUI libraries
+          sudo apt-get install -y \
+            libgtk-3-dev:arm64 \
+            libgdk-pixbuf-2.0-dev:arm64 \
+            libcairo-gobject2:arm64 \
+            libglib2.0-dev:arm64 \
+            libwebkit2gtk-4.0-dev:arm64 \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libappindicator3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            libsoup-3.0-dev:arm64 \
+            libjavascriptcoregtk-4.0-dev:arm64 \
+            libjavascriptcoregtk-4.1-dev:arm64 \
+            libpango1.0-dev:arm64 \
+            libharfbuzz-dev:arm64 \
+            libgdk-pixbuf2.0-dev:arm64 \
+            patchelf
+
+      - name: Setup Linux cross-compilation environment
+        run: |
+          # Set up environment variables for cross-compilation
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_SYSROOT_DIR=/" >> $GITHUB_ENV
+          echo "OPENSSL_DIR=/usr" >> $GITHUB_ENV
+          
+          # Set library path for ARM64 libraries
+          echo "LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          
+          # Create a pkg-config wrapper for cross-compilation
+          sudo tee /usr/local/bin/aarch64-linux-gnu-pkg-config > /dev/null << 'EOF'
+          #!/bin/bash
+          export PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig"
+          export PKG_CONFIG_LIBDIR="/usr/lib/aarch64-linux-gnu/pkgconfig"
+          export PKG_CONFIG_SYSROOT_DIR="/"
+          exec pkg-config "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/aarch64-linux-gnu-pkg-config
+          
+          echo "PKG_CONFIG_aarch64_unknown_linux_gnu=/usr/local/bin/aarch64-linux-gnu-pkg-config" >> $GITHUB_ENV
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Build eltor-app ARM64
+        run: |
+          cd frontend
+          pnpm i
+          pnpm tauri build --target aarch64-unknown-linux-gnu --bundles deb
+
+      - name: Upload ARM64 artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !env.ACT }}
+        with:
+          name: eltor-app-linux-arm64
+          path: |
+            frontend/src-tauri/target/aarch64-unknown-linux-gnu/release/eltor-app
+            frontend/src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
+
+  build-linux-x86_64:
+    name: Build eltor-app - Linux x86_64
+    runs-on: ubuntu-latest
+    if: github.event.inputs.architecture == 'both' || github.event.inputs.architecture == 'x86_64'
+    env:
+      PLATFORM_TARGET: x86_64-unknown-linux-gnu
+      PLATFORM_BIN: eltor-app
+      PLATFORM_OS_NAME: linux-x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install Linux x86_64 native tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            libsqlite3-dev \
+            libgtk-3-dev \
+            libgdk-pixbuf-2.0-dev \
+            libcairo-gobject2 \
+            libglib2.0-dev \
+            libwebkit2gtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libpango1.0-dev \
+            libharfbuzz-dev \
+            patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Build eltor-app x86_64
+        run: |
+          cd frontend
+          pnpm i
+          pnpm tauri build --target x86_64-unknown-linux-gnu --bundles deb
+
+      - name: Upload x86_64 artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !env.ACT }}
+        with:
+          name: eltor-app-linux-x86_64
+          path: |
+            frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/eltor-app
+            frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb

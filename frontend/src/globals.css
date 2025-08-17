@@ -7,10 +7,17 @@
   }
 }
 
+@media (max-width: 1200px) {
+  .container {
+    width: 100%;
+    padding: 0px;
+  }
+}
+
 /* Example CSS for responsiveness */
 @media (max-width: 768px) {
   .container {
-    width: 100%;
+    width: "100%";
     padding: 0px;
   }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "eltor-app"
-version = "0.1.0"
+version = "0.0.1"
 description = "eltor-app"
 authors = ["eltordev"]
 license = "MIT"
@@ -20,11 +20,11 @@ log = "0.4"
 tauri = { version = "2.5.0", features = ["tray-icon"] }
 tauri-plugin-shell = "2.0.0"
 tokio = { version = "1", features = ["full"] }
-tauri-plugin-log = "2.0.0" 
 dirs = "5.0.0"
 chrono = { version = "0.4", features = ["serde"] }
 # Import the backend as a local dependency
 eltor-backend = { path = "../../backend" }
 dotenv = "0.15.0"
+rand = { version = "0.9.1", features = ["std"] }
 
 
