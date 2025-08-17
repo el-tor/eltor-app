@@ -16,10 +16,13 @@ services:
       - '0.0.0.0:18058:18058' # Tor SOCKS proxy - explicitly bind to all interfaces
       - '0.0.0.0:18057:18057' # Tor Relay SOCKS proxy - explicitly bind to all interfaces
       - '0.0.0.0:9996:9996' # Tor relay OR port
+      - '0.0.0.0:18068:18068' # Tor SOCKS proxy - explicitly bind to all interfaces
+
     volumes:
       # Todo use ~/.eltor for data storage (need to update the eltord project to use this path)
       - ./data/eltor:/home/user/code/eltor-app/backend/bin/data
       - ./data/phoenix:/home/user/.phoenix
+      - ./scripts/exports.sh:/home/user/exports.sh
     env_file:
       - .env
     environment:

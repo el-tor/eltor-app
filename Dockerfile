@@ -147,11 +147,10 @@ COPY backend/bin/torrc.template /home/user/code/eltor-app/backend/bin/
 COPY backend/bin/torrc.relay.template /home/user/code/eltor-app/backend/bin/
 COPY backend/run.sh /home/user/code/eltor-app/backend/
 COPY scripts/start.sh /home/user/start.sh
-COPY scripts/exports.sh /home/user/exports.sh
 
 # Set ownership for all copied files (use shared group)
 RUN chown -R user:datagroup /home/user/code \
-    && chown user:datagroup /home/user/start.sh /home/user/exports.sh \
+    && chown user:datagroup /home/user/start.sh \
     && chmod -R g+rw /home/user/code
 
 # Set permissions
@@ -160,8 +159,7 @@ RUN chmod +x /home/user/code/eltor-app/backend/bin/eltord \
              /home/user/code/eltor-app/backend/bin/phoenix-cli \
              /home/user/code/eltor-app/backend/bin/eltor-backend \
              /home/user/code/eltor-app/backend/run.sh \
-             /home/user/start.sh \
-             /home/user/exports.sh
+             /home/user/start.sh
 
 # Switch to non-root user
 USER user
