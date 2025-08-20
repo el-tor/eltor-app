@@ -7,7 +7,7 @@ use crate::paths::PathConfig;
 use crate::state::{AppState, LogEntry};
 
 // Function to read phoenixd logs from stdout
-async fn read_phoenixd_logs(
+pub async fn read_phoenixd_logs(
     mut reader: AsyncBufReader<tokio::process::ChildStdout>,
     state: AppState,
     source: &'static str,
@@ -41,7 +41,7 @@ async fn read_phoenixd_logs(
 }
 
 // Function to read phoenixd logs from stderr
-async fn read_phoenixd_stderr_logs(
+pub async fn read_phoenixd_stderr_logs(
     mut reader: AsyncBufReader<tokio::process::ChildStderr>,
     state: AppState,
     source: &'static str,

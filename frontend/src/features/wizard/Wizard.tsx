@@ -86,13 +86,13 @@ export function Wizard({ close }: { close: () => void }) {
                 <Title order={3}>Configure Lightning Node (3/3)</Title>
                 <Box m="xs">
                   <p>
-                    On the next screen configure your lightning node (Core
-                    Lightning, LND, Strike or Phoenixd).
+                    On the next screen, configure your lightning node (Core
+                    Lightning or Phoenixd).
                   </p>
                   <p>
                     If you do not have a node you can choose Phoenixd and the
                     app will locally spin up an embedded Phoenixd node for you
-                    (just load it up with sats!).
+                    (just load it up with some sats!)
                   </p>
                   <p>After that you will be all set to use El Tor!</p>
                 </Box>

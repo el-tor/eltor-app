@@ -45,7 +45,7 @@ RUN git clone https://github.com/el-tor/eltor.git /root/code/eltor && \
 
 # Checkout specific branches
 # TODO change to master
-RUN cd /root/code/lni && git checkout search
+# RUN cd /root/code/lni && git checkout search
 
 # Build libeltor-sys
 RUN cd /root/code/libeltor-sys && \

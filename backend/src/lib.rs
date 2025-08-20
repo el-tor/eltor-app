@@ -31,11 +31,14 @@ pub use ports::{
 };
 pub use state::{AppState, EltordStatusResponse, LogEntry, MessageResponse, StatusResponse};
 use tokio::sync::broadcast;
-pub use wallet::{start_phoenixd, stop_phoenixd};
+pub use wallet::{start_phoenixd, stop_phoenixd, read_phoenixd_logs, read_phoenixd_stderr_logs};
 pub use debug_info::DebugInfo;
 
 // Re-export IP location types and functions
 pub use routes::ip::{init_ip_database, lookup_ip_location, IpLocationResponse};
+
+// Re-export Phoenix download functions
+pub use routes::phoenix::{download_phoenix, download_phoenix_default, start_phoenix_with_config, PhoenixStartResponse};
 
 use crate::eltor::EltorMode;
 

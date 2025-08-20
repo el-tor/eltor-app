@@ -150,6 +150,7 @@ async fn main() {
         .route("/api/ip/bulk", post(ip::get_bulk_ip_locations))
         .merge(eltor_backend::routes::eltor::create_routes())
         .merge(eltor_backend::routes::wallet::create_routes())
+        .merge(eltor_backend::routes::phoenix::create_routes())
         .merge(eltor_backend::routes::debug::create_routes())
         // Serve static frontend files (this should be last to catch all non-API routes)
         .fallback(static_files::serve_static)
@@ -194,6 +195,8 @@ async fn main() {
     println!("   PUT  /api/wallet/config");
     println!("   DELETE /api/wallet/config");
     println!("   GET  /api/wallet/configs");
+    println!("   POST /api/phoenix/start");
+    println!("   POST /api/phoenix/stop");
     println!("   GET  /api/debug");
     println!("📁 Static files served from frontend/dist/");
     println!("🔧 Environment variables injected into frontend:");

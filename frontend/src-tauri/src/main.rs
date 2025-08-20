@@ -15,7 +15,7 @@ use eltor_backend::{
     activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, initialize_app_state,
     initialize_app_state_with_path_config, initialize_phoenixd, lightning, lookup_ip_location,
     ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState, DebugInfo,
-    IpLocationResponse, LogEntry, PathConfig,
+    IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -813,6 +813,67 @@ async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, Stri
         .map_err(|e| format!("Failed to serialize debug info: {}", e))?)
 }
 
+#[command]
+async fn start_phoenix_daemon(
+    app_handle: AppHandle,
+) -> Result<serde_json::Value, String> {
+    println!("🔥 start_phoenix_daemon called");
+
+    let path_config = create_tauri_path_config(Some(&app_handle))?;
+
+    // Use the new start_phoenix_with_config function
+    match start_phoenix_with_config(&path_config).await {
+        Ok(response) => {
+            println!("✅ Phoenix daemon started successfully with config: {:?}", response);
+            Ok(serde_json::to_value(&response)
+                .map_err(|e| format!("Failed to serialize response: {}", e))?)
+        }
+        Err(e) => {
+            println!("❌ Failed to start Phoenix daemon: {}", e);
+            Err(format!("Failed to start Phoenix daemon: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn stop_phoenix_daemon(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    println!("🛑 stop_phoenix_daemon called");
+
+    // Stop phoenixd using the existing backend function
+    let backend_state = tauri_state.backend_state.read().await;
+    let app_state = backend_state.clone();
+    drop(backend_state);
+    
+    match eltor_backend::stop_phoenixd(app_state).await {
+        Ok(()) => {
+            println!("✅ Phoenix daemon stopped successfully");
+            
+            let response = serde_json::json!({
+                "success": true,
+                "message": "Phoenix daemon stopped successfully",
+                "pid": null // We could get PID from AppState if needed
+            });
+            Ok(response)
+        }
+        Err(e) => {
+            if e.contains("No phoenixd process") || e.contains("not running") {
+                println!("ℹ️  Phoenix daemon was not running");
+                let response = serde_json::json!({
+                    "success": true,
+                    "message": "Phoenix daemon is not currently running",
+                    "pid": null
+                });
+                Ok(response)
+            } else {
+                println!("❌ Failed to stop Phoenix daemon: {}", e);
+                Err(format!("Failed to stop Phoenix daemon: {}", e))
+            }
+        }
+    }
+}
+
 fn main() {
     // Load environment variables from root .env file
     dotenv::from_path("../../.env").ok();
@@ -977,7 +1038,9 @@ fn main() {
             list_lightning_configs,
             delete_lightning_config,
             upsert_lightning_config,
-            get_debug_info
+            get_debug_info,
+            start_phoenix_daemon,
+            stop_phoenix_daemon
         ])
         .run(generate_context!())
         .expect("error while running tauri application");
