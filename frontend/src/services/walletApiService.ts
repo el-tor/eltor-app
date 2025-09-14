@@ -60,6 +60,7 @@ export interface LightningConfigRequest {
   url: string
   password: string
   set_as_default: boolean
+  is_embedded?: boolean // Indicates if this config is for an embedded Phoenix instance
 }
 
 export interface DeleteLightningConfigRequest {
@@ -315,6 +316,23 @@ class WalletApiService {
 
       return await response.json()
     }
+  }
+
+  async detectPhoenixConfig(): Promise<PhoenixStartResponse> {
+    // Only use web API for detection, as we're detecting external Phoenix instances
+    const response = await fetch(`${getApiBaseUrl()}/api/phoenix/detect-config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(error)
+    }
+
+    return await response.json()
   }
 }
 

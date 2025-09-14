@@ -24,6 +24,7 @@ pub struct UpsertLightningConfigRequest {
     pub url: String,
     pub password: String, // Can be password, rune, or macaroon depending on node_type
     pub set_as_default: bool,
+    pub is_embedded: Option<bool>, // Indicates if this config is for an embedded Phoenix instance
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,6 +40,7 @@ pub struct LightningConfigResponse {
     pub password_type: String, // "password", "rune", or "macaroon"
     pub password: String,      // The actual credential value
     pub is_default: bool,
+    pub is_embedded: Option<bool>, // Indicates if this config is for an embedded Phoenix instance
 }
 
 #[derive(Debug, Serialize)]
@@ -299,11 +301,15 @@ async fn list_lightning_configs(
                     };
 
                     LightningConfigResponse {
-                        node_type: config.node_type,
-                        url: config.url,
+                        node_type: config.node_type.clone(),
+                        url: config.url.clone(),
                         password_type: password_type.to_string(),
                         password: config.password, // Include the actual credential
                         is_default: config.is_default,
+                        is_embedded: Some(
+                            config.node_type == "phoenixd" && 
+                            (config.url == "http://127.0.0.1:9740" || config.url == "http://localhost:9740")
+                        ), // Detect embedded Phoenix by URL
                     }
                 })
                 .collect();

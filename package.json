@@ -10,25 +10,20 @@
     "frontend": "cd frontend && pnpm run dev:web",
     "backend": "cd backend && ./run.sh",
     "build:web": "cd frontend && pnpm run build",
-
     "prod": "npm run build:prod && npm run start:prod",
     "build:prod": "npm run build:frontend && npm run build:backend",
     "build:frontend": "cd frontend && pnpm install --no-frozen-lockfile && pnpm run build",
     "build:backend": "cd backend && cargo build --release",
     "start:prod": "BIND_ADDRESS=${BIND_ADDRESS:-127.0.0.1} BACKEND_PORT=${BACKEND_PORT:-${PORT:-5174}} BACKEND_URL=${BACKEND_URL:-} ./backend/target/release/eltor-backend",
-    
     "env": "source scripts/exports.sh",
-
     "docker": "npm run build:frontend && DOCKER_BUILDKIT=1 docker-compose up --build",
     "docker:build:arm": "TARGETARCH=aarch64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/arm64 --build-arg TARGETARCH=aarch64 -t eltor/eltor:latest-arm64 -t eltor/eltor:${npm_package_version}-arm64 .",
     "docker:build:amd": "TARGETARCH=x86_64 DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain npm run build:frontend && docker buildx build --platform linux/amd64 --build-arg TARGETARCH=amd64 -t eltor/eltor:latest-amd64 -t eltor/eltor:${npm_package_version}-amd64 .",
     "docker:push": "docker push eltor/eltor:latest-arm64 && docker push eltor/eltor:latest-amd64 && docker push eltor/eltor:${npm_package_version}-arm64 && docker push eltor/eltor:${npm_package_version}-amd64",
     "docker:manifest": "npm run docker:manifest:latest && npm run docker:manifest:version",
-    
     "docker:manifest:latest": "docker manifest rm eltor/eltor:latest 2>/dev/null || true && docker manifest create eltor/eltor:latest eltor/eltor:latest-arm64 eltor/eltor:latest-amd64 && docker manifest push eltor/eltor:latest",
     "docker:manifest:version": "docker manifest rm eltor/eltor:${npm_package_version} 2>/dev/null || true && docker manifest create eltor/eltor:${npm_package_version} eltor/eltor:${npm_package_version}-arm64 eltor/eltor:${npm_package_version}-amd64 && docker manifest push eltor/eltor:${npm_package_version}",
     "docker:clean": "DOCKER_BUILDKIT=1 docker-compose up --build --no-cache",
-
     "actions:list": "act --list",
     "actions:build:linux:arm": "ACT=true act workflow_dispatch --secret-file .secrets -j build-arm64 -P ubuntu-latest=catthehacker/ubuntu:act-latest --bind"
   },
@@ -38,5 +33,6 @@
   ],
   "devDependencies": {
     "concurrently": "^8.2.2"
-  }
+  },
+  "packageManager": "pnpm@9.9.0+sha256.7a4261e50d9a44d9240baf6c9d6e10089dcf0a79d0007f2a26985a6927324177"
 }

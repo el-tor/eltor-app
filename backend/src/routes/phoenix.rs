@@ -18,6 +18,21 @@ use std::process::Stdio;
 use crate::{paths::PathConfig, state::{AppState, LogEntry}};
 use chrono::Utc;
 
+/// Try to get Phoenix configuration from existing running instance
+async fn get_existing_phoenix_config() -> Result<(String, String), String> {
+    let home_dir = dirs::home_dir().ok_or("Could not get home directory")?;
+    let phoenix_conf_path = home_dir.join(".phoenix").join("phoenix.conf");
+    
+    if !phoenix_conf_path.exists() {
+        return Err("Phoenix config file not found".to_string());
+    }
+    
+    let password = get_phoenixd_password()?;
+    let default_url = "http://127.0.0.1:9740".to_string();
+    
+    Ok((default_url, password))
+}
+
 const PHOENIX_VERSION: &str = "0.6.1";
 const PHOENIX_BASE_URL: &str = "https://github.com/ACINQ/phoenixd/releases/download";
 
@@ -362,6 +377,7 @@ pub fn create_routes() -> Router<AppState> {
     Router::new()
         .route("/api/phoenix/start", post(start_phoenix_api))
         .route("/api/phoenix/stop", post(stop_phoenix_api))
+        .route("/api/phoenix/detect-config", post(detect_phoenix_config_api))
 }
 
 /// API endpoint to start Phoenix daemon
@@ -581,6 +597,29 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
                 message: msg,
                 pid: None,
             }))
+        }
+    }
+}
+
+/// API endpoint to detect existing Phoenix configuration
+async fn detect_phoenix_config_api() -> Result<ResponseJson<PhoenixStartResponse>, StatusCode> {
+    println!("🔍 Attempting to detect existing Phoenix configuration...");
+    
+    match get_existing_phoenix_config().await {
+        Ok((url, password)) => {
+            println!("✅ Found existing Phoenix configuration");
+            Ok(ResponseJson(PhoenixStartResponse {
+                success: true,
+                message: "Existing Phoenix configuration detected".to_string(),
+                downloaded: false,
+                pid: None,
+                url: Some(url),
+                password: Some(password),
+            }))
+        }
+        Err(e) => {
+            println!("❌ Could not detect Phoenix configuration: {}", e);
+            Err(StatusCode::NOT_FOUND)
         }
     }
 }

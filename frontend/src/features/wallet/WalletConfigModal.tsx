@@ -60,6 +60,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
         })(),
       password: existingConfig?.password || '',
       setAsDefault: existingConfig?.is_default || false,
+      is_embedded: existingConfig?.is_embedded || false,
     },
     validate: {
       url: (value) =>
@@ -111,6 +112,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
       url: val.url,
       password: val.password,
       set_as_default: val.setAsDefault,
+      is_embedded: val.is_embedded,
     }
 
     try {
@@ -187,6 +189,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
           form.setFieldValue('url', response.url)
           form.setFieldValue('password', response.password)
           form.setFieldValue('setAsDefault', true) // Default to making it the default wallet
+          form.setFieldValue('is_embedded', true) // Mark as embedded Phoenix instance
           
           notifications.show({
             title: 'Phoenix Started',
@@ -210,11 +213,51 @@ export function WalletConfigModal({ close }: { close: () => void }) {
       }
     } catch (error) {
       console.error('Failed to start Phoenix daemon:', error)
-      notifications.show({
-        title: 'Phoenix Start Failed',
-        message: `Failed to start Phoenix daemon: ${error}`,
-        color: 'red',
-      })
+      
+      // Check if error is about Phoenix already running
+      const errorMessage = String(error)
+      if (errorMessage.includes('already running') || errorMessage.includes('port 9740')) {
+        try {
+          // Attempt to detect existing Phoenix configuration
+          console.log('Attempting to detect existing Phoenix configuration...')
+          const configResponse = await walletApiService.detectPhoenixConfig()
+          
+          if (configResponse.success && configResponse.url && configResponse.password) {
+            // Auto-populate form with detected config
+            form.setFieldValue('url', configResponse.url)
+            form.setFieldValue('password', configResponse.password)
+            form.setFieldValue('setAsDefault', true)
+            form.setFieldValue('is_embedded', true) // Mark as embedded since it's running locally
+            
+            notifications.show({
+              title: 'Phoenix Already Running',
+              message: 'Phoenix is already running. Auto-detected configuration and populated the form fields.',
+              color: 'blue',
+              autoClose: 8000,
+            })
+          } else {
+            notifications.show({
+              title: 'Phoenix Already Running',
+              message: 'Phoenix appears to be running but configuration could not be auto-detected. Please enter the URL and password manually.',
+              color: 'yellow',
+            })
+          }
+        } catch (detectError) {
+          console.error('Failed to detect Phoenix config:', detectError)
+          notifications.show({
+            title: 'Phoenix Already Running',
+            message: 'Phoenix appears to be running but configuration could not be auto-detected. Please enter the URL and password manually.',
+            color: 'yellow',
+          })
+        }
+      } else {
+        // Other error types
+        notifications.show({
+          title: 'Phoenix Start Failed',
+          message: `Failed to start Phoenix daemon: ${error}`,
+          color: 'red',
+        })
+      }
     } finally {
       setPhoenixLoading(false)
     }
