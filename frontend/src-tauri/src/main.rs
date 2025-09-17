@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::env;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{TrayIconBuilder};
 use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
 use tokio::sync::RwLock;
 
@@ -583,7 +583,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         &[&show_i, &hide_i, &activate_i, &deactivate_i, &quit_i],
     )?;
 
-    let _ = TrayIconBuilder::with_id("main-tray")
+    TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
         .icon(app.default_window_icon().unwrap().clone())
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -662,22 +662,9 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             }
             _ => {}
         })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: tauri::tray::MouseButtonState::Up,
-                ..
-            } = event
-            {
-                let app = tray.app_handle();
-                if let Some(window) = app.webview_windows().values().next() {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
-        .build(app);
+        .build(app)?;
 
+    println!("✅ Tray icon setup completed successfully");
     Ok(())
 }
 
