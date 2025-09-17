@@ -50,11 +50,12 @@ pub struct ListLightningConfigsResponse {
 
 // Helper function to get the current lightning node from torrc
 // This ensures we always use the latest configuration
-fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
+async fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
     let path_config = PathConfig::new()?;
     let bin_dir = path_config.bin_dir;
     let torrc_path = bin_dir.join("data").join("torrc");
     crate::lightning::LightningNode::from_torrc(&torrc_path)
+        .map_err(|e| format!("Failed to load wallet: {}", e))
 }
 
 // Get node information
@@ -62,7 +63,7 @@ async fn get_node_info(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<NodeInfoResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.get_node_info().await {
             Ok(info) => Ok(ResponseJson(info)),
             Err(e) => Err((
@@ -83,7 +84,7 @@ async fn create_invoice(
     Json(request): Json<CreateInvoiceRequest>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.create_invoice(request).await {
             Ok(invoice) => Ok(ResponseJson(invoice)),
             Err(e) => Err((
@@ -104,7 +105,7 @@ async fn pay_invoice(
     Json(request): Json<PayInvoiceRequest>,
 ) -> Result<ResponseJson<PayInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.pay_invoice(request).await {
             Ok(payment) => Ok(ResponseJson(payment)),
             Err(e) => Err((
@@ -122,7 +123,7 @@ async fn pay_invoice(
 // Get wallet status (simplified node info)
 async fn get_wallet_status(State(_state): State<AppState>) -> ResponseJson<MessageResponse> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => {
             let status = format!("Lightning wallet connected ({})", node.node_type());
             ResponseJson(MessageResponse { message: status })
@@ -138,7 +139,7 @@ async fn get_wallet_transactions(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListTransactionsResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => {
             // Use basic parameters - matching the required fields
             let params = ListTransactionsParams {
@@ -168,9 +169,11 @@ async fn get_offer(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.get_offer().await {
-            Ok(invoice) => Ok(ResponseJson(invoice)),
+            Ok(response) => {
+                Ok(ResponseJson(response))
+            }
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create invoice: {}", e),

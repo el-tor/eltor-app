@@ -9,7 +9,7 @@ pub use lni::phoenixd::{PhoenixdConfig, PhoenixdNode};
 pub use lni::types::*;
 
 // Import the LightningNode trait to use its methods
-use lni::LightningNode as LniTrait;
+use lni::LightningNode as LniLightningNode;
 
 // Import torrc parser
 use crate::torrc_parser::get_all_payment_lightning_configs;
@@ -33,7 +33,7 @@ pub struct ListTransactionsResponse {
 
 /// Lightning Node wrapper that uses trait objects for dynamic dispatch
 pub struct LightningNode {
-    inner: Arc<dyn LniTrait + Send + Sync>,
+    inner: Arc<dyn LniLightningNode + Send + Sync>,
     node_type: &'static str,
 }
 
