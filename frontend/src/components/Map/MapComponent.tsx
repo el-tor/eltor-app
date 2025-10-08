@@ -46,6 +46,7 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
       ip.startsWith('192.168') ||
       ip.startsWith('10.')
     ) {
+      console.log('Fetching random location for local IP:', ip)
       return getRandomLatLng() as [number, number]
     }
 

@@ -13,10 +13,10 @@ use tokio::sync::RwLock;
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, initialize_app_state,
-    initialize_app_state_with_path_config, initialize_phoenixd, lightning, lookup_ip_location,
-    ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState, DebugInfo,
-    IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
+    activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, init_ip_database,
+    initialize_app_state, initialize_app_state_with_path_config, initialize_phoenixd, lightning,
+    lookup_ip_location, ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState,
+    DebugInfo, IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -1087,6 +1087,10 @@ fn main() {
                 };
                 if ip_db_path.exists() {
                     println!("✅ IP database file found at: {:?}", ip_db_path);
+                    match init_ip_database(ip_db_path.clone()) {
+                        Ok(()) => println!("✅ IP database initialized successfully"),
+                        Err(e) => eprintln!("❌ Failed to initialize IP database: {}", e),
+                    }
                 } else {
                     eprintln!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
                 }
