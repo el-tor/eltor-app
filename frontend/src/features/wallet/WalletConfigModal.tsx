@@ -16,7 +16,7 @@ import { useForm } from '@mantine/form'
 import { upsertLightningConfig, deleteLightningConfig } from './walletStore'
 import type { LightningConfigRequest } from '../../services/walletApiService'
 import { walletApiService } from '../../services/walletApiService'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
 
 
@@ -25,6 +25,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
   const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false)
   const [phoenixLoading, setPhoenixLoading] = useState(false)
   const [phoenixRunning, setPhoenixRunning] = useState(false)
+  const [statusCheckLoading, setStatusCheckLoading] = useState(true)
   const {
     clickedWallet,
     lightningConfigs,
@@ -97,6 +98,49 @@ export function WalletConfigModal({ close }: { close: () => void }) {
     )
     return `${start}${middle}${end}`
   }
+
+  // Check Phoenix status when modal opens (only for phoenixd)
+  useEffect(() => {
+    const checkPhoenixStatus = async () => {
+      if (clickedWallet !== 'phoenixd') {
+        setStatusCheckLoading(false)
+        return
+      }
+
+      try {
+        // Try to detect Phoenix config - this also tells us if it's running
+        const configResponse = await walletApiService.detectPhoenixConfig()
+        
+        if (configResponse.success) {
+          const isRunning = configResponse.is_running ?? false
+          setPhoenixRunning(isRunning)
+          
+          // Auto-populate form fields if available and not already set
+          if (configResponse.url && configResponse.password) {
+            if (!form.getValues().url || form.getValues().url === 'http://localhost:9740') {
+              form.setFieldValue('url', configResponse.url)
+            }
+            if (!form.getValues().password) {
+              form.setFieldValue('password', configResponse.password)
+            }
+            if (!existingConfig) {
+              form.setFieldValue('is_embedded', true)
+            }
+          }
+        } else {
+          setPhoenixRunning(false)
+        }
+      } catch (error) {
+        // If detection fails, Phoenix is probably not running
+        console.log('Phoenix not detected (likely not running):', error)
+        setPhoenixRunning(false)
+      } finally {
+        setStatusCheckLoading(false)
+      }
+    }
+
+    checkPhoenixStatus()
+  }, [clickedWallet])
 
   const handleSave = async () => {
     const validation = form.validate()
@@ -298,11 +342,18 @@ export function WalletConfigModal({ close }: { close: () => void }) {
     <div>
       {clickedWallet === 'phoenixd' && (
         <>
-          <Text mb="sm">Click Start if you want to use the Embedded Phoenix Node. Or configure below for your remote Phoenix Node</Text>
+          <Text mb="sm">
+            {statusCheckLoading 
+              ? 'Checking Phoenix status...' 
+              : phoenixRunning 
+                ? 'Embedded Phoenix Node is running. Configure below or stop to use a remote node.'
+                : 'Click Start if you want to use the Embedded Phoenix Node. Or configure below for your remote Phoenix Node'
+            }
+          </Text>
           <Button.Group>
             <Button 
               radius="md" 
-              loading={phoenixLoading}
+              loading={phoenixLoading || statusCheckLoading}
               disabled={phoenixRunning}
               onClick={handlePhoenixStart}
             >
@@ -311,7 +362,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
             <Button 
               variant='light' 
               radius="md" 
-              loading={phoenixLoading}
+              loading={phoenixLoading || statusCheckLoading}
               disabled={!phoenixRunning}
               onClick={handlePhoenixStop}
             >

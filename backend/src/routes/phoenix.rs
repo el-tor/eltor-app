@@ -18,6 +18,10 @@ use std::process::Stdio;
 use crate::{paths::PathConfig, state::{AppState, LogEntry}};
 use chrono::Utc;
 
+const PHOENIX_VERSION: &str = "0.6.1";
+const PHOENIX_BASE_URL: &str = "https://github.com/ACINQ/phoenixd/releases/download";
+const PHOENIX_DEFAULT_URL: &str = "http://127.0.0.1:9740";
+
 /// Try to get Phoenix configuration from existing running instance
 async fn get_existing_phoenix_config() -> Result<(String, String), String> {
     let home_dir = dirs::home_dir().ok_or("Could not get home directory")?;
@@ -28,13 +32,10 @@ async fn get_existing_phoenix_config() -> Result<(String, String), String> {
     }
     
     let password = get_phoenixd_password()?;
-    let default_url = "http://127.0.0.1:9740".to_string();
+    let default_url = PHOENIX_DEFAULT_URL.to_string();
     
     Ok((default_url, password))
 }
-
-const PHOENIX_VERSION: &str = "0.6.1";
-const PHOENIX_BASE_URL: &str = "https://github.com/ACINQ/phoenixd/releases/download";
 
 /// Phoenix download module for eltor-backend
 /// 
@@ -345,6 +346,7 @@ pub async fn start_phoenix_with_config(path_config: &PathConfig) -> Result<Phoen
                 pid: Some(pid),
                 url: Some(url),
                 password: if password.is_empty() { None } else { Some(password) },
+                is_running: Some(true),
             })
         }
         Err(e) => {
@@ -362,6 +364,7 @@ pub struct PhoenixStartResponse {
     pub pid: Option<u32>,
     pub url: Option<String>,
     pub password: Option<String>,
+    pub is_running: Option<bool>,
 }
 
 /// API endpoint response for Phoenix stop operation
@@ -394,8 +397,9 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
                 message: "Phoenix daemon is already running".to_string(),
                 downloaded: false,
                 pid: child.id(),
-                url: Some("http://127.0.0.1:9740".to_string()),
+                url: Some(PHOENIX_DEFAULT_URL.to_string()),
                 password: None, // Don't expose existing password in API response
+                is_running: Some(true),
             }));
         }
     }
@@ -478,6 +482,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
                 pid: Some(pid),
                 url: Some(url),
                 password: if password.is_empty() { None } else { Some(password) },
+                is_running: Some(true),
             }))
         }
         Err(e) => {
@@ -602,24 +607,44 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
 }
 
 /// API endpoint to detect existing Phoenix configuration
-async fn detect_phoenix_config_api() -> Result<ResponseJson<PhoenixStartResponse>, StatusCode> {
+async fn detect_phoenix_config_api(State(state): State<AppState>) -> Result<ResponseJson<PhoenixStartResponse>, StatusCode> {
     println!("🔍 Attempting to detect existing Phoenix configuration...");
+    
+    // Check if Phoenix process is running in our state
+    let is_running = {
+        let process_guard = state.wallet_state.phoenixd_process.lock().unwrap();
+        process_guard.is_some()
+    };
     
     match get_existing_phoenix_config().await {
         Ok((url, password)) => {
-            println!("✅ Found existing Phoenix configuration");
+            println!("✅ Found existing Phoenix configuration (running: {})", is_running);
             Ok(ResponseJson(PhoenixStartResponse {
                 success: true,
-                message: "Existing Phoenix configuration detected".to_string(),
+                message: format!("Existing Phoenix configuration detected (running: {})", is_running),
                 downloaded: false,
                 pid: None,
                 url: Some(url),
                 password: Some(password),
+                is_running: Some(is_running),
             }))
         }
         Err(e) => {
             println!("❌ Could not detect Phoenix configuration: {}", e);
-            Err(StatusCode::NOT_FOUND)
+            // If config doesn't exist but process is running, return minimal info
+            if is_running {
+                Ok(ResponseJson(PhoenixStartResponse {
+                    success: true,
+                    message: "Phoenix is running but configuration not yet available".to_string(),
+                    downloaded: false,
+                    pid: None,
+                    url: Some(PHOENIX_DEFAULT_URL.to_string()),
+                    password: None,
+                    is_running: Some(true),
+                }))
+            } else {
+                Err(StatusCode::NOT_FOUND)
+            }
         }
     }
 }
@@ -679,7 +704,7 @@ async fn start_phoenixd_process(state: &AppState, path_config: &PathConfig) -> R
     // Wait for phoenix.conf to be created and get the password
     match wait_for_phoenix_conf_and_get_password().await {
         Ok(password) => {
-            let default_url = "http://127.0.0.1:9740".to_string();
+            let default_url = PHOENIX_DEFAULT_URL.to_string();
             println!("✅ Phoenix configuration ready:");
             println!("   URL: {}", default_url);
             println!("   Password: {}***", &password[..std::cmp::min(4, password.len())]);
@@ -690,7 +715,7 @@ async fn start_phoenixd_process(state: &AppState, path_config: &PathConfig) -> R
             println!("⚠️ Could not get Phoenix password: {}", e);
             println!("   Phoenix daemon is running but configuration may need manual setup");
             // Still return success but with empty config
-            Ok((pid, "http://127.0.0.1:9740".to_string(), "".to_string()))
+            Ok((pid, PHOENIX_DEFAULT_URL.to_string(), "".to_string()))
         }
     }
 }

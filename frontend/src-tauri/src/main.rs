@@ -885,6 +885,74 @@ async fn stop_phoenix_daemon(
     }
 }
 
+#[command]
+async fn detect_phoenix_config(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    println!("🔍 detect_phoenix_config called");
+
+    // Check if Phoenix process is running in our state
+    let backend_state = tauri_state.backend_state.read().await;
+    let phoenixd_process = backend_state.wallet_state.phoenixd_process.lock().unwrap();
+    let is_running = phoenixd_process.is_some();
+    drop(phoenixd_process);
+    drop(backend_state);
+
+    // Try to get existing Phoenix config from ~/.phoenix/phoenix.conf
+    let home_dir = dirs::home_dir().ok_or("Could not get home directory")?;
+    let phoenix_conf_path = home_dir.join(".phoenix").join("phoenix.conf");
+    
+    if phoenix_conf_path.exists() {
+        // Try to read the password from config
+        match std::fs::read_to_string(&phoenix_conf_path) {
+            Ok(conf_content) => {
+                let mut password = String::new();
+                for line in conf_content.lines() {
+                    let line = line.trim();
+                    if line.starts_with("http-password=") {
+                        if let Some(pwd) = line.strip_prefix("http-password=") {
+                            password = pwd.to_string();
+                            break;
+                        }
+                    }
+                }
+                
+                if !password.is_empty() {
+                    println!("✅ Found existing Phoenix configuration (running: {})", is_running);
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": format!("Existing Phoenix configuration detected (running: {})", is_running),
+                        "downloaded": false,
+                        "pid": null,
+                        "url": "http://127.0.0.1:9740",
+                        "password": password,
+                        "is_running": is_running,
+                    }))
+                } else {
+                    Err("http-password not found in phoenix.conf".to_string())
+                }
+            }
+            Err(e) => {
+                Err(format!("Failed to read phoenix.conf: {}", e))
+            }
+        }
+    } else if is_running {
+        // Config doesn't exist but process is running
+        println!("⚠️  Phoenix is running but configuration not yet available");
+        Ok(serde_json::json!({
+            "success": true,
+            "message": "Phoenix is running but configuration not yet available",
+            "downloaded": false,
+            "pid": null,
+            "url": "http://127.0.0.1:9740",
+            "password": null,
+            "is_running": true,
+        }))
+    } else {
+        Err("Phoenix config file not found and Phoenix is not running".to_string())
+    }
+}
+
 fn main() {
     // Load environment variables from root .env file
     dotenv::from_path("../../.env").ok();
@@ -1051,7 +1119,8 @@ fn main() {
             upsert_lightning_config,
             get_debug_info,
             start_phoenix_daemon,
-            stop_phoenix_daemon
+            stop_phoenix_daemon,
+            detect_phoenix_config
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

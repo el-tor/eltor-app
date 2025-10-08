@@ -93,6 +93,7 @@ export interface PhoenixStartResponse {
   pid?: number
   url?: string
   password?: string
+  is_running?: boolean
 }
 
 export interface PhoenixStopResponse {
@@ -319,20 +320,29 @@ class WalletApiService {
   }
 
   async detectPhoenixConfig(): Promise<PhoenixStartResponse> {
-    // Only use web API for detection, as we're detecting external Phoenix instances
-    const response = await fetch(`${getApiBaseUrl()}/api/phoenix/detect-config`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('detect_phoenix_config')
+      } catch (error) {
+        throw new Error(`Failed to detect Phoenix config: ${error}`)
+      }
+    } else {
+      // Use web API for detection in non-Tauri mode
+      const response = await fetch(`${getApiBaseUrl()}/api/phoenix/detect-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(error)
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
     }
-
-    return await response.json()
   }
 }
 

@@ -52,8 +52,8 @@ pub struct ListLightningConfigsResponse {
 // This ensures we always use the latest configuration
 async fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
     let path_config = PathConfig::new()?;
-    let bin_dir = path_config.bin_dir;
-    let torrc_path = bin_dir.join("data").join("torrc");
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
     crate::lightning::LightningNode::from_torrc(&torrc_path)
         .map_err(|e| format!("Failed to load wallet: {}", e))
 }
@@ -205,8 +205,19 @@ async fn upsert_lightning_config(
     };
 
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Modify the payment lightning config
     match modify_payment_lightning_config(
@@ -249,8 +260,19 @@ async fn delete_lightning_config(
     };
 
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Delete the lightning config
     match modify_payment_lightning_config(
@@ -286,8 +308,19 @@ async fn list_lightning_configs(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListLightningConfigsResponse>, (StatusCode, String)> {
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Get all payment lightning configs
     match get_all_payment_lightning_configs(&torrc_path) {
