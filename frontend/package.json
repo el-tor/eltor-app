@@ -18,6 +18,7 @@
     "preview": "vite preview",
     "serve": "python3 -m http.server 5173 --directory dist",
     "clean": "rm -rf src-tauri/target && rm -rf node_modules/.cache && rm -rf dist",
+    "icon": "tauri icon src/assets/eltor-logo-1024.svg",
     
     "dmg:debug": "tauri build --bundles dmg --debug",
     "dmg": "tauri build --bundles dmg",

@@ -178,10 +178,8 @@ impl LightningNode {
 
     /// Get node information (async to handle blocking LNI calls)
     pub async fn get_node_info(&self) -> Result<NodeInfoResponse, String> {
-        let inner = self.inner.clone();
-        let info = tokio::task::spawn_blocking(move || inner.get_info())
+        let info = self.inner.get_info()
             .await
-            .map_err(|e| format!("Task join error: {}", e))?
             .map_err(|e| format!("Failed to get node info: {:?}", e))?;
 
         Ok(NodeInfoResponse {
@@ -203,10 +201,8 @@ impl LightningNode {
             ..Default::default()
         };
 
-        let inner = self.inner.clone();
-        let transaction = tokio::task::spawn_blocking(move || inner.create_invoice(params))
+        let transaction = self.inner.create_invoice(params)
             .await
-            .map_err(|e| format!("Task join error: {}", e))?
             .map_err(|e| format!("Failed to create invoice: {:?}", e))?;
 
         Ok(CreateInvoiceResponse {
@@ -229,10 +225,8 @@ impl LightningNode {
             ..Default::default()
         };
 
-        let inner = self.inner.clone();
-        let response = tokio::task::spawn_blocking(move || inner.pay_invoice(params))
+        let response = self.inner.pay_invoice(params)
             .await
-            .map_err(|e| format!("Task join error: {}", e))?
             .map_err(|e| format!("Failed to pay invoice: {:?}", e))?;
 
         Ok(PayInvoiceResponse {
@@ -249,10 +243,8 @@ impl LightningNode {
         &self,
         params: ListTransactionsParams,
     ) -> Result<ListTransactionsResponse, String> {
-        let inner = self.inner.clone();
-        let transactions = tokio::task::spawn_blocking(move || inner.list_transactions(params))
+        let transactions = self.inner.list_transactions(params)
             .await
-            .map_err(|e| format!("Task join error: {}", e))?
             .map_err(|e| format!("Failed to list transactions: {:?}", e))?;
 
         let responses: Vec<TransactionResponse> = transactions
@@ -281,10 +273,8 @@ impl LightningNode {
             ..Default::default()
         };
 
-        let inner = self.inner.clone();
-        let transaction = tokio::task::spawn_blocking(move || inner.create_invoice(params))
+        let transaction = self.inner.create_invoice(params)
             .await
-            .map_err(|e| format!("Task join error: {}", e))?
             .map_err(|e| format!("Failed to create invoice: {:?}", e))?;
 
         Ok(CreateInvoiceResponse {

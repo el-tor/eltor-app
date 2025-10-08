@@ -3,10 +3,11 @@
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
+use tauri::image::Image;
 use std::env;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{TrayIconBuilder};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
 use tokio::sync::RwLock;
 
@@ -583,9 +584,32 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         &[&show_i, &hide_i, &activate_i, &deactivate_i, &quit_i],
     )?;
 
+    let app_clone = app.clone();
+    let tray_icon = tauri::image::Image::from_path("icons/tray-icon.png")?;
+    
     TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tray_icon)
+        .icon_as_template(true)
+        .on_tray_icon_event(move |_tray, event| {
+            // Handle tray icon click events to show/hide window
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app_handle = app_clone.clone();
+                if let Some(window) = app_handle.webview_windows().values().next() {
+                    if window.is_visible().unwrap_or(false) {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        })
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "quit" => {
                 let app_handle = app.clone();
