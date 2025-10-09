@@ -60,6 +60,7 @@ export interface LightningConfigRequest {
   url: string
   password: string
   set_as_default: boolean
+  is_embedded?: boolean // Indicates if this config is for an embedded Phoenix instance
 }
 
 export interface DeleteLightningConfigRequest {
@@ -73,6 +74,7 @@ export interface LightningConfigResponse {
   password_type: 'password' | 'rune' | 'macaroon'
   password: string // The actual credential value
   is_default: boolean
+  is_embedded?: boolean // Indicates if this config is for an embedded Phoenix instance
 }
 
 export interface ListLightningConfigsResponse {
@@ -81,6 +83,23 @@ export interface ListLightningConfigsResponse {
 
 export interface MessageResponse {
   message: string
+}
+
+// Phoenix-specific interfaces
+export interface PhoenixStartResponse {
+  success: boolean
+  message: string
+  downloaded: boolean
+  pid?: number
+  url?: string
+  password?: string
+  is_running?: boolean
+}
+
+export interface PhoenixStopResponse {
+  success: boolean
+  message: string
+  pid?: number
 }
 
 class WalletApiService {
@@ -246,6 +265,83 @@ class WalletApiService {
 
       const data: ListLightningConfigsResponse = await response.json()
       return data.configs
+    }
+  }
+
+  // Phoenix daemon management
+  async startPhoenixDaemon(): Promise<PhoenixStartResponse> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('start_phoenix_daemon')
+      } catch (error) {
+        throw new Error(`Failed to start Phoenix daemon: ${error}`)
+      }
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/phoenix/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
+    }
+  }
+
+  async stopPhoenixDaemon(): Promise<PhoenixStopResponse> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('stop_phoenix_daemon')
+      } catch (error) {
+        throw new Error(`Failed to stop Phoenix daemon: ${error}`)
+      }
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/phoenix/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
+    }
+  }
+
+  async detectPhoenixConfig(): Promise<PhoenixStartResponse> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      try {
+        return await tauriInvoke('detect_phoenix_config')
+      } catch (error) {
+        throw new Error(`Failed to detect Phoenix config: ${error}`)
+      }
+    } else {
+      // Use web API for detection in non-Tauri mode
+      const response = await fetch(`${getApiBaseUrl()}/api/phoenix/detect-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const error = await response.text()
+        throw new Error(error)
+      }
+
+      return await response.json()
     }
   }
 }

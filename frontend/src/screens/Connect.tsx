@@ -26,6 +26,7 @@ import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
 import { IconChevronDown, IconPlug } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
+import { Wizard } from '../features/wizard/Wizard'
 
 export const Connect = () => {
   const params: any = useParams()
@@ -35,6 +36,9 @@ export const Connect = () => {
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
   const [showSocksModal, setShowSocksModal] = useState(false)
+  const { defaultWallet } = useSelector((state) => state.wallet)
+  const [openedWizard, { open: openWizard, close: closeWizard }] =
+    useDisclosure(false)
 
   const {
     logsClient,
@@ -100,17 +104,7 @@ export const Connect = () => {
   return (
     <Stack>
       <Group w="100%">
-        {/* {torActive ? (
-          <Text>Click "Deactivate" in the menu to disconnect. <br/>To Connect to El Tor open a browser and configure it use a socks5 proxy 127.0.0.1:18058</Text>
-        ) : (
-          <Text>Click "Activate" in the OS tray menu to connect</Text>
-        )} */}
-
-        {/* <Group mb="md">
-          <Badge color={isTauri() ? 'blue' : 'green'}>
-            {isTauri() ? '🖥️ Desktop Mode' : '🌐 Web Mode'}
-          </Badge>
-        </Group> */}
+        {defaultWallet === 'none' && <Wizard close={closeWizard} />}
 
         <Group>
           <Button
@@ -226,6 +220,9 @@ export const Connect = () => {
               <Circle
                 color={isRunning && relayEnabled ? 'lightgreen' : '#FF6347'}
               />
+            </Group>
+            <Group>
+              <Text>{defaultWallet !== 'none' ? defaultWallet : ''}</Text>
             </Group>
             {circuitInUse.id && isRunning && (
               <Text>Circuit: {circuitInUse.id}</Text>

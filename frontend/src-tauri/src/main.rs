@@ -3,19 +3,20 @@
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
+use tauri::image::Image;
 use std::env;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
 use tokio::sync::RwLock;
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, initialize_app_state,
-    initialize_app_state_with_path_config, initialize_phoenixd, lightning, lookup_ip_location,
-    ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState, DebugInfo,
-    IpLocationResponse, LogEntry, PathConfig,
+    activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, init_ip_database,
+    initialize_app_state, initialize_app_state_with_path_config, initialize_phoenixd, lightning,
+    lookup_ip_location, ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState,
+    DebugInfo, IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
 };
 
 // Tauri-specific log entry format for frontend compatibility
@@ -583,9 +584,32 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         &[&show_i, &hide_i, &activate_i, &deactivate_i, &quit_i],
     )?;
 
-    let _ = TrayIconBuilder::with_id("main-tray")
+    let app_clone = app.clone();
+    let tray_icon = tauri::image::Image::from_path("icons/tray-icon.png")?;
+    
+    TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tray_icon)
+        .icon_as_template(true)
+        .on_tray_icon_event(move |_tray, event| {
+            // Handle tray icon click events to show/hide window
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app_handle = app_clone.clone();
+                if let Some(window) = app_handle.webview_windows().values().next() {
+                    if window.is_visible().unwrap_or(false) {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                    }
+                }
+            }
+        })
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "quit" => {
                 let app_handle = app.clone();
@@ -662,22 +686,9 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             }
             _ => {}
         })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: tauri::tray::MouseButtonState::Up,
-                ..
-            } = event
-            {
-                let app = tray.app_handle();
-                if let Some(window) = app.webview_windows().values().next() {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-            }
-        })
-        .build(app);
+        .build(app)?;
 
+    println!("✅ Tray icon setup completed successfully");
     Ok(())
 }
 
@@ -811,6 +822,135 @@ async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, Stri
 
     Ok(serde_json::to_value(&debug_info)
         .map_err(|e| format!("Failed to serialize debug info: {}", e))?)
+}
+
+#[command]
+async fn start_phoenix_daemon(
+    app_handle: AppHandle,
+) -> Result<serde_json::Value, String> {
+    println!("🔥 start_phoenix_daemon called");
+
+    let path_config = create_tauri_path_config(Some(&app_handle))?;
+
+    // Use the new start_phoenix_with_config function
+    match start_phoenix_with_config(&path_config).await {
+        Ok(response) => {
+            println!("✅ Phoenix daemon started successfully with config: {:?}", response);
+            Ok(serde_json::to_value(&response)
+                .map_err(|e| format!("Failed to serialize response: {}", e))?)
+        }
+        Err(e) => {
+            println!("❌ Failed to start Phoenix daemon: {}", e);
+            Err(format!("Failed to start Phoenix daemon: {}", e))
+        }
+    }
+}
+
+#[command]
+async fn stop_phoenix_daemon(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    println!("🛑 stop_phoenix_daemon called");
+
+    // Stop phoenixd using the existing backend function
+    let backend_state = tauri_state.backend_state.read().await;
+    let app_state = backend_state.clone();
+    drop(backend_state);
+    
+    match eltor_backend::stop_phoenixd(app_state).await {
+        Ok(()) => {
+            println!("✅ Phoenix daemon stopped successfully");
+            
+            let response = serde_json::json!({
+                "success": true,
+                "message": "Phoenix daemon stopped successfully",
+                "pid": null // We could get PID from AppState if needed
+            });
+            Ok(response)
+        }
+        Err(e) => {
+            if e.contains("No phoenixd process") || e.contains("not running") {
+                println!("ℹ️  Phoenix daemon was not running");
+                let response = serde_json::json!({
+                    "success": true,
+                    "message": "Phoenix daemon is not currently running",
+                    "pid": null
+                });
+                Ok(response)
+            } else {
+                println!("❌ Failed to stop Phoenix daemon: {}", e);
+                Err(format!("Failed to stop Phoenix daemon: {}", e))
+            }
+        }
+    }
+}
+
+#[command]
+async fn detect_phoenix_config(
+    tauri_state: State<'_, TauriState>,
+) -> Result<serde_json::Value, String> {
+    println!("🔍 detect_phoenix_config called");
+
+    // Check if Phoenix process is running in our state
+    let backend_state = tauri_state.backend_state.read().await;
+    let phoenixd_process = backend_state.wallet_state.phoenixd_process.lock().unwrap();
+    let is_running = phoenixd_process.is_some();
+    drop(phoenixd_process);
+    drop(backend_state);
+
+    // Try to get existing Phoenix config from ~/.phoenix/phoenix.conf
+    let home_dir = dirs::home_dir().ok_or("Could not get home directory")?;
+    let phoenix_conf_path = home_dir.join(".phoenix").join("phoenix.conf");
+    
+    if phoenix_conf_path.exists() {
+        // Try to read the password from config
+        match std::fs::read_to_string(&phoenix_conf_path) {
+            Ok(conf_content) => {
+                let mut password = String::new();
+                for line in conf_content.lines() {
+                    let line = line.trim();
+                    if line.starts_with("http-password=") {
+                        if let Some(pwd) = line.strip_prefix("http-password=") {
+                            password = pwd.to_string();
+                            break;
+                        }
+                    }
+                }
+                
+                if !password.is_empty() {
+                    println!("✅ Found existing Phoenix configuration (running: {})", is_running);
+                    Ok(serde_json::json!({
+                        "success": true,
+                        "message": format!("Existing Phoenix configuration detected (running: {})", is_running),
+                        "downloaded": false,
+                        "pid": null,
+                        "url": "http://127.0.0.1:9740",
+                        "password": password,
+                        "is_running": is_running,
+                    }))
+                } else {
+                    Err("http-password not found in phoenix.conf".to_string())
+                }
+            }
+            Err(e) => {
+                Err(format!("Failed to read phoenix.conf: {}", e))
+            }
+        }
+    } else if is_running {
+        // Config doesn't exist but process is running
+        println!("⚠️  Phoenix is running but configuration not yet available");
+        Ok(serde_json::json!({
+            "success": true,
+            "message": "Phoenix is running but configuration not yet available",
+            "downloaded": false,
+            "pid": null,
+            "url": "http://127.0.0.1:9740",
+            "password": null,
+            "is_running": true,
+        }))
+    } else {
+        Err("Phoenix config file not found and Phoenix is not running".to_string())
+    }
 }
 
 fn main() {
@@ -947,6 +1087,10 @@ fn main() {
                 };
                 if ip_db_path.exists() {
                     println!("✅ IP database file found at: {:?}", ip_db_path);
+                    match init_ip_database(ip_db_path.clone()) {
+                        Ok(()) => println!("✅ IP database initialized successfully"),
+                        Err(e) => eprintln!("❌ Failed to initialize IP database: {}", e),
+                    }
                 } else {
                     eprintln!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
                 }
@@ -977,7 +1121,10 @@ fn main() {
             list_lightning_configs,
             delete_lightning_config,
             upsert_lightning_config,
-            get_debug_info
+            get_debug_info,
+            start_phoenix_daemon,
+            stop_phoenix_daemon,
+            detect_phoenix_config
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

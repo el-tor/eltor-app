@@ -9,7 +9,6 @@ import eltorLogo from "./assets/eltor-logo.png";
 import classes from "./globals.module.css";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import styles from "./globals.module.css";
-import { setTorActive, setRelayActive } from "./globalStore";
 import { useDispatch } from "./hooks";
 
 export function Layout() {

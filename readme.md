@@ -14,7 +14,6 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 
 ### 🌐 Web Mode
 ```bash
-cd frontend && pnpm run dev:web
 npm run web
 # Frontend runs on `http://localhost:5173` (with vite proxy to backend at /api)
 # Backend API on `http://localhost:5174`
@@ -142,7 +141,7 @@ Outputs platform-specific installers:
 Right now builds works locally on each platform, Windows, Linux and Mac.
 
 #### Linux
-```
+```sh
 cd frontend 
 pnpm i
 pnpm run deb
@@ -155,7 +154,7 @@ sudo apt purge eltor
 ```
 
 #### Mac
-```
+```sh
 # run on a mac arm or x86_64
 cd frontend 
 pnpm i
@@ -164,7 +163,7 @@ pnpm run dmg
 ```
 
 ### Windows
-```
+```sh
 cd frontend 
 pnpm i
 pnpm run win
@@ -177,7 +176,7 @@ Arm builds on Github is super slow, instead of using Github actions, you can use
 to locally build arm64 based images. This allows you to build locally on a Mac M-series and still push artifacts to Github.
 
 1. Install Prereqs
-  ```
+  ```sh
   docker buildx create --name mybuilder --driver docker-container --use 
   docker buildx inspect --bootstrap 
   docker run --privileged --rm tonistiigi/binfmt --install all
@@ -189,13 +188,13 @@ to locally build arm64 based images. This allows you to build locally on a Mac M
   ```
 
 2. Create ./secrets
-  ```
+  ```sh
   GITHUB_TOKEN=ghp_yourtokenhere
   DOCKER_USERNAME=yourdockerusername
   DOCKER_PASSWORD=dckr_pat_yourtokenhere
   ```
 3. Run a actions build locally
-```
+```sh
 npm run actions:build:linux:arm
 # or
 ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm -P self-hosted=skip --bind
@@ -225,8 +224,8 @@ https://github.com/el-tor/eltor-store
 
 ## 🖼️ Screenshots
 <div align="center">
-  <img src="./frontend/src/assets/eltor-home.png" alt="Home Screen" width="90%"/><br/>
-  <img src="./frontend/src/assets/eltor-flow.png" alt="Network Flow" width="90%"/>
+  <img src="./frontend/src/assets/eltor-home.png" alt="Home Screen" width="50%"/><br/>
+  <img src="./frontend/src/assets/eltor-flow.png" alt="Network Flow" width="50%"/>
 </div>
 
 

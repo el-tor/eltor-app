@@ -24,6 +24,7 @@ pub struct UpsertLightningConfigRequest {
     pub url: String,
     pub password: String, // Can be password, rune, or macaroon depending on node_type
     pub set_as_default: bool,
+    pub is_embedded: Option<bool>, // Indicates if this config is for an embedded Phoenix instance
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,6 +40,7 @@ pub struct LightningConfigResponse {
     pub password_type: String, // "password", "rune", or "macaroon"
     pub password: String,      // The actual credential value
     pub is_default: bool,
+    pub is_embedded: Option<bool>, // Indicates if this config is for an embedded Phoenix instance
 }
 
 #[derive(Debug, Serialize)]
@@ -48,11 +50,12 @@ pub struct ListLightningConfigsResponse {
 
 // Helper function to get the current lightning node from torrc
 // This ensures we always use the latest configuration
-fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
+async fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
     let path_config = PathConfig::new()?;
-    let bin_dir = path_config.bin_dir;
-    let torrc_path = bin_dir.join("data").join("torrc");
+    path_config.ensure_torrc_files()?;
+    let torrc_path = path_config.get_torrc_path(None);
     crate::lightning::LightningNode::from_torrc(&torrc_path)
+        .map_err(|e| format!("Failed to load wallet: {}", e))
 }
 
 // Get node information
@@ -60,7 +63,7 @@ async fn get_node_info(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<NodeInfoResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.get_node_info().await {
             Ok(info) => Ok(ResponseJson(info)),
             Err(e) => Err((
@@ -81,7 +84,7 @@ async fn create_invoice(
     Json(request): Json<CreateInvoiceRequest>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.create_invoice(request).await {
             Ok(invoice) => Ok(ResponseJson(invoice)),
             Err(e) => Err((
@@ -102,7 +105,7 @@ async fn pay_invoice(
     Json(request): Json<PayInvoiceRequest>,
 ) -> Result<ResponseJson<PayInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.pay_invoice(request).await {
             Ok(payment) => Ok(ResponseJson(payment)),
             Err(e) => Err((
@@ -120,7 +123,7 @@ async fn pay_invoice(
 // Get wallet status (simplified node info)
 async fn get_wallet_status(State(_state): State<AppState>) -> ResponseJson<MessageResponse> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => {
             let status = format!("Lightning wallet connected ({})", node.node_type());
             ResponseJson(MessageResponse { message: status })
@@ -136,7 +139,7 @@ async fn get_wallet_transactions(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListTransactionsResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => {
             // Use basic parameters - matching the required fields
             let params = ListTransactionsParams {
@@ -166,9 +169,11 @@ async fn get_offer(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
     // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node() {
+    match get_current_lightning_node().await {
         Ok(node) => match node.get_offer().await {
-            Ok(invoice) => Ok(ResponseJson(invoice)),
+            Ok(response) => {
+                Ok(ResponseJson(response))
+            }
             Err(e) => Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create invoice: {}", e),
@@ -200,8 +205,19 @@ async fn upsert_lightning_config(
     };
 
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Modify the payment lightning config
     match modify_payment_lightning_config(
@@ -244,8 +260,19 @@ async fn delete_lightning_config(
     };
 
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Delete the lightning config
     match modify_payment_lightning_config(
@@ -281,8 +308,19 @@ async fn list_lightning_configs(
     State(_state): State<AppState>,
 ) -> Result<ResponseJson<ListLightningConfigsResponse>, (StatusCode, String)> {
     // Get torrc file path
-    let path_config = PathConfig::new().unwrap();
-    let torrc_path = path_config.data_dir.join("torrc");
+    let path_config = PathConfig::new().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get path config: {}", e),
+        )
+    })?;
+    path_config.ensure_torrc_files().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to ensure torrc files: {}", e),
+        )
+    })?;
+    let torrc_path = path_config.get_torrc_path(None);
 
     // Get all payment lightning configs
     match get_all_payment_lightning_configs(&torrc_path) {
@@ -299,11 +337,15 @@ async fn list_lightning_configs(
                     };
 
                     LightningConfigResponse {
-                        node_type: config.node_type,
-                        url: config.url,
+                        node_type: config.node_type.clone(),
+                        url: config.url.clone(),
                         password_type: password_type.to_string(),
                         password: config.password, // Include the actual credential
                         is_default: config.is_default,
+                        is_embedded: Some(
+                            config.node_type == "phoenixd" && 
+                            (config.url == "http://127.0.0.1:9740" || config.url == "http://localhost:9740")
+                        ), // Detect embedded Phoenix by URL
                     }
                 })
                 .collect();
