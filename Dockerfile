@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build Dependencies
 # =============================================================================
-FROM rust:1.82-slim AS builder
+FROM rustlang/rust:nightly-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -65,7 +65,7 @@ RUN cargo build --release
 # =============================================================================
 # Stage 3: Download Phoenix
 # =============================================================================
-FROM debian:bookworm-slim AS phoenix-downloader
+FROM builder AS phoenix-downloader
 
 RUN apt-get update && apt-get install -y curl unzip && rm -rf /var/lib/apt/lists/*
 
@@ -85,7 +85,7 @@ RUN ARCH=$(uname -m) && \
 # =============================================================================
 # Stage 4: Final Runtime Image
 # =============================================================================
-FROM debian:bookworm-slim AS runtime
+FROM rustlang/rust:nightly-slim AS runtime
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y \

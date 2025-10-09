@@ -1,6 +1,6 @@
 [package]
 name = "eltor-backend"
-version = "0.0.1"
+version = "0.0.15"
 edition = "2021"
 
 [lib]
@@ -19,12 +19,12 @@ futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
-#lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="c6b6e46d8b4231f7c1cd57ac64aa218d211eee8b"}
-lni = { path = "../../lni/crates/lni" }
+lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="c6b6e46d8b4231f7c1cd57ac64aa218d211eee8b"}
+# lni = { path = "../../lni/crates/lni" }
 uuid = { version = "1.0", features = ["v4"] }
 ip2location = "0.5"
-# eltor = { git = "https://github.com/el-tor/eltord.git", rev = "d56d37c236d2b46551ec423bfa3cbc662182ff1d" }
-eltor = { path = "../../eltord" }
+eltor = { git = "https://github.com/el-tor/eltord.git", rev = "a938e585e5ef16424d6d281291eb34accf0cae14" }
+# eltor = { path = "../../eltord" }
 env_logger = "0.11"
 log = "0.4"
 rand = "0.8"
