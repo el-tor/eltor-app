@@ -40,7 +40,7 @@ pub struct AppState {
     pub log_sender: broadcast::Sender<LogEntry>,
     pub recent_logs: Arc<Mutex<VecDeque<LogEntry>>>,
     pub wallet_state: WalletState,
-    pub lightning_node: Option<Arc<LightningNode>>,
+    pub lightning_node: Arc<Mutex<Option<LightningNode>>>,
     pub torrc_file_name: String,
     pub eltor_manager: Option<Arc<EltorManager>>,
 }
@@ -54,14 +54,15 @@ impl AppState {
             log_sender,
             recent_logs: Arc::new(Mutex::new(VecDeque::with_capacity(100))),
             wallet_state: WalletState::new(use_phoenixd_embedded),
-            lightning_node: None,
+            lightning_node: Arc::new(Mutex::new(None)),
             torrc_file_name: "torrc".to_string(),
             eltor_manager: None,
         }
     }
 
-    pub fn set_lightning_node(&mut self, node: LightningNode) {
-        self.lightning_node = Some(Arc::new(node));
+    pub fn set_lightning_node(&self, node: LightningNode) {
+        let mut lightning_node_guard = self.lightning_node.lock().unwrap();
+        *lightning_node_guard = Some(node);
     }
 
     pub fn set_eltor_manager(&mut self, manager: EltorManager) {

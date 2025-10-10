@@ -81,6 +81,7 @@ export const Wallet = () => {
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
   const [opened, { open, close }] = useDisclosure(false)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Check if there's no default wallet configured
   const hasNoDefaultWallet = !defaultLightningConfig && lightningConfigs.length > 0
@@ -107,10 +108,20 @@ export const Wallet = () => {
     return `${start}${middle}${end}`
   }
 
+  // Load configs first (fast), then load other data
   useEffect(() => {
-    dispatch(fetchLightningConfigs())
-    dispatch(fetchNodeInfo(''))
-    dispatch(getBolt12Offer(''))
+    // First, load lightning configs (should be fast since it's just reading torrc)
+    dispatch(fetchLightningConfigs()).then(() => {
+      setIsInitialLoad(false)
+    })
+
+    // Then load other data lazily with a slight delay to let UI render
+    const timer = setTimeout(() => {
+      dispatch(fetchNodeInfo(''))
+      dispatch(getBolt12Offer(''))
+    }, 100) // Small delay to ensure page renders first
+
+    return () => clearTimeout(timer)
   }, [])
 
   return (
@@ -189,9 +200,13 @@ export const Wallet = () => {
           <Group mt="xl">
             <Title order={4}>
               Balance:{' '}
-              <span style={{ fontFamily: 'monospace' }}>
-                {send?.toLocaleString()}
-              </span>
+              {loading && isInitialLoad ? (
+                <Loader size="sm" />
+              ) : (
+                <span style={{ fontFamily: 'monospace' }}>
+                  {send?.toLocaleString()}
+                </span>
+              )}
             </Title>
             <IconRefresh
               stroke={1.5}
@@ -245,13 +260,25 @@ export const Wallet = () => {
                     </Title>
                   </Center>
                   <Center>
-                    <QRCode
-                      value={bolt12Offer}
-                      size={280}
-                      style={{ border: 2, borderColor: 'whitesmoke' }}
-                    />
+                    {loading && !bolt12Offer ? (
+                      <Box h={280} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Loader size="lg" />
+                      </Box>
+                    ) : bolt12Offer ? (
+                      <QRCode
+                        value={bolt12Offer}
+                        size={280}
+                        style={{ border: 2, borderColor: 'whitesmoke' }}
+                      />
+                    ) : (
+                      <Box h={280} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text c="dimmed">No offer available</Text>
+                      </Box>
+                    )}
                   </Center>
-                  <CopyableTextBox text={bolt12Offer} limitChars={36} bg="white" />
+                  {bolt12Offer && (
+                    <CopyableTextBox text={bolt12Offer} limitChars={36} bg="white" />
+                  )}
                 </Box>
 
                 <Transactions h="450px" />
