@@ -1,4 +1,4 @@
-import { ScrollArea, Table, Collapse, ActionIcon, Text, Group, Box, CopyButton, Tooltip, Center } from '@mantine/core'
+import { ScrollArea, Table, Collapse, ActionIcon, Text, Group, Box, CopyButton, Tooltip, Center, Loader } from '@mantine/core'
 import React, { useEffect, useState } from 'react'
 import { IconChevronDown, IconChevronRight, IconCopy, IconCheck } from '@tabler/icons-react'
 import dayjs from 'dayjs'
@@ -10,9 +10,10 @@ import { fetchTransactions } from './walletStore'
 dayjs.extend(relativeTime)
 
 export function Transactions({ h }: { h?: number | string }) {
-  const { transactions, defaultLightningConfig } = useSelector((state) => state.wallet)
+  const { transactions, defaultLightningConfig, loading } = useSelector((state) => state.wallet)
   const dispatch = useDispatch()
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
 
   const toggleRow = (paymentHash: string) => {
     const newExpandedRows = new Set(expandedRows)
@@ -43,8 +44,16 @@ export function Transactions({ h }: { h?: number | string }) {
   useEffect(() => {
     console.log('Transactions component mounted')
     // Only fetch transactions if there's a default lightning config
+    // Delay slightly to let the page render first
     if (defaultLightningConfig) {
-      dispatch(fetchTransactions(''))
+      setIsLoadingTransactions(true)
+      const timer = setTimeout(() => {
+        dispatch(fetchTransactions('')).finally(() => {
+          setIsLoadingTransactions(false)
+        })
+      }, 200) // Small delay after component mounts
+
+      return () => clearTimeout(timer)
     }
   }, [defaultLightningConfig])
 
@@ -77,6 +86,14 @@ export function Transactions({ h }: { h?: number | string }) {
                   <Text c="dimmed" size="sm">
                     No default wallet configured
                   </Text>
+                </Center>
+              </Table.Td>
+            </Table.Tr>
+          ) : isLoadingTransactions ? (
+            <Table.Tr>
+              <Table.Td colSpan={3}>
+                <Center p="xl">
+                  <Loader size="sm" />
                 </Center>
               </Table.Td>
             </Table.Tr>

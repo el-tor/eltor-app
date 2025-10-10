@@ -48,22 +48,23 @@ pub struct ListLightningConfigsResponse {
     pub configs: Vec<LightningConfigResponse>,
 }
 
-// Helper function to get the current lightning node from torrc
-// This ensures we always use the latest configuration
-async fn get_current_lightning_node() -> Result<crate::lightning::LightningNode, String> {
-    let path_config = PathConfig::new()?;
-    path_config.ensure_torrc_files()?;
-    let torrc_path = path_config.get_torrc_path(None);
-    crate::lightning::LightningNode::from_torrc(&torrc_path)
-        .map_err(|e| format!("Failed to load wallet: {}", e))
+// Helper function to get the current lightning node from app state
+// This uses the cached node from state instead of recreating it from torrc every time
+async fn get_lightning_node_from_state(state: &AppState) -> Result<crate::lightning::LightningNode, String> {
+    // Get the cached lightning node from app state
+    let lightning_node_guard = state.lightning_node.lock().unwrap();
+    lightning_node_guard
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| "Lightning node not initialized in app state".to_string())
 }
 
 // Get node information
 async fn get_node_info(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<ResponseJson<NodeInfoResponse>, (StatusCode, String)> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => match node.get_node_info().await {
             Ok(info) => Ok(ResponseJson(info)),
             Err(e) => Err((
@@ -80,11 +81,11 @@ async fn get_node_info(
 
 // Create an invoice (receive payment)
 async fn create_invoice(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<CreateInvoiceRequest>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => match node.create_invoice(request).await {
             Ok(invoice) => Ok(ResponseJson(invoice)),
             Err(e) => Err((
@@ -101,11 +102,11 @@ async fn create_invoice(
 
 // Pay an invoice (send payment)
 async fn pay_invoice(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<PayInvoiceRequest>,
 ) -> Result<ResponseJson<PayInvoiceResponse>, (StatusCode, String)> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => match node.pay_invoice(request).await {
             Ok(payment) => Ok(ResponseJson(payment)),
             Err(e) => Err((
@@ -121,9 +122,9 @@ async fn pay_invoice(
 }
 
 // Get wallet status (simplified node info)
-async fn get_wallet_status(State(_state): State<AppState>) -> ResponseJson<MessageResponse> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+async fn get_wallet_status(State(state): State<AppState>) -> ResponseJson<MessageResponse> {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => {
             let status = format!("Lightning wallet connected ({})", node.node_type());
             ResponseJson(MessageResponse { message: status })
@@ -136,10 +137,10 @@ async fn get_wallet_status(State(_state): State<AppState>) -> ResponseJson<Messa
 
 // Get wallet transactions
 async fn get_wallet_transactions(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<ResponseJson<ListTransactionsResponse>, (StatusCode, String)> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => {
             // Use basic parameters - matching the required fields
             let params = ListTransactionsParams {
@@ -166,10 +167,10 @@ async fn get_wallet_transactions(
 
 // Get a BOLT12 offer
 async fn get_offer(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
-    // Get the current lightning node from torrc to ensure we use the latest config
-    match get_current_lightning_node().await {
+    // Get the cached lightning node from app state
+    match get_lightning_node_from_state(&state).await {
         Ok(node) => match node.get_offer().await {
             Ok(response) => {
                 Ok(ResponseJson(response))
@@ -188,7 +189,7 @@ async fn get_offer(
 
 // Upsert lightning configuration
 async fn upsert_lightning_config(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<UpsertLightningConfigRequest>,
 ) -> Result<ResponseJson<MessageResponse>, (StatusCode, String)> {
     // Parse node type
@@ -228,12 +229,27 @@ async fn upsert_lightning_config(
         Some(request.password.clone()),
         request.set_as_default,
     ) {
-        Ok(_) => Ok(ResponseJson(MessageResponse {
-            message: format!(
-                "Successfully upserted {} lightning config for {}",
-                request.node_type, request.url
-            ),
-        })),
+        Ok(_) => {
+            // If this is being set as default, reload the lightning node in app state
+            if request.set_as_default {
+                match crate::lightning::LightningNode::from_torrc(&torrc_path) {
+                    Ok(new_node) => {
+                        state.set_lightning_node(new_node);
+                        println!("✅ Lightning node reloaded from torrc after upsert");
+                    }
+                    Err(e) => {
+                        println!("⚠️  Failed to reload lightning node: {}", e);
+                    }
+                }
+            }
+            
+            Ok(ResponseJson(MessageResponse {
+                message: format!(
+                    "Successfully upserted {} lightning config for {}",
+                    request.node_type, request.url
+                ),
+            }))
+        }
         Err(e) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to upsert lightning config: {}", e),
@@ -243,7 +259,7 @@ async fn upsert_lightning_config(
 
 // Delete lightning configuration
 async fn delete_lightning_config(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<DeleteLightningConfigRequest>,
 ) -> Result<ResponseJson<MessageResponse>, (StatusCode, String)> {
     // Parse node type
@@ -284,6 +300,20 @@ async fn delete_lightning_config(
         false,
     ) {
         Ok(_) => {
+            // After deletion, try to reload the lightning node with any new default
+            match crate::lightning::LightningNode::from_torrc(&torrc_path) {
+                Ok(new_node) => {
+                    state.set_lightning_node(new_node);
+                    println!("✅ Lightning node reloaded from torrc after deletion");
+                }
+                Err(e) => {
+                    // It's okay if there's no default config after deletion
+                    println!("⚠️  No default lightning node after deletion: {}", e);
+                    let mut node_guard = state.lightning_node.lock().unwrap();
+                    *node_guard = None;
+                }
+            }
+            
             let message = match request.url {
                 Some(url) => format!(
                     "Successfully deleted {} lightning config for {}",

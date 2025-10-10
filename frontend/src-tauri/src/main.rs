@@ -3,7 +3,6 @@
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
-use tauri::image::Image;
 use std::env;
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
@@ -14,7 +13,7 @@ use tokio::sync::RwLock;
 // Import backend library
 use eltor_backend::{
     activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, init_ip_database,
-    initialize_app_state, initialize_app_state_with_path_config, initialize_phoenixd, lightning,
+    initialize_app_state_with_path_config, initialize_phoenixd, lightning,
     lookup_ip_location, ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState,
     DebugInfo, IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
 };
@@ -46,7 +45,8 @@ impl From<LogEntry> for TauriLogEntry {
 struct TauriState {
     backend_state: Arc<RwLock<AppState>>,
     log_listener_active: Arc<tokio::sync::Mutex<bool>>,
-    lightning_node: Arc<tokio::sync::Mutex<Option<lightning::LightningNode>>>,
+    // Note: lightning_node is now managed in backend_state.lightning_node
+    // Removed redundant TauriState.lightning_node to use the cached version
 }
 
 impl TauriState {
@@ -62,13 +62,7 @@ impl TauriState {
         Self {
             backend_state: Arc::new(RwLock::new(backend_state)),
             log_listener_active: Arc::new(tokio::sync::Mutex::new(false)),
-            lightning_node: Arc::new(tokio::sync::Mutex::new(None)),
         }
-    }
-
-    async fn initialize(&self) -> Result<(), String> {
-        initialize_app_state(self.backend_state.clone()).await?;
-        self.initialize_phoenixd().await
     }
 
     async fn initialize_with_app_handle(&self, app_handle: &AppHandle) -> Result<(), String> {
@@ -277,25 +271,32 @@ async fn get_eltord_status_invoke(
 
 #[command]
 async fn get_node_info(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
-    // Get the lightning node from TauriState
-    let lightning_node_guard = tauri_state.lightning_node.lock().await;
-    let lightning_node = lightning_node_guard
-        .as_ref()
-        .ok_or("Lightning node not initialized")?;
-
-    // Get the balance from the lightning node
-    match lightning_node.get_node_info().await {
-        Ok(balance) => {
-            println!(
-                "✅ Send wallet balance: {} sats",
-                balance.node_info.send_balance_msat / 1000
-            );
-            Ok(serde_json::json!(balance))
+    // Get the lightning node from backend AppState (cached)
+    let backend_state = tauri_state.backend_state.read().await;
+    
+    // Clone the lightning node to avoid holding the lock across await
+    let lightning_node = {
+        let lightning_node_guard = backend_state.lightning_node.lock().unwrap();
+        lightning_node_guard.clone()
+    }; // Guard is dropped here
+    
+    if let Some(lightning_node) = lightning_node {
+        // Get the balance from the lightning node
+        match lightning_node.get_node_info().await {
+            Ok(balance) => {
+                println!(
+                    "✅ Send wallet balance: {} sats",
+                    balance.node_info.send_balance_msat / 1000
+                );
+                Ok(serde_json::json!(balance))
+            }
+            Err(e) => {
+                println!("❌ Failed to get wallet balance: {}", e);
+                Err(format!("Failed to get wallet balance: {}", e))
+            }
         }
-        Err(e) => {
-            println!("❌ Failed to get wallet balance: {}", e);
-            Err(format!("Failed to get wallet balance: {}", e))
-        }
+    } else {
+        Err("Lightning node not initialized".to_string())
     }
 }
 
@@ -303,45 +304,59 @@ async fn get_node_info(tauri_state: State<'_, TauriState>) -> Result<serde_json:
 async fn get_wallet_transactions(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
-    // Get the lightning node from TauriState
-    let lightning_node_guard = tauri_state.lightning_node.lock().await;
-    let lightning_node = lightning_node_guard
-        .as_ref()
-        .ok_or("Lightning node not initialized")?;
-
-    let params = ListTransactionsParams {
-        payment_hash: None, // Get all transactions
-        from: 0,
-        limit: 1000,
-        search: None, // No search filter
-    };
-    match lightning_node.list_transactions(params).await {
-        Ok(transactions) => Ok(serde_json::json!(transactions)),
-        Err(e) => {
-            println!("❌ Failed to get wallet txns: {}", e);
-            Err(format!("Failed to get wallet txns: {}", e))
+    // Get the lightning node from backend AppState (cached)
+    let backend_state = tauri_state.backend_state.read().await;
+    
+    // Clone the lightning node to avoid holding the lock across await
+    let lightning_node = {
+        let lightning_node_guard = backend_state.lightning_node.lock().unwrap();
+        lightning_node_guard.clone()
+    }; // Guard is dropped here
+    
+    if let Some(lightning_node) = lightning_node {
+        let params = ListTransactionsParams {
+            payment_hash: None, // Get all transactions
+            from: 0,
+            limit: 1000,
+            search: None, // No search filter
+        };
+        match lightning_node.list_transactions(params).await {
+            Ok(transactions) => Ok(serde_json::json!(transactions)),
+            Err(e) => {
+                println!("❌ Failed to get wallet txns: {}", e);
+                Err(format!("Failed to get wallet txns: {}", e))
+            }
         }
+    } else {
+        Err("Lightning node not initialized".to_string())
     }
 }
 
 #[command]
 async fn get_offer(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
-    // Get the lightning node from TauriState
-    let lightning_node_guard = tauri_state.lightning_node.lock().await;
-    let lightning_node = lightning_node_guard
-        .as_ref()
-        .ok_or("Lightning node not initialized")?;
-
-    // Get the offer from the lightning node
-    match lightning_node.get_offer().await {
-        Ok(offer) => {
-            println!("✅ Retrieved BOLT12 offer: {}", offer.payment_request);
-            Ok(serde_json::json!(offer))
+    // Get the lightning node from backend AppState (cached)
+    let backend_state = tauri_state.backend_state.read().await;
+    
+    // Clone the lightning node to avoid holding the lock across await
+    let lightning_node = {
+        let lightning_node_guard = backend_state.lightning_node.lock().unwrap();
+        lightning_node_guard.clone()
+    }; // Guard is dropped here
+    
+    if let Some(lightning_node) = lightning_node {
+        // Get the offer from the lightning node
+        match lightning_node.get_offer().await {
+            Ok(offer) => {
+                println!("✅ Retrieved BOLT12 offer: {}", offer.payment_request);
+                Ok(serde_json::json!(offer))
+            }
+            Err(e) => {
+                println!("❌ Failed to get BOLT12 offer: {}", e);
+                Err(format!("Failed to get BOLT12 offer: {}", e))
+            }
         }
-        Err(e) => {
-            println!("❌ Failed to get BOLT12 offer: {}", e);
-            Err(format!("Failed to get BOLT12 offer: {}", e))
-        }
+    } else {
+        Err("Lightning node not initialized".to_string())
     }
 }
 
@@ -554,9 +569,9 @@ async fn reinitialize_lightning_node(
                 node.node_type()
             );
 
-            // Store the new lightning node in TauriState
-            let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
-            *lightning_node_guard = Some(node);
+            // Store the new lightning node in backend AppState (cached)
+            let backend_state = tauri_state.backend_state.read().await;
+            backend_state.set_lightning_node(node);
 
             Ok(())
         }
@@ -564,7 +579,8 @@ async fn reinitialize_lightning_node(
             println!("❌ Failed to reinitialize Lightning node from torrc: {}", e);
 
             // Clear the lightning node on error
-            let mut lightning_node_guard = tauri_state.lightning_node.lock().await;
+            let backend_state = tauri_state.backend_state.read().await;
+            let mut lightning_node_guard = backend_state.lightning_node.lock().unwrap();
             *lightning_node_guard = None;
 
             Err(e)
@@ -895,8 +911,8 @@ async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, Stri
     let path_config = create_tauri_path_config(Some(&app_handle))?;
     let debug_info = DebugInfo::with_path_config(path_config)?;
 
-    Ok(serde_json::to_value(&debug_info)
-        .map_err(|e| format!("Failed to serialize debug info: {}", e))?)
+    serde_json::to_value(&debug_info)
+        .map_err(|e| format!("Failed to serialize debug info: {}", e))
 }
 
 #[command]
@@ -1143,10 +1159,10 @@ fn main() {
                             "✅ Lightning node connected from torrc ({})",
                             node.node_type()
                         );
-                        // Store the lightning node in TauriState
-                        let mut lightning_node_guard = state_for_init.lightning_node.lock().await;
-                        *lightning_node_guard = Some(node);
-                        drop(lightning_node_guard); // Release the lock
+                        // Store the lightning node in backend AppState (cached)
+                        let backend_state = state_for_init.backend_state.read().await;
+                        backend_state.set_lightning_node(node);
+                        drop(backend_state); // Release the lock
                         let _ = app_handle.emit("lightning-ready", "Lightning node ready");
                     }
                     Err(e) => {
