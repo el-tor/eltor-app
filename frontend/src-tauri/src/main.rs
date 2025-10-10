@@ -585,7 +585,55 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     )?;
 
     let app_clone = app.clone();
-    let tray_icon = tauri::image::Image::from_path("icons/tray-icon.png")?;
+    
+    // Try to load tray icon from resources, with fallback
+    let tray_icon = match app.path().resource_dir() {
+        Ok(resource_dir) => {
+            // Icons are in Resources/icons/ directory
+            let icon_path = resource_dir.join("icons").join("tray-icon.png");
+            println!("🖼️  Attempting to load tray icon from: {:?}", icon_path);
+            
+            match tauri::image::Image::from_path(&icon_path) {
+                Ok(img) => {
+                    println!("✅ Tray icon loaded successfully");
+                    img
+                }
+                Err(e) => {
+                    println!("⚠️  Failed to load tray icon from resources: {}", e);
+                    println!("   Trying local path fallback...");
+                    
+                    // Fallback to local path (development mode)
+                    match tauri::image::Image::from_path("icons/tray-icon.png") {
+                        Ok(img) => {
+                            println!("✅ Tray icon loaded from local path");
+                            img
+                        }
+                        Err(e) => {
+                            println!("⚠️  Failed to load tray icon from local path: {}", e);
+                            println!("   Using default icon");
+                            // Create a simple default icon (empty/placeholder)
+                            return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                        }
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            println!("⚠️  Could not get resource directory: {}", e);
+            println!("   Trying local path...");
+            
+            match tauri::image::Image::from_path("icons/tray-icon.png") {
+                Ok(img) => {
+                    println!("✅ Tray icon loaded from local path");
+                    img
+                }
+                Err(e) => {
+                    println!("⚠️  Failed to load tray icon: {}", e);
+                    return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                }
+            }
+        }
+    };
     
     TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
@@ -742,6 +790,33 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
         match app_handle.path().resource_dir() {
             Ok(resource_dir) => {
                 // Check if we actually have bundled resources (production build)
+                // First check for Tauri's _up_ directory structure (when resources use relative paths)
+                let tauri_bin_dir = resource_dir.join("_up_").join("_up_").join("backend").join("bin");
+                
+                if tauri_bin_dir.exists() {
+                    let phoenixd_path = tauri_bin_dir.join("phoenixd");
+                    let ip_db_path = tauri_bin_dir.join("IP2LOCATION-LITE-DB3.BIN");
+                    
+                    if phoenixd_path.exists() || ip_db_path.exists() {
+                        println!(
+                            "✅ Using Tauri _up_ structure for binaries: {:?}",
+                            tauri_bin_dir
+                        );
+                        println!(
+                            "✅ Using app data directory for config files: {:?}",
+                            app_data_dir
+                        );
+
+                        // Production: use _up_ directory for binaries
+                        return Ok(PathConfig {
+                            bin_dir: tauri_bin_dir,
+                            data_dir: app_data_dir.clone(),
+                            app_data_dir: Some(app_data_dir),
+                        });
+                    }
+                }
+                
+                // Fallback: check if files are directly in Resources (alternative bundle structure)
                 let ip_db_path = resource_dir.join("IP2LOCATION-LITE-DB3.BIN");
                 let phoenixd_path = resource_dir.join("phoenixd");
 
@@ -984,7 +1059,13 @@ fn main() {
 
     Builder::default()
         .setup(|app| {
-            setup_tray(app.handle())?;
+            // Set up tray with error handling - don't fail the entire app if tray fails
+            if let Err(e) = setup_tray(app.handle()) {
+                eprintln!("⚠️  Failed to set up system tray: {}", e);
+                eprintln!("   App will continue without system tray");
+            } else {
+                println!("✅ System tray initialized successfully");
+            }
 
             // Re-initialize with proper app context for production builds
             let app_config = create_tauri_path_config(Some(app.handle()));

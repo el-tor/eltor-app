@@ -130,14 +130,43 @@ async fn main() {
     }
 
     // Initialize IP location database
+    println!("🗺️  Initializing IP location database...");
     let ip_db_path = path_config.get_executable_path("IP2LOCATION-LITE-DB3.BIN");
+    println!("   Looking for IP database at: {:?}", ip_db_path);
+    
+    // Debug: List files in the bin directory
+    if let Some(bin_dir) = ip_db_path.parent() {
+        println!("   📁 Contents of bin directory {:?}:", bin_dir);
+        if bin_dir.exists() {
+            if let Ok(entries) = std::fs::read_dir(bin_dir) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let metadata = entry.metadata();
+                    let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                    println!("      - {:?} ({} bytes)", file_name, size);
+                }
+            } else {
+                println!("      ⚠️  Could not read directory");
+            }
+        } else {
+            println!("      ⚠️  Directory does not exist!");
+        }
+    }
+    
+    println!("   IP database exists: {}", ip_db_path.exists());
+    
     if ip_db_path.exists() {
-        if let Err(e) = ip::init_ip_database(ip_db_path) {
-            eprintln!("⚠️  Failed to initialize IP database: {}", e);
+        match ip::init_ip_database(ip_db_path.clone()) {
+            Ok(()) => println!("   ✅ IP database initialized successfully"),
+            Err(e) => {
+                eprintln!("   ⚠️  Failed to initialize IP database: {}", e);
+                eprintln!("   IP geolocation features will be unavailable");
+            }
         }
     } else {
-        eprintln!("⚠️  IP database not found at: {}", ip_db_path.display());
-        eprintln!("   Download IP2LOCATION-LITE-DB3.BIN to enable IP geolocation");
+        eprintln!("   ⚠️  IP database not found at: {}", ip_db_path.display());
+        eprintln!("   IP geolocation features will be unavailable");
+        eprintln!("   To enable: download IP2LOCATION-LITE-DB3.BIN and place in bin directory");
     }
 
     // Configure CORS to allow SSE

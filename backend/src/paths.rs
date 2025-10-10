@@ -136,8 +136,15 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
     let current_dir = env::current_dir()
         .map_err(|e| format!("Failed to get current directory: {}", e))?;
     
+    println!("🔍 PathConfig Debug - detect_paths():");
+    println!("   Current dir: {:?}", current_dir);
+    if let Ok(exe_path) = env::current_exe() {
+        println!("   Current exe: {:?}", exe_path);
+    }
+    
     // Check environment variable override first
     if let Ok(override_path) = env::var("ELTOR_BIN_DIR") {
+        println!("   Using ELTOR_BIN_DIR override: {}", override_path);
         let bin_dir = PathBuf::from(override_path);
         let data_dir = if let Ok(data_override) = env::var("ELTOR_DATA_DIR") {
             PathBuf::from(data_override)
@@ -150,6 +157,7 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
     // Docker environment detection
     if env::var("ELTOR_DOCKER_ENV").is_ok() || 
        Path::new("/home/user/code/eltor-app").exists() {
+        println!("   Detected Docker environment");
         let base = PathBuf::from("/home/user/code/eltor-app/backend");
         return Ok((base.join("bin"), base.join("bin/data"), None));
     }
@@ -160,22 +168,60 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
         
         // Check if we're in a macOS app bundle
         if exe_path.to_string_lossy().contains(".app/Contents/MacOS/") {
+            println!("   Detected macOS app bundle");
             let app_data_dir = get_app_data_dir()?;
+            
             // In a macOS app bundle, resources are in ../Resources/
-            let resources_dir = exe_dir.join("../Resources");
-            if resources_dir.exists() {
-                return Ok((resources_dir, app_data_dir.clone(), Some(app_data_dir)));
+            // exe_path is typically: App.app/Contents/MacOS/app-name
+            // So we need: App.app/Contents/Resources/
+            if let Some(contents_dir) = exe_dir.parent() {
+                let resources_dir = contents_dir.join("Resources");
+                println!("   Checking Resources directory: {:?}", resources_dir);
+                
+                if resources_dir.exists() {
+                    println!("   ✅ Found Resources directory");
+                    
+                    // Check for Tauri's _up_ structure (when resources use relative paths like ../../)
+                    let tauri_bin_dir = resources_dir.join("_up_").join("_up_").join("backend").join("bin");
+                    if tauri_bin_dir.exists() {
+                        println!("   ✅ Found Tauri _up_ structure at: {:?}", tauri_bin_dir);
+                        
+                        // List files for debugging
+                        if let Ok(entries) = fs::read_dir(&tauri_bin_dir) {
+                            println!("   📁 Files in Tauri bin directory:");
+                            for entry in entries.flatten() {
+                                println!("      - {:?}", entry.file_name());
+                            }
+                        }
+                        
+                        return Ok((tauri_bin_dir, app_data_dir.clone(), Some(app_data_dir)));
+                    }
+                    
+                    // Otherwise check if files are directly in Resources
+                    if let Ok(entries) = fs::read_dir(&resources_dir) {
+                        println!("   📁 Files in Resources:");
+                        for entry in entries.flatten() {
+                            println!("      - {:?}", entry.file_name());
+                        }
+                    }
+                    
+                    return Ok((resources_dir, app_data_dir.clone(), Some(app_data_dir)));
+                } else {
+                    println!("   ⚠️  Resources directory not found at: {:?}", resources_dir);
+                }
             }
         }
         
         // Check if we're in a general bundled context (resources in same directory)
         if exe_dir.join("torrc.template").exists() || exe_dir.join("phoenixd").exists() {
+            println!("   Detected bundled context (resources in exe dir)");
             let app_data_dir = get_app_data_dir()?;
             return Ok((exe_dir.to_path_buf(), app_data_dir.clone(), Some(app_data_dir)));
         }
     }
 
     // Development environment detection
+    println!("   Using development environment paths");
     let backend_dir = find_backend_dir(&current_dir)?;
     let bin_dir = backend_dir.join("bin");
     let data_dir = bin_dir.join("data");

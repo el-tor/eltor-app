@@ -41,8 +41,14 @@
       "../../backend/bin/torrc.relay.template",
       "../../backend/bin/phoenix-cli",
       "../../backend/bin/phoenixd",
-      "../../backend/bin/IP2LOCATION-LITE-DB3.BIN"
-    ]
+      "../../backend/bin/IP2LOCATION-LITE-DB3.BIN",
+      "icons/tray-icon.png",
+      "icons/tray-icon@2x.png"
+    ],
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "minimumSystemVersion": "10.13"
+    }
   },
   "plugins": {
     "shell": {
