@@ -22,8 +22,6 @@ class LogStreamService {
       if (isTauri()) {
         // Tauri mode - use subscription system
         this.cleanup = await apiService.subscribeToEvents((eventName, payload) => {
-          console.log('📡 LogStreamService: Received Tauri event:', eventName, payload)
-          
           if (eventName === 'eltord-log') {
             const logEntry = payload as LogEntry
             this.distributeLog(logEntry)
@@ -34,7 +32,6 @@ class LogStreamService {
         // Web mode - use Server-Sent Events
         this.cleanup = apiService.createLogStream(
           (log: LogEntry) => {
-            console.log('📡 LogStreamService: Received SSE log:', log)
             this.distributeLog(log)
           },
           (error: Error) => {
@@ -57,8 +54,6 @@ class LogStreamService {
       return
     }
 
-    console.log('📝 LogStreamService: Distributing log:', logEntry)
-
     // Handle circuit events first
     if (logEntry.message) {
       this.handleCircuitEvents(logEntry.message)
@@ -67,15 +62,12 @@ class LogStreamService {
     // Distribute to appropriate log store based on mode
     if (logEntry.mode === 'client' || (!logEntry.mode && logEntry.source !== 'relay')) {
       // Client logs or system logs (default to client)
-      console.log('✅ LogStreamService: Adding log to CLIENT store')
       this.dispatch(addLogClient(logEntry))
     } else if (logEntry.mode === 'relay') {
       // Relay logs
-      console.log('✅ LogStreamService: Adding log to RELAY store')
       this.dispatch(addLogRelay(logEntry))
     } else {
       // Fallback to client for unknown modes
-      console.log('🔄 LogStreamService: Unknown mode, defaulting to CLIENT store:', logEntry.mode)
       this.dispatch(addLogClient(logEntry))
     }
   }

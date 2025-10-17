@@ -27,6 +27,7 @@ export {
   setClientEnabled,
 }
 
+ const MAX_LOGS = 2000
 
 // 1. State
 interface GlobalState {
@@ -88,6 +89,12 @@ const globalStore = createSlice({
       )
       if (!isDuplicate) {
         state.logsClient.push(newLog)
+
+        // Keep only the last 2000 logs to prevent memory bloat and UI freeze
+        // This is critical for long-running sessions with heartbeat logs
+        if (state.logsClient.length > MAX_LOGS) {
+          state.logsClient = state.logsClient.slice(-MAX_LOGS)
+        }
       }
     },
     addLogRelay: (state, action: PayloadAction<LogEntry>) => {
@@ -100,6 +107,9 @@ const globalStore = createSlice({
       )
       if (!isDuplicate) {
         state.logsRelay.push(newLog)
+        if (state.logsRelay.length > MAX_LOGS) {
+          state.logsRelay = state.logsRelay.slice(-MAX_LOGS)
+        }
       }
     },
     clearLogsClient: (state) => {

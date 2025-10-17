@@ -100,19 +100,31 @@ impl BroadcastLogger {
 }
 
 impl Log for BroadcastLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true // Capture all log levels
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        // Only capture Info, Warn, Error logs to prevent UI freeze from Debug/Trace floods
+        metadata.level() <= log::Level::Info
     }
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
+            let message = format!("{}", record.args());
+            
+            // Filter out excessive process output logs from eltord library
+            // These come from the process manager's stdout/stderr monitoring
+            if message.starts_with("[ELTORD-STDOUT]") 
+                || message.starts_with("[ELTORD-STDERR]")
+                || message.starts_with("[ELTORD-TRACE]") {
+                // Skip these verbose logs to prevent UI freeze
+                return;
+            }
+            
             // Try to determine the mode from the log content or source
             let mode = self.determine_log_mode(record);
             
             let log_entry = LogEntry {
                 timestamp: Utc::now(),
                 level: record.level().to_string(),
-                message: format!("{}", record.args()),
+                message,
                 source: record.target().to_string(),
                 mode,
             };
@@ -140,8 +152,10 @@ pub fn setup_broadcast_logger(state: AppState) -> Result<(), String> {
         return Err(format!("Failed to set custom logger: {}", e));
     }
     
-    log::set_max_level(log::LevelFilter::Trace); // Capture all log levels
-    println!("🎯 Custom logger installed successfully - ALL logs will stream to broadcast channel");
+    // Set max level to Info to block Debug and Trace logs from eltord library
+    // This prevents excessive log flooding that causes UI freezes
+    log::set_max_level(log::LevelFilter::Info);
+    println!("🎯 Custom logger installed successfully - capturing Info, Warn, Error logs only");
     Ok(())
 }
 
