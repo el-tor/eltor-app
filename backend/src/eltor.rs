@@ -52,19 +52,28 @@ pub struct EltorProcessHandle {
     task_handle: tokio::task::JoinHandle<()>,
     abort_handle: tokio::task::AbortHandle,
     mode: EltorMode,
+    tor_pids: Vec<u32>, // Track actual Tor daemon PIDs
 }
 
 impl EltorProcessHandle {
     async fn stop(&mut self) -> Result<(), String> {
-        info!("🛑 Stopping {} process", self.mode);
+        info!("🛑 Stopping {} process with {} Tor daemon(s)", self.mode, self.tor_pids.len());
 
-        // ONLY abort the task - NO process killing at all
+        // Step 1: Abort the Tokio task
         self.abort_handle.abort();
 
-        // Brief wait for task to abort
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Step 2: Wait a moment for graceful shutdown
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        info!("✅ {} process stopped", self.mode);
+        // Step 3: Force kill all tracked Tor daemon PIDs
+        for pid in &self.tor_pids {
+            info!("🔪 Killing Tor daemon PID: {}", pid);
+            if let Err(e) = kill_process_by_pid(*pid).await {
+                warn!("⚠️ Failed to kill Tor daemon PID {}: {}", pid, e);
+            }
+        }
+
+        info!("✅ {} process stopped and {} Tor daemon(s) killed", self.mode, self.tor_pids.len());
         Ok(())
     }
 }
@@ -197,38 +206,41 @@ impl EltorManager {
             EltorMode::Client => {
                 let mut client_guard = self.client_process.write().await;
                 if let Some(mut handle) = client_guard.take() {
-                    // Stop the task (this aborts it immediately)
+                    // Stop the task and kill the Tor processes
                     handle.stop().await?;
-                    // Clean up any residual Tor state
-                    self.cleanup_tor_port(EltorMode::Client).await;
                     Ok("Eltor client deactivated".to_string())
                 } else {
-                    Ok("Eltor client is not running".to_string())
+                    // No handle stored, but try to clean up any orphaned processes anyway
+                    info!("⚠️ No client handle found, attempting cleanup of orphaned processes");
+                    self.cleanup_orphaned_processes(EltorMode::Client).await;
+                    Ok("Eltor client cleaned up (was not tracked)".to_string())
                 }
             }
             EltorMode::Relay => {
                 let mut relay_guard = self.relay_process.write().await;
                 if let Some(mut handle) = relay_guard.take() {
-                    // Stop the task (this aborts it immediately)
+                    // Stop the task and kill the Tor processes
                     handle.stop().await?;
-                    // Clean up any residual Tor state
-                    self.cleanup_tor_port(EltorMode::Relay).await;
                     Ok("Eltor relay deactivated".to_string())
                 } else {
-                    Ok("Eltor relay is not running".to_string())
+                    // No handle stored, but try to clean up any orphaned processes anyway
+                    info!("⚠️ No relay handle found, attempting cleanup of orphaned processes");
+                    self.cleanup_orphaned_processes(EltorMode::Relay).await;
+                    Ok("Eltor relay cleaned up (was not tracked)".to_string())
                 }
             }
             EltorMode::Both => {
                 // For "both" mode, we only have one process in the relay slot
                 let mut relay_guard = self.relay_process.write().await;
                 if let Some(mut handle) = relay_guard.take() {
-                    // Stop the task (this aborts it immediately)
+                    // Stop the task and kill the Tor processes
                     handle.stop().await?;
-                    // Clean up any residual Tor state
-                    self.cleanup_tor_port(EltorMode::Both).await;
                     Ok("Eltor both mode deactivated".to_string())
                 } else {
-                    Ok("Eltor both mode is not running".to_string())
+                    // No handle stored, but try to clean up any orphaned processes anyway
+                    info!("⚠️ No both mode handle found, attempting cleanup of orphaned processes");
+                    self.cleanup_orphaned_processes(EltorMode::Both).await;
+                    Ok("Eltor both mode cleaned up (was not tracked)".to_string())
                 }
             }
         }
@@ -238,10 +250,11 @@ impl EltorManager {
     async fn start_eltor_process(&self, mode: EltorMode) -> Result<EltorProcessHandle, String> {
         let torrc_file = mode.get_torrc_file().to_string();
         let torrc_path = self.path_config.get_torrc_path(Some(&torrc_file));
+        let control_port = mode.get_control_port(&self.path_config);
 
         info!(
-            "🚀 Starting eltor {} as Tokio task with torrc: {:?}",
-            mode, torrc_path
+            "🚀 Starting eltor {} as Tokio task with torrc: {:?}, control port: {}",
+            mode, torrc_path, control_port
         );
 
         // Clean up any residual state first
@@ -286,13 +299,44 @@ impl EltorManager {
         // Get the abort handle
         let abort_handle = task_handle.abort_handle();
 
-        // Brief delay to let it start
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // Brief delay to let Tor daemons start
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        // Discover the PIDs of spawned Tor daemons by checking the control ports
+        let mut tor_pids = Vec::new();
+        let control_port = mode.get_control_port(&self.path_config);
+        
+        info!("🔍 Looking for Tor daemon on control port {}", control_port);
+        if let Ok(port_num) = control_port.parse::<u16>() {
+            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                info!("✅ Found Tor daemon PID {} on port {}", pid, control_port);
+                tor_pids.push(pid);
+            } else {
+                warn!("⚠️ No process found on control port {} yet", control_port);
+            }
+        }
+
+        // For "both" mode, also check the client control port
+        if mode == EltorMode::Both {
+            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            info!("🔍 Looking for client Tor daemon on control port {}", client_port);
+            if let Ok(port_num) = client_port.parse::<u16>() {
+                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                    info!("✅ Found client Tor daemon PID {} on port {}", pid, client_port);
+                    tor_pids.push(pid);
+                } else {
+                    warn!("⚠️ No process found on client control port {} yet", client_port);
+                }
+            }
+        }
+
+        info!("📋 Tracking {} Tor daemon PID(s) for {} mode", tor_pids.len(), mode);
 
         Ok(EltorProcessHandle {
             task_handle,
             abort_handle,
             mode,
+            tor_pids,
         })
     }
 
@@ -324,6 +368,58 @@ impl EltorManager {
         // Wait a moment for Tor to process shutdown
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         info!("✅ Minimal cleanup completed for {} mode", mode);
+    }
+
+    /// Cleanup orphaned processes when no handle is tracked
+    /// This is called when deactivate is called but no process handle exists
+    async fn cleanup_orphaned_processes(&self, mode: EltorMode) {
+        info!("🧹 Cleaning up orphaned processes for {} mode", mode);
+
+        // Find PIDs using the control ports
+        let mut orphaned_pids = Vec::new();
+        
+        let port = mode.get_control_port(&self.path_config);
+        info!("🔍 Checking for orphaned process on control port {}", port);
+        
+        if let Ok(port_num) = port.parse::<u16>() {
+            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                info!("✅ Found orphaned Tor daemon PID {} on port {}", pid, port);
+                orphaned_pids.push(pid);
+            } else {
+                info!("✓ No orphaned process found on port {}", port);
+            }
+        }
+
+        // For Both mode, also check client port
+        if mode == EltorMode::Both {
+            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            info!("🔍 Checking for orphaned client process on port {}", client_port);
+            
+            if let Ok(port_num) = client_port.parse::<u16>() {
+                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                    info!("✅ Found orphaned client Tor daemon PID {} on port {}", pid, client_port);
+                    orphaned_pids.push(pid);
+                } else {
+                    info!("✓ No orphaned client process found on port {}", client_port);
+                }
+            }
+        }
+
+        // Kill all found orphaned processes
+        if orphaned_pids.is_empty() {
+            info!("✓ No orphaned processes to clean up for {} mode", mode);
+        } else {
+            info!("🔪 Killing {} orphaned process(es) for {} mode", orphaned_pids.len(), mode);
+            for pid in orphaned_pids {
+                if let Err(e) = kill_process_by_pid(pid).await {
+                    warn!("⚠️ Failed to kill orphaned PID {}: {}", pid, e);
+                } else {
+                    info!("✅ Killed orphaned PID {}", pid);
+                }
+            }
+        }
+
+        info!("✅ Orphaned process cleanup completed for {} mode", mode);
     }
 
     /// Send a SHUTDOWN command to a specific Tor control port
@@ -428,4 +524,17 @@ impl EltorManager {
             recent_logs,
         }
     }
+}
+
+/// Helper function to kill a process by PID
+async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
+    use crate::ports::kill_process;
+
+    info!("🔪 Killing process PID {}", pid);
+    kill_process(pid)?;
+    
+    // Wait a moment to let the process die
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+    
+    Ok(())
 }
