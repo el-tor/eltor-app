@@ -162,21 +162,24 @@ const MapComponent = ({ h, scale }: { h: number; scale?: number }) => {
       </Geographies>
       {/* Exit Country Label */}
       {exitCountry && (
-        <g>
-          <text
-            x="50%"
-            y="35"
-            textAnchor="middle"
-            style={{
-              fontSize: '14px',
-              fontWeight: 'bold',
-              fill: '#ffffff',
-              fontFamily: 'Arial, sans-serif'
-            }}
-          >
-            Exit: {exitCountry}
-          </text>
-        </g>
+        <foreignObject x="50%" y="20" width="200" height="40" style={{ overflow: 'visible' }}>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <div 
+              className="glass-effect"
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                fontFamily: 'Arial, sans-serif',
+                whiteSpace: 'nowrap',
+                transform: 'translateX(-50%)',
+              }}
+            >
+              Exit: {exitCountry}
+            </div>
+          </div>
+        </foreignObject>
       )}
       {markers.map((marker, i) => {
         if (i === markers.length - 1) return null

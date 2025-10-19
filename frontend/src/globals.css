@@ -52,3 +52,98 @@ a:hover {
 .anchor {
   color: purple;
 }
+
+/* Glassmorphism effect */
+.glass-effect {
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Map overlay positioning - responsive */
+.map-overlay-top-left {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+
+.map-overlay-top-right {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .map-overlay-top-left {
+    top: 10px;
+    left: 10px;
+  }
+
+  .map-overlay-top-right {
+    top: 10px;
+    right: 10px;
+  }
+
+  /* Stack buttons vertically on mobile */
+  .map-overlay-top-left .mantine-Group-root {
+    flex-direction: column;
+    gap: 8px !important;
+  }
+
+  /* Make status box more compact on mobile */
+  .map-overlay-top-right {
+    font-size: 12px;
+  }
+
+  .map-overlay-top-right .mantine-Stack-root {
+    gap: 4px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .map-overlay-top-left {
+    top: 5px;
+    left: 5px;
+  }
+
+  .map-overlay-top-right {
+    top: 5px;
+    right: 5px;
+  }
+}
+
+/* Bootstrap notification - move below map on mobile */
+.bootstrap-notification {
+  position: absolute;
+  bottom: 160px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .bootstrap-notification {
+    position: relative;
+    bottom: auto;
+    margin-top: 16px;
+  }
+
+  /* Make map container flow vertically on mobile */
+  .map-container-mobile {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Adjust terminal position on mobile */
+  .terminal-container {
+    margin-top: 0 !important;
+    position: relative !important;
+  }
+}

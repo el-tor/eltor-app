@@ -10,6 +10,7 @@ import {
   Box,
   Badge,
   Notification,
+  Progress,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -22,11 +23,13 @@ import styles from '../globals.module.css'
 import MapComponent from '../components/Map/MapComponent'
 import './Connect.css'
 import { useEltord } from '../hooks/useEltord'
+import { useBootstrapping } from '../hooks/useBootstrapping'
 import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
 import { IconChevronDown, IconPlug } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
+import { SocksProxyHelp } from '../components/SocksProxyHelp'
 
 export const Connect = () => {
   const params: any = useParams()
@@ -65,6 +68,17 @@ export const Connect = () => {
     deactivate,
   } = useEltord({
     mode,
+  })
+
+  // Use bootstrapping hook to monitor Tor connection progress
+  const {
+    progress: bootstrapProgress,
+    isBootstrapping: showBootstrapping,
+    reset: resetBootstrapping,
+    start: startBootstrapping,
+  } = useBootstrapping({
+    logs: logsClient,
+    onComplete: () => setShowSocksModal(true),
   })
 
   const preRef = useRef<HTMLPreElement>(null)
@@ -107,54 +121,6 @@ export const Connect = () => {
         {defaultWallet === 'none' && <Wizard close={closeWizard} />}
 
         <Group>
-          <Button
-            onClick={async () => {
-              await activate()
-              setShowSocksModal(true)
-            }}
-            disabled={isRunning || loading}
-            color="green"
-            loading={loading || isLoadingActivate}
-          >
-            {isRunning ? 'Active' : 'Activate'}
-          </Button>
-
-          <Button
-            onClick={async () => {
-              try {
-                await deactivate()
-                setShowSocksModal(false)
-              } catch (error) {
-                console.error('❌ [Connect] Deactivate error:', error)
-                // Handle the case where backend says "No eltord client process is currently running"
-                // This means the frontend state is out of sync with backend
-                if (
-                  error instanceof Error &&
-                  error.message.includes(
-                    'No eltord client process is currently running',
-                  )
-                ) {
-                  console.log(
-                    '🔄 [Connect] Backend says client not running, syncing frontend state',
-                  )
-                  // The useEltord hook should handle state updates through the 'eltord-error' event
-                  // But in case it doesn't, we can dispatch the state change here if needed
-                }
-              }
-            }}
-            disabled={!isRunning || loading}
-            color="red"
-            loading={loading || isLoadingDeactivate}
-          >
-            Deactivate
-          </Button>
-          <Badge
-            ml="xl"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate('/relay')}
-          >
-            Mode: {mode === 'both' ? 'Client+Relay' : mode}
-          </Badge>
           {/* {isTauri() && (
             <Button
               onClick={async () => {
@@ -207,50 +173,183 @@ export const Connect = () => {
         /> */}
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
+        </Group>
+      </Group>
+      
+      <Box className="map-container-mobile" style={{ position: 'relative', marginTop: '-20px' }}>
+        <MapComponent h={500} />
+        
+        {/* Activate/Deactivate buttons - top left */}
+        <Box
+          className="glass-effect map-overlay-top-left"
+          style={{
+            padding: '12px',
+          }}
+        >
+          <Group gap="xs">
+            <Button
+              onClick={async () => {
+                // Reset any previous state
+                resetBootstrapping()
+                setShowSocksModal(false)
+                
+                // Start bootstrapping UI immediately at 1%
+                startBootstrapping()
+                
+                await activate()
+                
+                // Don't show SOCKS modal immediately - wait for bootstrapping to complete
+                // The useBootstrapping hook will show it after 100%
+              }}
+              disabled={isRunning || loading}
+              color="green"
+              loading={loading || isLoadingActivate}
+            >
+              {isRunning ? 'Active' : 'Activate'}
+            </Button>
 
-          <Stack align="left" gap="2px">
-            <Group>
+            <Button
+              onClick={async () => {
+                try {
+                  await deactivate()
+                  setShowSocksModal(false)
+                  resetBootstrapping()
+                } catch (error) {
+                  console.error('❌ [Connect] Deactivate error:', error)
+                  // Handle the case where backend says "No eltord client process is currently running"
+                  // This means the frontend state is out of sync with backend
+                  if (
+                    error instanceof Error &&
+                    error.message.includes(
+                      'No eltord client process is currently running',
+                    )
+                  ) {
+                    console.log(
+                      '🔄 [Connect] Backend says client not running, syncing frontend state',
+                    )
+                    // The useEltord hook should handle state updates through the 'eltord-error' event
+                    // But in case it doesn't, we can dispatch the state change here if needed
+                  }
+                }
+              }}
+              disabled={!isRunning || loading}
+              color="red"
+              loading={loading || isLoadingDeactivate}
+            >
+              Deactivate
+            </Button>
+          </Group>
+        </Box>
+        
+        {/* Status overlay - top right */}
+        <Box
+          className="glass-effect map-overlay-top-right"
+          style={{
+            padding: '12px 16px',
+          }}
+        >
+          <Stack align="left" gap="8px">
+            <Badge
+              style={{ cursor: 'pointer' }}
+              onClick={() => navigate('/relay')}
+            >
+              Mode: {mode === 'both' ? 'Client+Relay' : mode}
+            </Badge>
+            <Group gap="xs">
               <Text>Client</Text>
               <Circle
                 color={isRunning && clientEnabled ? 'lightgreen' : '#FF6347'}
               />
             </Group>
-            <Group>
+            <Group gap="xs">
               <Text>Relay&nbsp;</Text>
               <Circle
                 color={isRunning && relayEnabled ? 'lightgreen' : '#FF6347'}
               />
             </Group>
-            <Group>
+            <Group gap="xs">
               <Text>{defaultWallet !== 'none' ? defaultWallet : ''}</Text>
             </Group>
             {circuitInUse.id && isRunning && (
               <Text>Circuit: {circuitInUse.id}</Text>
             )}
           </Stack>
-        </Group>
-      </Group>
-      {showSocksModal && (
-        <Center>
-          <Notification
-            title="Connected! Socks5 Proxy Ready"
-            icon={<IconPlug />}
-            onClose={() => setShowSocksModal(false)}
-          >
-            <Text mb="xs" mt="xs">
-              Open a browser and configure it to use a Socks5 proxy at:
-            </Text>
-            <CopyableTextBox
-              text={`${window.location.hostname}:${socksPort}`}
-              h="44px"
-            />
-          </Notification>
-        </Center>
-      )}
-
-      <MapComponent h={500} />
+        </Box>
+        
+        {(showBootstrapping || showSocksModal) && (
+          <Center className="bootstrap-notification">
+            <Box 
+              className="glass-effect"
+              style={{ 
+                pointerEvents: 'auto',
+              }}
+            >
+              <Notification
+                w="500px"
+                title={
+                  showBootstrapping ? (
+                    'Connecting to the El Tor Network...'
+                  ) : (
+                    <Group gap="xs" wrap="nowrap">
+                      <Text>Connected! Socks5 Proxy Ready</Text>
+                      <SocksProxyHelp
+                        hostname={window.location.hostname}
+                        port={socksPort}
+                      />
+                    </Group>
+                  )
+                }
+                icon={<IconPlug />}
+                onClose={() => {
+                  setShowSocksModal(false)
+                  resetBootstrapping()
+                }}
+                color={showBootstrapping ? 'blue' : 'green'}
+                styles={{
+                  root: {
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                  }
+                }}
+              >
+                {showBootstrapping ? (
+                  <Stack gap="md">
+                    <Text size="sm" c="dimmed">
+                      Bootstrapping {bootstrapProgress}%
+                    </Text>
+                    <Progress
+                      value={bootstrapProgress}
+                      size="lg"
+                      radius="xl"
+                      animated
+                      striped
+                      color={bootstrapProgress === 100 ? 'green' : 'blue'}
+                    />
+                    {bootstrapProgress === 100 && (
+                      <Text size="xs" c="green" ta="center" fw={600}>
+                        ✅ Connection established!
+                      </Text>
+                    )}
+                  </Stack>
+                ) : (
+                  <>
+                    <Text mb="xs" mt="xs" size="sm">
+                      Open a browser (System-Wide Proxy) and configure it to use a Socks5 proxy at:
+                    </Text>
+                    <CopyableTextBox
+                      text={`${window.location.hostname}:${socksPort}`}
+                      h="44px"
+                    />
+                  </>
+                )}
+              </Notification>
+            </Box>
+          </Center>
+        )}
+      </Box>
       <Center>
         <Box
+          className="terminal-container"
           style={{
             width: '100%',
             position: 'relative',

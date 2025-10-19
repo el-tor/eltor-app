@@ -75,7 +75,10 @@ CircuitBuildTimeout 10
 UseMicrodescriptors 1
 # Skip downloads on bootstrap
 FetchDirInfoEarly 0
-# No pre-fetching 
+# No pre-fetching            
 FetchDirInfoExtraEarly 0
-# allow stale descriptors of 1 week, should not run this in prod, should have background process fetch new descriptors every hour
+# Accept 7 days old descriptors, should have background process fetch new descriptors every hour
 TestingDirConnectionMaxStall 604800
+# 24 hours in seconds
+MaxCircuitDirtiness 86400  
+CircuitPriorityHalflife 0
