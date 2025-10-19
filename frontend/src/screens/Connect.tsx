@@ -11,6 +11,7 @@ import {
   Badge,
   Notification,
   Progress,
+  Tooltip,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -246,6 +247,7 @@ export const Connect = () => {
           className="glass-effect map-overlay-top-right"
           style={{
             padding: '12px 16px',
+            maxWidth: '200px',
           }}
         >
           <Stack align="left" gap="8px">
@@ -270,9 +272,16 @@ export const Connect = () => {
             <Group gap="xs">
               <Text>{defaultWallet !== 'none' ? defaultWallet : ''}</Text>
             </Group>
-            {circuitInUse.id && isRunning && (
-              <Text>Circuit: {circuitInUse.id}</Text>
-            )}
+            {circuitInUse.id && isRunning && (() => {
+              const circuitIdStr = String(circuitInUse.id)
+              return (
+                <Tooltip label={circuitIdStr} disabled={circuitIdStr.length <= 6}>
+                  <Text style={{ cursor: circuitIdStr.length > 6 ? 'help' : 'default' }}>
+                    Circuit: {circuitIdStr.length > 6 ? `${circuitIdStr.substring(0, 6)}...` : circuitIdStr}
+                  </Text>
+                </Tooltip>
+              )
+            })()}
           </Stack>
         </Box>
         
@@ -436,15 +445,19 @@ export const Connect = () => {
                 }}
               >
                 {JSON.stringify(
-                  { ...debugInfo, torrc_file: 'see below' },
+                  { ...debugInfo, torrc_file: 'see below', torrc_relay_file: 'see below' },
                   null,
                   2,
                 )}
               </pre>
             </Text>
-            <Title order={5}>Raw torrc File</Title>
-            <Title order={5}>============</Title>
+            <Title order={5}>Raw torrc File (Client)</Title>
+            <Title order={5}>========================</Title>
             <pre>{debugInfo?.torrc_file ?? ''}</pre>
+            
+            <Title order={5} mt="lg">Raw torrc Relay File</Title>
+            <Title order={5}>====================</Title>
+            <pre>{debugInfo?.torrc_relay_file ?? ''}</pre>
           </Box>
         </Collapse>
       </Box>

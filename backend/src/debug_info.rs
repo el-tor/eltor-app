@@ -20,6 +20,7 @@ pub struct DebugInfo {
     pub platform: String,
     pub architecture: String,
     pub torrc_file: String,
+    pub torrc_relay_file: String,
 }
 
 impl DebugInfo {
@@ -81,6 +82,9 @@ impl DebugInfo {
         let torrc_file = get_torrc_txt(&torrc_path)
             .unwrap_or_else(|_| "Failed to read torrc file".to_string());
         
+        let torrc_relay_file = get_torrc_txt(&torrc_relay_path)
+            .unwrap_or_else(|_| "Failed to read torrc relay file".to_string());
+        
         Ok(DebugInfo {
             torrc_path: torrc_path.to_string_lossy().to_string(),
             torrc_relay_path: torrc_relay_path.to_string_lossy().to_string(),
@@ -97,6 +101,7 @@ impl DebugInfo {
             platform,
             architecture,
             torrc_file,
+            torrc_relay_file,
         })
     }
     
@@ -132,7 +137,8 @@ impl DebugInfo {
             - Frontend Port: {}\n\
             - Torrc SocksPort: {}\n\
             - Torrc Relay SocksPort: {}\n\
-            - Torrc File Content: {}",
+            - Torrc File Content: {}\n\
+            - Torrc Relay File Content: {}",
 
             self.environment,
             self.platform,
@@ -148,7 +154,8 @@ impl DebugInfo {
             self.frontend_port,
             self.torrc_socks_port.map_or("not found".to_string(), |p| p.to_string()),
             self.torrc_relay_socks_port.map_or("not found".to_string(), |p| p.to_string()),
-            self.torrc_file.clone()
+            self.torrc_file.clone(),
+            self.torrc_relay_file.clone()
         )
     }
     
