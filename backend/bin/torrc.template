@@ -77,8 +77,11 @@ UseMicrodescriptors 1
 FetchDirInfoEarly 0
 # No pre-fetching            
 FetchDirInfoExtraEarly 0
-# Accept 7 days old descriptors, should have background process fetch new descriptors every hour
+# Accept 7 days old descriptors
 TestingDirConnectionMaxStall 604800
 # 24 hours in seconds
 MaxCircuitDirtiness 86400  
 CircuitPriorityHalflife 0
+
+#__DisablePredictedCircuits 0
+#__LeaveStreamsUnattached 0

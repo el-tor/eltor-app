@@ -19,7 +19,7 @@ futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
-lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="ebbc09c297628a81b483652b8076856ead8bb448"}
+lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="0f36a410e0109498909d032bc444f5805df06254"}
 # lni = { path = "../../lni/crates/lni" }
 uuid = { version = "1.0", features = ["v4"] }
 ip2location = "0.5"
