@@ -264,25 +264,40 @@ impl LightningNode {
         })
     }
 
-    /// Create an invoice (async to handle blocking LNI calls)
+    /// Get or create a BOLT12 offer (async to handle blocking LNI calls)
     pub async fn get_offer(&self) -> Result<CreateInvoiceResponse, String> {
-        let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt12,
-            amount_msats: None,
-            description: Some("El Tor Offer".to_string()),
-            ..Default::default()
-        };
+        // Try to get an existing offer first
+        match self.inner.get_offer(None).await {
+            Ok(paycode) => {
+                println!("✅ Retrieved existing BOLT12 offer from node");
+                Ok(CreateInvoiceResponse {
+                    payment_request: paycode.bolt12,
+                    payment_hash: String::new(), // Not applicable for offers
+                    amount_sats: None,
+                    expiry: None,
+                })
+            }
+            Err(e) => {
+                // If getting offer fails, create a new offer
+                println!("⚠️  No existing offer found ({}), creating new offer...", e);
+                
+                let params = CreateOfferParams {
+                    amount_msats: None,
+                    description: Some("El Tor".to_string()),
+                };
 
-        let transaction = self.inner.create_invoice(params)
-            .await
-            .map_err(|e| format!("Failed to create invoice: {:?}", e))?;
+                let offer = self.inner.create_offer(params)
+                    .await
+                    .map_err(|e| format!("Failed to create offer: {:?}", e))?;
 
-        Ok(CreateInvoiceResponse {
-            payment_request: transaction.invoice,
-            payment_hash: transaction.payment_hash,
-            amount_sats: Some((transaction.amount_msats / 1000) as u64),
-            expiry: None,
-        })
+                Ok(CreateInvoiceResponse {
+                    payment_request: offer.bolt12,
+                    payment_hash: "".to_string(),
+                    amount_sats: Some(offer.amount_msats.map(|msats| msats as u64).unwrap_or(0)),
+                    expiry: None,
+                })
+            }
+        }
     }
 
     /// Get node type as string

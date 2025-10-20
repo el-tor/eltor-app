@@ -379,6 +379,54 @@ pub fn get_all_payment_lightning_configs<P: AsRef<Path>>(
     Ok(configs)
 }
 
+/// Update or add a single-value configuration line in a torrc file
+/// If the config_key exists, it will be updated. If not, it will be added.
+/// 
+/// Example: update_torrc_config_line(torrc_relay_path, "PaymentBolt12Offer", "lno1...")
+pub fn update_torrc_config_line<P: AsRef<Path>>(
+    torrc_path: P,
+    config_key: &str,
+    new_value: &str,
+) -> Result<(), String> {
+    let torrc_path = torrc_path.as_ref();
+    
+    // Read existing content
+    let content = fs::read_to_string(torrc_path)
+        .map_err(|e| format!("Failed to read torrc file: {}", e))?;
+    
+    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+    let mut found = false;
+    let config_line = format!("{} {}", config_key, new_value);
+    
+    // Try to find and update existing line
+    for line in &mut lines {
+        let trimmed = line.trim();
+        // Skip comments
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        
+        // Check if this line starts with our config key
+        if trimmed.starts_with(&format!("{} ", config_key)) || trimmed == config_key {
+            *line = config_line.clone();
+            found = true;
+            break;
+        }
+    }
+    
+    // If not found, add it to the end
+    if !found {
+        lines.push(config_line);
+    }
+    
+    // Write back to file
+    let updated_content = lines.join("\n");
+    fs::write(torrc_path, updated_content)
+        .map_err(|e| format!("Failed to write torrc file: {}", e))?;
+    
+    Ok(())
+}
+
 /// Torrc configuration structure
 #[derive(Debug, Clone, Default)]
 pub struct TorrcConfig {
