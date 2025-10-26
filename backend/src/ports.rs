@@ -3,6 +3,8 @@ use crate::state::AppState;
 use std::env;
 use std::fs;
 use std::process::Command;
+use log::info;
+
 
 /// Default ports used by the application
 const DEFAULT_PHOENIXD_PORT: u16 = 9740;
@@ -103,11 +105,11 @@ pub fn get_ports_to_check_with_torrc(torrc_filename: &str) -> Result<Vec<PortInf
     match parse_torrc_ports(&torrc_path) {
         Ok(mut tor_ports) => ports.append(&mut tor_ports),
         Err(e) => {
-            eprintln!(
+            info!(
                 "⚠️  Warning: Could not parse torrc file {}: {}",
                 torrc_path, e
             );
-            eprintln!("   Using default Tor ports instead");
+            info!("   Using default Tor ports instead");
 
             // Use default ports if torrc parsing fails
             ports.push(PortInfo {
@@ -147,24 +149,31 @@ pub fn is_port_in_use(port: u16) -> Result<bool, String> {
 }
 
 /// Get the PID of the process using a specific port
-pub fn get_pid_using_port(port: u16) -> Result<Option<u32>, String> {
-    let output = Command::new("lsof")
-        .args(["-i", &format!(":{}", port), "-t"])
-        .output()
-        .map_err(|e| format!("Failed to run lsof: {}", e))?;
+pub async fn get_pid_using_port(port: u16) -> Result<Option<u32>, String> {
+    // Use tokio::task::spawn_blocking to avoid blocking the async runtime
+    tokio::task::spawn_blocking(move || {
+        use std::process::Command;
+        
+        let output = Command::new("lsof")
+            .args(["-i", &format!(":{}", port), "-t"])
+            .output()
+            .map_err(|e| format!("Failed to run lsof: {}", e))?;
 
-    if output.stdout.is_empty() {
-        return Ok(None);
-    }
+        if output.stdout.is_empty() {
+            return Ok(None);
+        }
 
-    let pid_str = String::from_utf8_lossy(&output.stdout);
-    let pid_str = pid_str.trim();
+        let pid_str = String::from_utf8_lossy(&output.stdout);
+        let pid_str = pid_str.trim();
 
-    if let Ok(pid) = pid_str.parse::<u32>() {
-        Ok(Some(pid))
-    } else {
-        Ok(None)
-    }
+        if let Ok(pid) = pid_str.parse::<u32>() {
+            Ok(Some(pid))
+        } else {
+            Ok(None)
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 /// Get process information for a given PID
@@ -230,7 +239,7 @@ pub async fn cleanup_ports_startup() -> Result<(), String> {
 
 /// Clean up ports used by the application for a specific torrc file
 pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String> {
-    println!(
+    info!(
         "🔍 Checking for processes using application ports (torrc: {})...",
         torrc_filename
     );
@@ -240,10 +249,10 @@ pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String
 
     for port_info in ports {
         match is_port_in_use(port_info.port) {
-            Ok(true) => match get_pid_using_port(port_info.port) {
+            Ok(true) => match get_pid_using_port(port_info.port).await {
                 Ok(Some(pid)) => match get_process_info(pid) {
                     Ok(process_name) => {
-                        println!(
+                        info!(
                             "🔥 Port {} ({}) is in use by PID {} ({})",
                             port_info.port, port_info.description, pid, process_name
                         );
@@ -251,52 +260,52 @@ pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String
                         print!("   Killing process... ");
                         match kill_process(pid) {
                             Ok(()) => {
-                                println!("✅ Killed successfully");
+                                info!("✅ Killed successfully");
                                 killed_processes += 1;
                             }
                             Err(e) => {
-                                println!("❌ Failed: {}", e);
+                                info!("❌ Failed: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        println!(
+                        info!(
                             "⚠️  Port {} is in use by PID {} but couldn't get process info: {}",
                             port_info.port, pid, e
                         );
                     }
                 },
                 Ok(None) => {
-                    println!(
+                    info!(
                         "⚠️  Port {} appears to be in use but no PID found",
                         port_info.port
                     );
                 }
                 Err(e) => {
-                    println!("❌ Error checking PID for port {}: {}", port_info.port, e);
+                    info!("❌ Error checking PID for port {}: {}", port_info.port, e);
                 }
             },
             Ok(false) => {
-                println!(
+                info!(
                     "✅ Port {} ({}) is available",
                     port_info.port, port_info.description
                 );
             }
             Err(e) => {
-                println!("❌ Error checking port {}: {}", port_info.port, e);
+                info!("❌ Error checking port {}: {}", port_info.port, e);
             }
         }
     }
 
     if killed_processes > 0 {
-        println!(
+        info!(
             "🧹 Cleanup completed: killed {} processes",
             killed_processes
         );
         // Give processes time to fully terminate
         std::thread::sleep(std::time::Duration::from_millis(1000));
     } else {
-        println!("✨ All ports are clean - no cleanup needed");
+        info!("✨ All ports are clean - no cleanup needed");
     }
 
     Ok(())
@@ -304,7 +313,7 @@ pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String
 
 /// Clean up only Tor-related ports, leaving phoenixd running
 pub async fn cleanup_tor_ports_only(torrc_filename: &str) -> Result<(), String> {
-    println!(
+    info!(
         "🔍 Checking for Tor processes only (torrc: {}, preserving phoenixd)...",
         torrc_filename
     );
@@ -315,10 +324,10 @@ pub async fn cleanup_tor_ports_only(torrc_filename: &str) -> Result<(), String> 
 
     for port_info in tor_ports {
         match is_port_in_use(port_info.port) {
-            Ok(true) => match get_pid_using_port(port_info.port) {
+            Ok(true) => match get_pid_using_port(port_info.port).await {
                 Ok(Some(pid)) => match get_process_info(pid) {
                     Ok(process_name) => {
-                        println!(
+                        info!(
                             "🔥 Port {} ({}) is in use by PID {} ({})",
                             port_info.port, port_info.description, pid, process_name
                         );
@@ -326,50 +335,50 @@ pub async fn cleanup_tor_ports_only(torrc_filename: &str) -> Result<(), String> 
                         print!("   Killing process... ");
                         match kill_process(pid) {
                             Ok(()) => {
-                                println!("✅ Killed successfully");
+                                info!("✅ Killed successfully");
                                 killed_processes += 1;
                             }
                             Err(e) => {
-                                println!("❌ Failed: {}", e);
+                                info!("❌ Failed: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        println!(
+                        info!(
                             "⚠️  Port {} is in use by PID {} but couldn't get process info: {}",
                             port_info.port, pid, e
                         );
                     }
                 },
                 Ok(None) => {
-                    println!(
+                    info!(
                         "⚠️  Port {} appears to be in use but no PID found",
                         port_info.port
                     );
                 }
                 Err(e) => {
-                    println!("❌ Error checking PID for port {}: {}", port_info.port, e);
+                    info!("❌ Error checking PID for port {}: {}", port_info.port, e);
                 }
             },
             Ok(false) => {
-                println!(
+                info!(
                     "✅ Port {} ({}) is available",
                     port_info.port, port_info.description
                 );
             }
             Err(e) => {
-                println!("❌ Error checking port {}: {}", port_info.port, e);
+                info!("❌ Error checking port {}: {}", port_info.port, e);
             }
         }
     }
 
     if killed_processes > 0 {
-        println!("🧹 Killed {} Tor processes", killed_processes);
+        info!("🧹 Killed {} Tor processes", killed_processes);
 
         // Wait a moment for processes to clean up
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     } else {
-        println!("ℹ️  No Tor processes needed to be killed");
+        info!("ℹ️  No Tor processes needed to be killed");
     }
 
     Ok(())
@@ -385,11 +394,11 @@ pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String>
     match parse_torrc_ports(&torrc_path) {
         Ok(mut tor_ports) => ports.append(&mut tor_ports),
         Err(e) => {
-            eprintln!(
+            info!(
                 "⚠️  Warning: Could not parse torrc file {}: {}",
                 torrc_path, e
             );
-            eprintln!("   Using default Tor ports instead");
+            info!("   Using default Tor ports instead");
 
             // Use default ports if torrc parsing fails
             ports.push(PortInfo {
@@ -420,46 +429,46 @@ pub fn get_tor_ports_only(torrc_filename: &str) -> Result<Vec<PortInfo>, String>
 
 /// Kill any process using the backend server port
 pub async fn cleanup_backend_port(port: u16) -> Result<(), String> {
-    println!("🔍 Checking if backend port {} is in use...", port);
+    info!("🔍 Checking if backend port {} is in use...", port);
     
     match is_port_in_use(port) {
         Ok(false) => {
-            println!("✅ Backend port {} is available", port);
+            info!("✅ Backend port {} is available", port);
             Ok(())
         }
         Ok(true) => {
-            println!("⚠️  Backend port {} is in use, attempting to free it...", port);
+            info!("⚠️  Backend port {} is in use, attempting to free it...", port);
             
-            match get_pid_using_port(port) {
+            match get_pid_using_port(port).await {
                 Ok(Some(pid)) => {
-                    println!("🔍 Found process {} using backend port {}", pid, port);
+                    info!("🔍 Found process {} using backend port {}", pid, port);
                     match kill_process(pid) {
                         Ok(_) => {
-                            println!("✅ Successfully killed process {} on backend port {}", pid, port);
+                            info!("✅ Successfully killed process {} on backend port {}", pid, port);
                             Ok(())
                         }
                         Err(e) => {
                             let error = format!("Failed to kill process {} on backend port {}: {}", pid, port, e);
-                            println!("❌ {}", error);
+                            info!("❌ {}", error);
                             Err(error)
                         }
                     }
                 }
                 Ok(None) => {
                     let error = format!("Backend port {} is in use but no PID found", port);
-                    println!("⚠️  {}", error);
+                    info!("⚠️  {}", error);
                     Err(error)
                 }
                 Err(e) => {
                     let error = format!("Failed to get PID for backend port {}: {}", port, e);
-                    println!("❌ {}", error);
+                    info!("❌ {}", error);
                     Err(error)
                 }
             }
         }
         Err(e) => {
             let error = format!("Failed to check backend port {}: {}", port, e);
-            println!("❌ {}", error);
+            info!("❌ {}", error);
             Err(error)
         }
     }

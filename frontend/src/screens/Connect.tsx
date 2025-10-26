@@ -12,6 +12,7 @@ import {
   Notification,
   Progress,
   Tooltip,
+  Anchor
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -39,7 +40,6 @@ export const Connect = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
-  const [showSocksModal, setShowSocksModal] = useState(false)
   const { defaultWallet } = useSelector((state) => state.wallet)
   const [openedWizard, { open: openWizard, close: closeWizard }] =
     useDisclosure(false)
@@ -61,6 +61,7 @@ export const Connect = () => {
     mode === 'client'
       ? debugInfo?.torrc_socks_port
       : debugInfo?.torrc_relay_socks_port
+  const [showSocksModal, setShowSocksModal] = useState(clientActive || relayActive)
   const {
     isRunning,
     loading: isLoadingActivate,
@@ -176,10 +177,13 @@ export const Connect = () => {
           <Center> {loading && <Loader size="sm" />}</Center>
         </Group>
       </Group>
-      
-      <Box className="map-container-mobile" style={{ position: 'relative', marginTop: '-20px' }}>
+
+      <Box
+        className="map-container-mobile"
+        style={{ position: 'relative', marginTop: '-20px' }}
+      >
         <MapComponent h={500} />
-        
+
         {/* Activate/Deactivate buttons - top left */}
         <Box
           className="glass-effect map-overlay-top-left"
@@ -193,12 +197,13 @@ export const Connect = () => {
                 // Reset any previous state
                 resetBootstrapping()
                 setShowSocksModal(false)
-                
+
                 // Start bootstrapping UI immediately at 1%
                 startBootstrapping()
-                
+
                 await activate()
-                
+                setTimeout(() => setShowSocksModal(true), 3000)
+
                 // Don't show SOCKS modal immediately - wait for bootstrapping to complete
                 // The useBootstrapping hook will show it after 100%
               }}
@@ -241,7 +246,7 @@ export const Connect = () => {
             </Button>
           </Group>
         </Box>
-        
+
         {/* Status overlay - top right */}
         <Box
           className="glass-effect map-overlay-top-right"
@@ -272,85 +277,74 @@ export const Connect = () => {
             <Group gap="xs">
               <Text>{defaultWallet !== 'none' ? defaultWallet : ''}</Text>
             </Group>
-            {circuitInUse.id && isRunning && (() => {
-              const circuitIdStr = String(circuitInUse.id)
-              return (
-                <Tooltip label={circuitIdStr} disabled={circuitIdStr.length <= 6}>
-                  <Text style={{ cursor: circuitIdStr.length > 6 ? 'help' : 'default' }}>
-                    Circuit: {circuitIdStr.length > 6 ? `${circuitIdStr.substring(0, 6)}...` : circuitIdStr}
-                  </Text>
-                </Tooltip>
-              )
-            })()}
+            {circuitInUse.id &&
+              isRunning &&
+              (() => {
+                const circuitIdStr = String(circuitInUse.id)
+                return (
+                  <Tooltip
+                    label={circuitIdStr}
+                    disabled={circuitIdStr.length <= 6}
+                  >
+                    <Text
+                      style={{
+                        cursor: circuitIdStr.length > 6 ? 'help' : 'default',
+                      }}
+                    >
+                      Circuit:{' '}
+                      {circuitIdStr.length > 6
+                        ? `${circuitIdStr.substring(0, 6)}...`
+                        : circuitIdStr}
+                    </Text>
+                  </Tooltip>
+                )
+              })()}
           </Stack>
         </Box>
-        
-        {(showBootstrapping || showSocksModal) && (
+
+        {showSocksModal && (
           <Center className="bootstrap-notification">
-            <Box 
+            <Box
               className="glass-effect"
-              style={{ 
+              style={{
                 pointerEvents: 'auto',
               }}
             >
               <Notification
                 w="500px"
                 title={
-                  showBootstrapping ? (
-                    'Connecting to the El Tor Network...'
-                  ) : (
-                    <Group gap="xs" wrap="nowrap">
-                      <Text>Connected! Socks5 Proxy Ready</Text>
-                      <SocksProxyHelp
-                        hostname={window.location.hostname}
-                        port={socksPort}
-                      />
-                    </Group>
-                  )
+                  <Group gap="xs" wrap="nowrap">
+                    <Text>Connected! Socks5 Proxy Ready</Text>
+                    
+                  </Group>
                 }
                 icon={<IconPlug />}
                 onClose={() => {
                   setShowSocksModal(false)
                   resetBootstrapping()
                 }}
-                color={showBootstrapping ? 'blue' : 'green'}
+                color={'green'}
                 styles={{
                   root: {
                     backgroundColor: 'transparent',
                     border: 'none',
-                  }
+                  },
                 }}
               >
-                {showBootstrapping ? (
-                  <Stack gap="md">
-                    <Text size="sm" c="dimmed">
-                      Bootstrapping {bootstrapProgress}%
-                    </Text>
-                    <Progress
-                      value={bootstrapProgress}
-                      size="lg"
-                      radius="xl"
-                      animated
-                      striped
-                      color={bootstrapProgress === 100 ? 'green' : 'blue'}
-                    />
-                    {bootstrapProgress === 100 && (
-                      <Text size="xs" c="green" ta="center" fw={600}>
-                        ✅ Connection established!
-                      </Text>
-                    )}
-                  </Stack>
-                ) : (
-                  <>
-                    <Text mb="xs" mt="xs" size="sm">
-                      Open a browser (System-Wide Proxy) and configure it to use a Socks5 proxy at:
-                    </Text>
-                    <CopyableTextBox
-                      text={`${window.location.hostname}:${socksPort}`}
-                      h="44px"
-                    />
-                  </>
-                )}
+                <>
+                  <Text mb="xs" mt="xs" size="sm">
+                    Open a browser and configure it to use a SOCKS5 proxy. Or configure a system-wide SOCKS5 proxy:
+                      <SocksProxyHelp
+                        hostname={window.location.hostname}
+                        port={socksPort}
+                      />
+                  </Text>
+                  <CopyableTextBox
+                    text={`${window.location.hostname}:${socksPort}`}
+                    h="44px"
+                  />
+                  <Text mb="xs" mt="xs" size="xs">*Note: It could take up to 30 seconds for the connection to be stable</Text>
+                </>
               </Notification>
             </Box>
           </Center>
@@ -445,7 +439,11 @@ export const Connect = () => {
                 }}
               >
                 {JSON.stringify(
-                  { ...debugInfo, torrc_file: 'see below', torrc_relay_file: 'see below' },
+                  {
+                    ...debugInfo,
+                    torrc_file: 'see below',
+                    torrc_relay_file: 'see below',
+                  },
                   null,
                   2,
                 )}
@@ -454,8 +452,10 @@ export const Connect = () => {
             <Title order={5}>Raw torrc File (Client)</Title>
             <Title order={5}>========================</Title>
             <pre>{debugInfo?.torrc_file ?? ''}</pre>
-            
-            <Title order={5} mt="lg">Raw torrc Relay File</Title>
+
+            <Title order={5} mt="lg">
+              Raw torrc Relay File
+            </Title>
             <Title order={5}>====================</Title>
             <pre>{debugInfo?.torrc_relay_file ?? ''}</pre>
           </Box>

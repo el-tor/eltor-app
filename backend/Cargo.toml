@@ -17,6 +17,7 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 dirs = "5.0"
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
+async-stream = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
 lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="0f36a410e0109498909d032bc444f5805df06254"}
@@ -30,3 +31,4 @@ log = "0.4"
 rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
 zip = "0.6"
+libc = "0.2"

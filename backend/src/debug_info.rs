@@ -25,13 +25,13 @@ pub struct DebugInfo {
 
 impl DebugInfo {
     /// Parse SocksPort from a torrc file using the generic torrc parser
-    fn parse_socks_port_from_file(torrc_path: &std::path::Path) -> Option<u16> {
-        let socks_ports = get_torrc_config(torrc_path, "SocksPort");
+    async fn parse_socks_port_from_file(torrc_path: &std::path::Path) -> Option<u16> {
+        let socks_ports = get_torrc_config(torrc_path, "SocksPort").await;
         socks_ports.first().and_then(|port| parse_port_from_config(port))
     }
 
     /// Create debug info using PathConfig
-    pub fn new(path_config: &PathConfig) -> Result<Self, String> {
+    pub async fn new(path_config: &PathConfig) -> Result<Self, String> {
         // Ensure torrc files exist
         path_config.ensure_torrc_files()?;
         
@@ -76,13 +76,13 @@ impl DebugInfo {
         let architecture = env::consts::ARCH.to_string();
         
         // Parse SocksPort from torrc files
-        let torrc_socks_port = Self::parse_socks_port_from_file(&torrc_path);
-        let torrc_relay_socks_port = Self::parse_socks_port_from_file(&torrc_relay_path);
+        let torrc_socks_port = Self::parse_socks_port_from_file(&torrc_path).await;
+        let torrc_relay_socks_port = Self::parse_socks_port_from_file(&torrc_relay_path).await;
 
-        let torrc_file = get_torrc_txt(&torrc_path)
+        let torrc_file = get_torrc_txt(&torrc_path).await
             .unwrap_or_else(|_| "Failed to read torrc file".to_string());
         
-        let torrc_relay_file = get_torrc_txt(&torrc_relay_path)
+        let torrc_relay_file = get_torrc_txt(&torrc_relay_path).await
             .unwrap_or_else(|_| "Failed to read torrc relay file".to_string());
         
         Ok(DebugInfo {
@@ -106,14 +106,14 @@ impl DebugInfo {
     }
     
     /// Create debug info with custom path config (for Tauri with resource dir)
-    pub fn with_path_config(path_config: PathConfig) -> Result<Self, String> {
-        Self::new(&path_config)
+    pub async fn with_path_config(path_config: PathConfig) -> Result<Self, String> {
+        Self::new(&path_config).await
     }
     
     /// Create debug info using default path detection
-    pub fn create_default() -> Result<Self, String> {
+    pub async fn create_default() -> Result<Self, String> {
         let path_config = PathConfig::new()?;
-        Self::new(&path_config)
+        Self::new(&path_config).await
     }
     
     /// Format debug info as a human-readable string
@@ -168,17 +168,18 @@ impl DebugInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use log::info;
     
-    #[test]
-    fn test_debug_info_creation() {
-        match DebugInfo::create_default() {
+    #[tokio::test]
+    async fn test_debug_info_creation() {
+        match DebugInfo::create_default().await {
             Ok(debug_info) => {
-                println!("{}", debug_info.format_for_display());
+                info!("{}", debug_info.format_for_display());
                 assert!(!debug_info.torrc_path.is_empty());
                 assert!(!debug_info.bin_dir.is_empty());
             }
             Err(e) => {
-                println!("Debug info creation failed (expected in some environments): {}", e);
+                info!("Debug info creation failed (expected in some environments): {}", e);
             }
         }
     }

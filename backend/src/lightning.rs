@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::Arc;
+use log::info;
+
 
 // Re-export LNI types for easier use
 pub use lni::cln::{ClnConfig, ClnNode};
@@ -56,11 +58,11 @@ pub struct NodeConfig {
     pub accept_invalid_certs: Option<bool>,
 }
 
-/// Response structure for node info - includes raw NodeInfo plus node_type
+/// Response structure for node info - includes raw Nodinfo plus node_type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfoResponse {
     #[serde(flatten)]
-    pub node_info: lni::NodeInfo,
+    pub node_info: lni::types::NodeInfo,
     pub node_type: String,
 }
 
@@ -110,14 +112,14 @@ pub struct PayInvoiceResponse {
 
 impl LightningNode {
     /// Create a new lightning node connection based on torrc configuration
-    pub fn from_torrc<P: AsRef<std::path::Path>>(torrc_path: P) -> Result<Self, String> {
+    pub async fn from_torrc<P: AsRef<std::path::Path>>(torrc_path: P) -> Result<Self, String> {
         let accept_invalid_certs = Some(env::var("ACCEPT_INVALID_CERTS")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(true));
             
         // Get all lightning configs and find the default one
-        let configs = get_all_payment_lightning_configs(&torrc_path)?;
+        let configs = get_all_payment_lightning_configs(&torrc_path).await?;
         let default_config = configs
             .into_iter()
             .find(|config| config.is_default)
@@ -269,7 +271,7 @@ impl LightningNode {
         // Try to get an existing offer first
         match self.inner.get_offer(None).await {
             Ok(paycode) => {
-                println!("✅ Retrieved existing BOLT12 offer from node");
+                info!("✅ Retrieved existing BOLT12 offer from node");
                 Ok(CreateInvoiceResponse {
                     payment_request: paycode.bolt12,
                     payment_hash: String::new(), // Not applicable for offers
@@ -279,7 +281,7 @@ impl LightningNode {
             }
             Err(e) => {
                 // If getting offer fails, create a new offer
-                println!("⚠️  No existing offer found ({}), creating new offer...", e);
+                info!("⚠️  No existing offer found ({}), creating new offer...", e);
                 
                 let params = CreateOfferParams {
                     amount_msats: None,
@@ -293,7 +295,9 @@ impl LightningNode {
                 Ok(CreateInvoiceResponse {
                     payment_request: offer.bolt12,
                     payment_hash: "".to_string(),
-                    amount_sats: Some(offer.amount_msats.map(|msats| msats as u64).unwrap_or(0)),
+                    amount_sats: offer
+                        .amount_msats
+                        .map(|msats| (msats / 1000) as u64),
                     expiry: None,
                 })
             }

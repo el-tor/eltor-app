@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use crate::lightning::LightningNode;
 use crate::eltor::EltorManager;
+use crate::paths::PathConfig;
 
 // Log entry structure
 #[derive(Debug, Clone, Serialize)]
@@ -43,10 +44,11 @@ pub struct AppState {
     pub lightning_node: Arc<Mutex<Option<LightningNode>>>,
     pub torrc_file_name: String,
     pub eltor_manager: Option<Arc<EltorManager>>,
+    pub path_config: Arc<PathConfig>,
 }
 
 impl AppState {
-    pub fn new(use_phoenixd_embedded: bool) -> Self {
+    pub fn new(use_phoenixd_embedded: bool, path_config: PathConfig) -> Self {
         let (log_sender, _) = broadcast::channel(1000);
         Self {
             client_task: Arc::new(Mutex::new(None)),
@@ -57,6 +59,7 @@ impl AppState {
             lightning_node: Arc::new(Mutex::new(None)),
             torrc_file_name: "torrc".to_string(),
             eltor_manager: None,
+            path_config: Arc::new(path_config),
         }
     }
 

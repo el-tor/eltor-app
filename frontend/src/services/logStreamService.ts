@@ -1,82 +1,166 @@
 import { apiService, LogEntry } from './apiService'
 import { isTauri } from '../utils/platform'
-import { addLogClient, addLogRelay, setCircuits, setCircuitInUse, Circuit } from '../globalStore'
+import { setCircuits, setCircuitInUse, Circuit, Relay, addLogClient, addLogRelay } from '../globalStore'
 import { Dispatch } from '@reduxjs/toolkit'
 
 class LogStreamService {
-  private isSetup = false
-  private cleanup: (() => void) | undefined
+  private clientSetup = false
+  private relaySetup = false
+  private clientCleanup: (() => void) | undefined
+  private relayCleanup: (() => void) | undefined
   private dispatch: Dispatch | null = null
+  private initializingClient = false
+  private initializingRelay = false
 
-  public async initialize(dispatch: Dispatch) {
-    if (this.isSetup) {
-      console.log('🔧 LogStreamService: Already initialized, skipping')
+  public async initialize(dispatch: Dispatch, mode: 'client' | 'relay' | 'both' = 'client') {
+    this.dispatch = dispatch
+
+    if (mode === 'both' || mode === 'client') {
+      await this.initializeMode('client')
+    }
+    
+    if (mode === 'both' || mode === 'relay') {
+      await this.initializeMode('relay')
+    }
+  }
+
+  private async initializeMode(mode: 'client' | 'relay') {
+    const isSetup = mode === 'client' ? this.clientSetup : this.relaySetup
+    const isInitializing = mode === 'client' ? this.initializingClient : this.initializingRelay
+    
+    if (isSetup || isInitializing) {
+      console.log(`🔧 LogStreamService: ${mode} already initialized or initializing, skipping`)
       return
     }
 
-    console.log('🔧 LogStreamService: Initializing global log streaming')
-    this.dispatch = dispatch
-    this.isSetup = true
+    console.log(`🔧 LogStreamService: Initializing log streaming for mode: ${mode}`)
+    console.log(`🔧 LogStreamService: isTauri=${isTauri()}`)
+
+    // Mark as initializing immediately to prevent race conditions
+    if (mode === 'client') {
+      this.initializingClient = true
+    } else {
+      this.initializingRelay = true
+    }
 
     try {
-      if (isTauri()) {
-        // Tauri mode - use subscription system
-        this.cleanup = await apiService.subscribeToEvents((eventName, payload) => {
-          if (eventName === 'eltord-log') {
-            const logEntry = payload as LogEntry
-            this.distributeLog(logEntry)
-          }
-        })
-        console.log('✅ LogStreamService: Tauri event subscription setup complete')
+      // First, load recent logs to get initial state
+      console.log(`📥 LogStreamService (${mode}): Fetching recent logs...`)
+      const recentLogs = await apiService.getRecentLogs(mode)
+      console.log(`📥 LogStreamService (${mode}): Received ${recentLogs.length} recent logs`)
+      
+      // Process recent logs - convert to LogEntry and store in Redux, extract circuit info
+      recentLogs.forEach(logLine => {
+        const logEntry = this.parseLogLine(logLine, mode)
+        if (logEntry) {
+          this.storeLogInRedux(logEntry, mode)
+        }
+        this.handleCircuitEvents(logLine)
+      })
+      console.log(`✅ LogStreamService (${mode}): Processed ${recentLogs.length} recent logs`)
+
+      // Then start streaming new logs
+      console.log(`📡 LogStreamService (${mode}): Starting log stream...`)
+      const cleanup = await apiService.createLogStream(
+        mode,
+        (logLine: string) => {
+          console.log(`📨 LogStreamService (${mode}): Received log:`, logLine)
+          this.distributeLog(logLine, mode)
+        },
+        (error: Error) => {
+          console.error(`❌ LogStreamService (${mode}): Log stream error:`, error)
+          this.handleError(error)
+        },
+      )
+      console.log(`📡 LogStreamService (${mode}): Log stream cleanup function created`)
+      
+      // Store cleanup function
+      if (mode === 'client') {
+        this.clientCleanup = cleanup
+        this.clientSetup = true
+        this.initializingClient = false
       } else {
-        // Web mode - use Server-Sent Events
-        this.cleanup = apiService.createLogStream(
-          (log: LogEntry) => {
-            this.distributeLog(log)
-          },
-          (error: Error) => {
-            console.error('❌ LogStreamService: Log stream error:', error)
-            this.handleError(error)
-          },
-        )
-        console.log('✅ LogStreamService: SSE log stream setup complete')
+        this.relayCleanup = cleanup
+        this.relaySetup = true
+        this.initializingRelay = false
       }
+      
+      console.log(`✅ LogStreamService (${mode}): Log stream setup complete`)
     } catch (error) {
-      console.error('❌ LogStreamService: Failed to setup log streaming:', error)
-      this.isSetup = false
+      console.error(`❌ LogStreamService (${mode}): Failed to setup log streaming:`, error)
+      // Reset flags on error
+      if (mode === 'client') {
+        this.clientSetup = false
+        this.initializingClient = false
+      } else {
+        this.relaySetup = false
+        this.initializingRelay = false
+      }
       throw error
     }
   }
 
-  private distributeLog(logEntry: LogEntry) {
+  private parseLogLine(logLine: string, mode: 'client' | 'relay'): LogEntry | null {
+    // Try to parse log line into LogEntry format
+    // Expected format from eltord logs: timestamp + level + message
+    // Example: "2025-10-25T10:30:45Z INFO eltor::client Starting client..."
+    
+    const match = logLine.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)\s+(\w+)\s+(.+)$/)
+    
+    if (match) {
+      const [, timestamp, level, message] = match
+      return {
+        timestamp,
+        level: level.toLowerCase(),
+        message,
+        source: 'stdout',
+        mode,
+      }
+    }
+    
+    // If no match, create a simple log entry
+    return {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: logLine,
+      source: 'stdout',
+      mode,
+    }
+  }
+
+  private storeLogInRedux(logEntry: LogEntry, mode: 'client' | 'relay') {
+    if (!this.dispatch) return
+    
+    // Store in appropriate log store based on mode
+    if (mode === 'client') {
+      this.dispatch(addLogClient(logEntry))
+    } else {
+      this.dispatch(addLogRelay(logEntry))
+    }
+  }
+
+  private distributeLog(logLine: string, mode: 'client' | 'relay') {
     if (!this.dispatch) {
       console.warn('⚠️ LogStreamService: No dispatch available, skipping log')
       return
     }
 
-    // Handle circuit events first
-    if (logEntry.message) {
-      this.handleCircuitEvents(logEntry.message)
+    // Parse and store log in Redux
+    const logEntry = this.parseLogLine(logLine, mode)
+    if (logEntry) {
+      this.storeLogInRedux(logEntry, mode)
     }
 
-    // Distribute to appropriate log store based on mode
-    if (logEntry.mode === 'client' || (!logEntry.mode && logEntry.source !== 'relay')) {
-      // Client logs or system logs (default to client)
-      this.dispatch(addLogClient(logEntry))
-    } else if (logEntry.mode === 'relay') {
-      // Relay logs
-      this.dispatch(addLogRelay(logEntry))
-    } else {
-      // Fallback to client for unknown modes
-      this.dispatch(addLogClient(logEntry))
-    }
+    // Handle circuit events from raw log line
+    this.handleCircuitEvents(logLine)
   }
 
-  private handleCircuitEvents(message: string) {
+  private handleCircuitEvents(logLine: string) {
     if (!this.dispatch) return
 
-    // Parse circuit events
-    const eventData = message.match(/EVENT:(.*):ENDEVENT/)
+    // Parse circuit events from the log line
+    // Look for the EVENT:...:ENDEVENT pattern
+    const eventData = logLine.match(/EVENT:(.*?):ENDEVENT/)
     if (eventData && eventData[1]) {
       try {
         const parsedData = JSON.parse(eventData[1])
@@ -90,13 +174,61 @@ class LogStreamService {
             this.dispatch(setCircuitInUse(circuit))
             this.dispatch(setCircuits([circuit]))
             break
+          case 'CIRCUIT_CLOSED':
+            console.log('🔄 LogStreamService: Circuit closed:', parsedData.circuit_id)
+            // Could handle circuit removal here
+            break
           default:
             console.warn(`⚠️ LogStreamService: Unhandled event type: ${parsedData.event}`)
             break
         }
       } catch (error) {
-        console.error('❌ LogStreamService: Failed to parse event data:', error)
+        console.error('❌ LogStreamService: Failed to parse event data:', error, logLine)
       }
+    }
+    
+    // Also look for raw Tor circuit events in the logs
+    // Example: "650 CIRC 123 BUILT $fingerprint1~name1,$fingerprint2~name2"
+    const torCircuitMatch = logLine.match(/650 CIRC (\d+) BUILT (.+)/)
+    if (torCircuitMatch) {
+      const circuitId = parseInt(torCircuitMatch[1], 10)
+      const path = torCircuitMatch[2]
+      console.log(`🔄 LogStreamService: Tor circuit built: ${circuitId} -> ${path}`)
+      
+      // Parse relay path - create minimal Relay objects
+      const relays = path.split(',').map((relay, hop) => {
+        const parts = relay.split('~')
+        return {
+          fingerprint: parts[0].replace('$', ''),
+          nickname: parts[1] || 'Unknown',
+          hop,
+          // Fill in required fields with defaults/placeholders
+          bandwidth: 0,
+          contact: null,
+          ip: '',
+          payment_bip353: null,
+          payment_bolt11_lightning_address: null,
+          payment_bolt11_lnurl: null,
+          payment_bolt12_offer: null,
+          payment_handshake_fee: null,
+          payment_handshake_fee_payhash: '',
+          payment_handshake_fee_preimage: '',
+          payment_id_hashes_10: [],
+          payment_interval_rounds: 0,
+          payment_interval_seconds: 0,
+          payment_rate_msats: 0,
+          port: 0,
+          relay_tag: '',
+        }
+      })
+      
+      const circuit: Circuit = {
+        id: circuitId,
+        relays,
+      }
+      
+      this.dispatch(setCircuitInUse(circuit))
+      this.dispatch(setCircuits([circuit]))
     }
   }
 
@@ -107,16 +239,27 @@ class LogStreamService {
 
   public shutdown() {
     console.log('🧹 LogStreamService: Shutting down')
-    if (this.cleanup) {
-      this.cleanup()
-      this.cleanup = undefined
+    if (this.clientCleanup) {
+      console.log('🧹 LogStreamService: Cleaning up client stream')
+      this.clientCleanup()
+      this.clientCleanup = undefined
     }
-    this.isSetup = false
+    if (this.relayCleanup) {
+      console.log('🧹 LogStreamService: Cleaning up relay stream')
+      this.relayCleanup()
+      this.relayCleanup = undefined
+    }
+    this.clientSetup = false
+    this.relaySetup = false
+    this.initializingClient = false
+    this.initializingRelay = false
     this.dispatch = null
   }
 
-  public isInitialized(): boolean {
-    return this.isSetup
+  public isInitialized(mode?: 'client' | 'relay'): boolean {
+    if (mode === 'client') return this.clientSetup
+    if (mode === 'relay') return this.relaySetup
+    return this.clientSetup || this.relaySetup
   }
 }
 

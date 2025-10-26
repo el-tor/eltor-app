@@ -1,4 +1,4 @@
-import { Modal, ActionIcon, Stack, Box, Text, ScrollArea, Tooltip } from '@mantine/core'
+import { Modal, ActionIcon, Stack, Box, Text, ScrollArea, Tooltip, Anchor } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconHelp } from '@tabler/icons-react'
 
@@ -12,6 +12,7 @@ export const SocksProxyHelp = ({ hostname, port }: SocksProxyHelpProps) => {
 
   return (
     <>
+      <Anchor ml="xs" size="sm" onClick={open} underline="always" c="white">Help</Anchor>
       <Tooltip label="Click for socks proxy setup instructions" position="top" withArrow>
         <ActionIcon
           variant="subtle"

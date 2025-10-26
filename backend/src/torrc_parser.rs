@@ -1,14 +1,14 @@
-use std::fs;
 use std::path::Path;
+use tokio::fs;
 
 /// Get all values for a specific torrc configuration key
 /// Returns an array of values found for the given key
 /// 
 /// Example: get_torrc_config(torrc_path, "SocksPort") -> vec!["18057", "127.0.0.1:18058"]
-pub fn get_torrc_config<P: AsRef<Path>>(torrc_path: P, config_key: &str) -> Vec<String> {
+pub async fn get_torrc_config<P: AsRef<Path>>(torrc_path: P, config_key: &str) -> Vec<String> {
     let mut values = Vec::new();
     
-    if let Ok(content) = fs::read_to_string(torrc_path) {
+    if let Ok(content) = fs::read_to_string(torrc_path).await {
         for line in content.lines() {
             let line = line.trim();
             // Skip comments and empty lines
@@ -40,8 +40,8 @@ pub fn parse_port_from_config(config_value: &str) -> Option<u16> {
 
 /// Read the entire torrc file as text
 /// Returns the raw file content as a string, or an error if the file cannot be read
-pub fn get_torrc_txt<P: AsRef<Path>>(torrc_path: P) -> Result<String, String> {
-    fs::read_to_string(torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))
+pub async fn get_torrc_txt<P: AsRef<Path>>(torrc_path: P) -> Result<String, String> {
+    fs::read_to_string(torrc_path).await.map_err(|e| format!("Failed to read torrc file: {}", e))
 }
 
 /// Configuration structure for Lightning node from torrc
@@ -97,7 +97,7 @@ impl NodeType {
 }
 
 /// Upsert or delete PaymentLightningNodeConfig in torrc file
-pub fn modify_payment_lightning_config<P: AsRef<Path>>(
+pub async fn modify_payment_lightning_config<P: AsRef<Path>>(
     torrc_path: P,
     operation: Operation,
     node_type: NodeType,
@@ -106,7 +106,7 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
     set_as_default: bool,
 ) -> Result<(), String> {
     let content =
-        fs::read_to_string(&torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))?;
+        fs::read_to_string(&torrc_path).await.map_err(|e| format!("Failed to read torrc file: {}", e))?;
 
     let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
     let mut found_target = false;
@@ -138,10 +138,18 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
                 if existing_type == node_type {
                     match operation {
                         Operation::Upsert => {
-                            // For upsert, match by node_type only (one config per type)
-                            if !found_target {
-                                found_target = true;
-                                target_line_index = Some(i);
+                            // For upsert, match by node_type AND URL (support multiple configs of same type)
+                            if let Some(target_url) = url.as_ref() {
+                                if existing_url.as_ref() == Some(target_url) {
+                                    found_target = true;
+                                    target_line_index = Some(i);
+                                }
+                            } else {
+                                // No URL provided, match first config of this type
+                                if !found_target {
+                                    found_target = true;
+                                    target_line_index = Some(i);
+                                }
                             }
                         }
                         Operation::Delete => {
@@ -193,8 +201,6 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
                 default_str
             );
 
-            dbg!(&new_config);
-
             // If we're setting this as default, remove default=true from other lines
             if set_as_default && found_default {
                 if let Some(default_index) = default_line_index {
@@ -221,18 +227,18 @@ pub fn modify_payment_lightning_config<P: AsRef<Path>>(
 
     // Write the updated content back to file
     let updated_content = lines.join("\n");
-    fs::write(&torrc_path, updated_content)
+    fs::write(&torrc_path, updated_content).await
         .map_err(|e| format!("Failed to write torrc file: {}", e))?;
 
     Ok(())
 }
 
 /// Parse lightning configuration from torrc file
-pub fn parse_lightning_config_from_torrc<P: AsRef<Path>>(
+pub async fn parse_lightning_config_from_torrc<P: AsRef<Path>>(
     torrc_path: P,
 ) -> Result<Option<LightningConfig>, String> {
     let content =
-        fs::read_to_string(&torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))?;
+        fs::read_to_string(&torrc_path).await.map_err(|e| format!("Failed to read torrc file: {}", e))?;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -302,9 +308,9 @@ pub fn get_default_value(config_str: String, key: String) -> Option<String> {
 }
 
 /// Parse torrc file and extract all relevant configuration
-pub fn parse_torrc<P: AsRef<Path>>(torrc_path: P) -> Result<TorrcConfig, String> {
+pub async fn parse_torrc<P: AsRef<Path>>(torrc_path: P) -> Result<TorrcConfig, String> {
     let content =
-        fs::read_to_string(&torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))?;
+        fs::read_to_string(&torrc_path).await.map_err(|e| format!("Failed to read torrc file: {}", e))?;
 
     let mut config = TorrcConfig::default();
 
@@ -349,11 +355,11 @@ fn parse_torrc_line(line: &str) -> Option<(String, String)> {
 }
 
 /// Get all PaymentLightningNodeConfig entries from torrc
-pub fn get_all_payment_lightning_configs<P: AsRef<Path>>(
+pub async fn get_all_payment_lightning_configs<P: AsRef<Path>>(
     torrc_path: P,
 ) -> Result<Vec<LightningConfig>, String> {
     let content =
-        fs::read_to_string(&torrc_path).map_err(|e| format!("Failed to read torrc file: {}", e))?;
+        fs::read_to_string(&torrc_path).await.map_err(|e| format!("Failed to read torrc file: {}", e))?;
 
     let mut configs = Vec::new();
 
@@ -383,7 +389,7 @@ pub fn get_all_payment_lightning_configs<P: AsRef<Path>>(
 /// If the config_key exists, it will be updated. If not, it will be added.
 /// 
 /// Example: update_torrc_config_line(torrc_relay_path, "PaymentBolt12Offer", "lno1...")
-pub fn update_torrc_config_line<P: AsRef<Path>>(
+pub async fn update_torrc_config_line<P: AsRef<Path>>(
     torrc_path: P,
     config_key: &str,
     new_value: &str,
@@ -391,7 +397,7 @@ pub fn update_torrc_config_line<P: AsRef<Path>>(
     let torrc_path = torrc_path.as_ref();
     
     // Read existing content
-    let content = fs::read_to_string(torrc_path)
+    let content = fs::read_to_string(torrc_path).await
         .map_err(|e| format!("Failed to read torrc file: {}", e))?;
     
     let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
@@ -421,7 +427,7 @@ pub fn update_torrc_config_line<P: AsRef<Path>>(
     
     // Write back to file
     let updated_content = lines.join("\n");
-    fs::write(torrc_path, updated_content)
+    fs::write(torrc_path, updated_content).await
         .map_err(|e| format!("Failed to write torrc file: {}", e))?;
     
     Ok(())
@@ -446,16 +452,21 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn create_test_torrc(content: &str) -> PathBuf {
         let mut temp_file = std::env::temp_dir();
-        temp_file.push(format!("test_torrc_{}", std::process::id()));
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        temp_file.push(format!("test_torrc_{}_{}", std::process::id(), timestamp));
         fs::write(&temp_file, content).unwrap();
         temp_file
     }
 
-    #[test]
-    fn test_get_torrc_config() {
+    #[tokio::test]
+    async fn test_get_torrc_config() {
         let content = r#"
 # Test torrc file
 SocksPort 18057
@@ -469,27 +480,27 @@ Log info file /tmp/test.log
         let test_file = create_test_torrc(content);
         
         // Test SocksPort - should return multiple values
-        let socks_ports = get_torrc_config(&test_file, "SocksPort");
+        let socks_ports = get_torrc_config(&test_file, "SocksPort").await;
         assert_eq!(socks_ports, vec!["18057", "127.0.0.1:18058"]);
         
         // Test ControlPort - should return single value
-        let control_ports = get_torrc_config(&test_file, "ControlPort");
+        let control_ports = get_torrc_config(&test_file, "ControlPort").await;
         assert_eq!(control_ports, vec!["9992"]);
         
         // Test Log - should return multiple values
-        let log_configs = get_torrc_config(&test_file, "Log");
+        let log_configs = get_torrc_config(&test_file, "Log").await;
         assert_eq!(log_configs, vec!["notice stdout", "info file /tmp/test.log"]);
         
         // Test non-existent config
-        let missing = get_torrc_config(&test_file, "NonExistent");
+        let missing = get_torrc_config(&test_file, "NonExistent").await;
         assert_eq!(missing, Vec::<String>::new());
         
         // Clean up
         let _ = fs::remove_file(test_file);
     }
 
-    #[test]
-    fn test_get_torrc_txt() {
+    #[tokio::test]
+    async fn test_get_torrc_txt() {
         let content = r#"# Test torrc file
 SocksPort 18057
 SocksPort 127.0.0.1:18058
@@ -502,25 +513,25 @@ Log info file /tmp/test.log
         let test_file = create_test_torrc(content);
         
         // Test reading entire file content
-        let file_content = get_torrc_txt(&test_file).unwrap();
+        let file_content = get_torrc_txt(&test_file).await.unwrap();
         assert_eq!(file_content, content);
         
         // Clean up
         let _ = fs::remove_file(test_file);
     }
 
-    #[test]
-    fn test_get_torrc_txt_nonexistent_file() {
+    #[tokio::test]
+    async fn test_get_torrc_txt_nonexistent_file() {
         let nonexistent_path = "/tmp/nonexistent_torrc_file_12345";
         
         // Test error handling for nonexistent file
-        let result = get_torrc_txt(nonexistent_path);
+        let result = get_torrc_txt(nonexistent_path).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to read torrc file"));
     }
     
-    #[test]
-    fn test_parse_port_from_config() {
+    #[tokio::test]
+    async fn test_parse_port_from_config() {
         // Test simple port
         assert_eq!(parse_port_from_config("18057"), Some(18057));
         
@@ -532,8 +543,8 @@ Log info file /tmp/test.log
         assert_eq!(parse_port_from_config("127.0.0.1:invalid"), None);
     }
 
-    #[test]
-    fn test_get_config_value() {
+    #[tokio::test]
+    async fn test_get_config_value() {
         let config = "type=phoenixd url=http://127.0.0.1:9740 password=abc123 default=true";
 
         assert_eq!(
@@ -555,8 +566,8 @@ Log info file /tmp/test.log
         assert_eq!(get_config_value(config, "nonexistent"), None);
     }
 
-    #[test]
-    fn test_parse_lightning_config_string() {
+    #[tokio::test]
+    async fn test_parse_lightning_config_string() {
         let config = "type=phoenixd url=http://127.0.0.1:9740 password=abc123 default=true";
         let result = parse_lightning_config_string(config).unwrap();
 
@@ -565,8 +576,8 @@ Log info file /tmp/test.log
         assert_eq!(result.password, "abc123");
     }
 
-    #[test]
-    fn test_parse_cln_config() {
+    #[tokio::test]
+    async fn test_parse_cln_config() {
         let config = "type=cln url=https://cln.example.com rune=abc123rune default=true";
         let result = parse_lightning_config_string(config).unwrap();
 
@@ -575,8 +586,8 @@ Log info file /tmp/test.log
         assert_eq!(result.password, "abc123rune"); // Should pick up rune as password
     }
 
-    #[test]
-    fn test_parse_lnd_config() {
+    #[tokio::test]
+    async fn test_parse_lnd_config() {
         let config = "type=lnd url=https://lnd.example.com macaroon=abc123macaroon default=true";
         let result = parse_lightning_config_string(config).unwrap();
 
@@ -585,8 +596,8 @@ Log info file /tmp/test.log
         assert_eq!(result.password, "abc123macaroon"); // Should pick up macaroon as password
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_upsert_new() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_upsert_new() {
         let content = r#"SocksPort 18058
 ControlPort 9992
 DataDirectory /var/lib/tor
@@ -601,7 +612,7 @@ DataDirectory /var/lib/tor
             Some("http://127.0.0.1:9740".to_string()),
             Some("secret123".to_string()),
             true,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -610,8 +621,8 @@ DataDirectory /var/lib/tor
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_upsert_existing() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_upsert_existing() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://old.url password=oldpass default=true
 PaymentLightningNodeConfig type=phoenixd url=http://old2.url password=old2pass
@@ -628,7 +639,7 @@ ControlPort 9992
             Some("newpass".to_string()),
             false,
         )
-        .unwrap();
+        .await.unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
         assert!(updated_content.contains(
@@ -640,8 +651,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_upsert_multiple_same_type() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_upsert_multiple_same_type() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
@@ -658,7 +669,7 @@ ControlPort 9992
             Some("http://phoenix2.url".to_string()),
             Some("updated_pass2".to_string()),
             false,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -682,8 +693,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_delete_by_url() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_delete_by_url() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
@@ -701,7 +712,7 @@ ControlPort 9992
             Some("http://phoenix2.url".to_string()),
             None,
             false,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -720,8 +731,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_delete_without_url() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_delete_without_url() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix1.url password=pass1 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix2.url password=pass2
@@ -738,8 +749,7 @@ ControlPort 9992
             None,
             None,
             false,
-        )
-        .unwrap();
+        ).await.unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
 
@@ -756,8 +766,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_upsert_new_when_url_not_found() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_upsert_new_when_url_not_found() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://existing.url password=existing_pass default=true
 ControlPort 9992
@@ -772,7 +782,7 @@ ControlPort 9992
             Some("http://new.url".to_string()),
             Some("new_pass".to_string()),
             false,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -786,8 +796,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_delete() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_delete() {
         let content = r#"SocksPort 18058
 PaymentLightningNodeConfig type=phoenixd url=http://127.0.0.1:9740 password=secret123 default=true
 PaymentLightningNodeConfig type=phoenixd url=http://127.0.0.2:9740 password=secret2
@@ -804,7 +814,7 @@ ControlPort 9992
             Some("http://127.0.0.1:9740".to_string()),
             None,
             false,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -818,8 +828,8 @@ ControlPort 9992
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_modify_payment_lightning_config_change_default() {
+    #[tokio::test]
+    async fn test_modify_payment_lightning_config_change_default() {
         let content = r#"PaymentLightningNodeConfig type=phoenixd url=http://phoenix.url password=phoenix_pass default=true
 PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
 "#;
@@ -833,7 +843,7 @@ PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
             Some("https://new-cln.example.com".to_string()),
             Some("new_cln_rune".to_string()),
             true,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -851,8 +861,8 @@ PaymentLightningNodeConfig type=cln url=https://cln.example.com rune=cln_rune
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_ignore_commented_lines() {
+    #[tokio::test]
+    async fn test_ignore_commented_lines() {
         let content = r#"SocksPort 18058
 #PaymentLightningNodeConfig type=phoenixd url=http://commented.url password=commented_pass default=true
 # PaymentLightningNodeConfig type=cln url=https://also.commented rune=also_commented
@@ -868,7 +878,7 @@ PaymentLightningNodeConfig type=lnd url=https://active.lnd macaroon=active_macar
             Some("http://new.phoenix".to_string()),
             Some("new_phoenix_pass".to_string()),
             true,
-        )
+        ).await
         .unwrap();
 
         let updated_content = fs::read_to_string(&torrc_path).unwrap();
@@ -885,8 +895,8 @@ PaymentLightningNodeConfig type=lnd url=https://active.lnd macaroon=active_macar
         fs::remove_file(torrc_path).unwrap();
     }
 
-    #[test]
-    fn test_get_all_payment_lightning_configs() {
+    #[tokio::test]
+    async fn test_get_all_payment_lightning_configs() {
         let content = r#"SocksPort 18058
 #PaymentLightningNodeConfig type=phoenixd url=http://commented.url password=commented_pass
 PaymentLightningNodeConfig type=phoenixd url=http://phoenix.url password=phoenix_pass default=true
@@ -895,7 +905,7 @@ PaymentLightningNodeConfig type=lnd url=https://lnd.example.com macaroon=lnd_mac
 "#;
         let torrc_path = create_test_torrc(content);
 
-        let configs = get_all_payment_lightning_configs(&torrc_path).unwrap();
+        let configs = get_all_payment_lightning_configs(&torrc_path).await.unwrap();
 
         assert_eq!(configs.len(), 3); // Should ignore commented line
 

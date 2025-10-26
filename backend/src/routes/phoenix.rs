@@ -3,6 +3,8 @@ use std::io::Cursor;
 use std::path::Path;
 use tokio::task;
 use zip::ZipArchive;
+use log::info;
+
 
 use axum::{
     extract::State,
@@ -53,14 +55,14 @@ async fn get_existing_phoenix_config() -> Result<(String, String), String> {
 ///     // Using custom PathConfig
 ///     let path_config = PathConfig::new()?;
 ///     match phoenix::download_phoenix(&path_config).await {
-///         Ok(msg) => println!("{}", msg),
-///         Err(e) => eprintln!("Download failed: {}", e),
+///         Ok(msg) => info!("{}", msg),
+///         Err(e) => info!("Download failed: {}", e),
 ///     }
 /// 
 ///     // Using default PathConfig
 ///     match phoenix::download_phoenix_default().await {
-///         Ok(msg) => println!("{}", msg),
-///         Err(e) => eprintln!("Download failed: {}", e),
+///         Ok(msg) => info!("{}", msg),
+///         Err(e) => info!("Download failed: {}", e),
 ///     }
 /// 
 ///     Ok(())
@@ -80,8 +82,8 @@ pub async fn download_phoenix(path_config: &PathConfig) -> Result<String, String
     let (platform, arch) = detect_platform_and_arch()?;
     let download_url = get_download_url(&platform, &arch)?;
     
-    println!("🔥 Downloading Phoenix {} for {}-{}...", PHOENIX_VERSION, platform, arch);
-    println!("📥 Download URL: {}", download_url);
+    info!("🔥 Downloading Phoenix {} for {}-{}...", PHOENIX_VERSION, platform, arch);
+    info!("📥 Download URL: {}", download_url);
     
     // Download the file
     let zip_data = download_file(&download_url).await?;
@@ -94,7 +96,7 @@ pub async fn download_phoenix(path_config: &PathConfig) -> Result<String, String
         PHOENIX_VERSION,
         path_config.bin_dir
     );
-    println!("{}", success_msg);
+    info!("{}", success_msg);
     Ok(success_msg)
 }
 
@@ -149,7 +151,7 @@ async fn download_file(url: &str) -> Result<Vec<u8>, String> {
     
     let total_size = response.content_length();
     if let Some(size) = total_size {
-        println!("📦 Download size: {} bytes ({:.2} MB)", size, size as f64 / 1_048_576.0);
+        info!("📦 Download size: {} bytes ({:.2} MB)", size, size as f64 / 1_048_576.0);
     }
     
     let bytes = response
@@ -190,7 +192,7 @@ fn extract_zip_blocking(zip_data: &[u8], bin_dir: &Path, platform: &str) -> Resu
     let mut archive = ZipArchive::new(cursor)
         .map_err(|e| format!("Failed to read zip archive: {}", e))?;
     
-    println!("📂 Extracting {} files from Phoenix archive...", archive.len());
+    info!("📂 Extracting {} files from Phoenix archive...", archive.len());
     
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)
@@ -206,7 +208,7 @@ fn extract_zip_blocking(zip_data: &[u8], bin_dir: &Path, platform: &str) -> Resu
         let original_path = match file.enclosed_name() {
             Some(path) => path.to_path_buf(),
             None => {
-                println!("⚠️  Skipping file with invalid name: {}", file_name);
+                info!("⚠️  Skipping file with invalid name: {}", file_name);
                 continue;
             }
         };
@@ -218,7 +220,7 @@ fn extract_zip_blocking(zip_data: &[u8], bin_dir: &Path, platform: &str) -> Resu
             .unwrap_or_default();
         
         if filename.is_empty() {
-            println!("⚠️  Skipping file with empty filename: {}", file_name);
+            info!("⚠️  Skipping file with empty filename: {}", file_name);
             continue;
         }
         
@@ -247,11 +249,11 @@ fn extract_zip_blocking(zip_data: &[u8], bin_dir: &Path, platform: &str) -> Resu
                 perms.set_mode(0o755); // rwxr-xr-x
                 fs::set_permissions(&outpath, perms)
                     .map_err(|e| format!("Failed to set executable permissions: {}", e))?;
-                println!("🔧 Set executable permissions for: {:?}", outpath);
+                info!("🔧 Set executable permissions for: {:?}", outpath);
             }
         }
         
-        println!("📄 Extracted to bin root: {:?}", outpath);
+        info!("📄 Extracted to bin root: {:?}", outpath);
     }
     
     Ok(())
@@ -290,16 +292,16 @@ fn get_phoenixd_password() -> Result<String, String> {
 /// This function will wait up to 10 seconds for the config file to appear
 async fn wait_for_phoenix_conf_and_get_password() -> Result<String, String> {
     for attempt in 1..=10 {
-        println!("🔍 Attempt {} to read Phoenix password from config...", attempt);
+        info!("🔍 Attempt {} to read Phoenix password from config...", attempt);
         
         match get_phoenixd_password() {
             Ok(password) => {
-                println!("✅ Successfully read Phoenix password from ~/.phoenix/phoenix.conf");
+                info!("✅ Successfully read Phoenix password from ~/.phoenix/phoenix.conf");
                 return Ok(password);
             }
             Err(e) => {
                 if attempt < 10 {
-                    println!("⏳ Phoenix config not ready yet: {}. Waiting 1 second...", e);
+                    info!("⏳ Phoenix config not ready yet: {}. Waiting 1 second...", e);
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                 } else {
                     return Err(format!("Failed to get Phoenix password after {} attempts: {}", attempt, e));
@@ -317,14 +319,14 @@ pub async fn start_phoenix_with_config(path_config: &PathConfig) -> Result<Phoen
     // Create a minimal AppState for the Phoenix process management
     // This is a simplified version for Tauri usage
     use crate::state::AppState;
-    let app_state = AppState::new(true); // Enable embedded phoenixd
+    let app_state = AppState::new(true, path_config.clone()); // Enable embedded phoenixd
     
     // Check if phoenixd binary exists, download if needed
     let phoenixd_binary = path_config.get_executable_path("phoenixd");
     let mut downloaded = false;
 
     if !phoenixd_binary.exists() {
-        println!("📥 Phoenix binary not found, downloading...");
+        info!("📥 Phoenix binary not found, downloading...");
         
         match download_phoenix(path_config).await {
             Ok(_) => {
@@ -425,7 +427,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
     let mut downloaded = false;
 
     if !phoenixd_binary.exists() {
-        println!("📥 Phoenix binary not found, downloading...");
+        info!("📥 Phoenix binary not found, downloading...");
         state.add_log(LogEntry {
             timestamp: Utc::now(),
             level: "INFO".to_string(),
@@ -437,7 +439,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
         // Download and extract Phoenix
         match download_phoenix(&path_config).await {
             Ok(msg) => {
-                println!("{}", msg);
+                info!("{}", msg);
                 state.add_log(LogEntry {
                     timestamp: Utc::now(),
                     level: "INFO".to_string(),
@@ -449,7 +451,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
             }
             Err(e) => {
                 let error_msg = format!("Failed to download Phoenix: {}", e);
-                println!("❌ {}", error_msg);
+                info!("❌ {}", error_msg);
                 state.add_log(LogEntry {
                     timestamp: Utc::now(),
                     level: "ERROR".to_string(),
@@ -466,7 +468,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
     match start_phoenixd_process(&state, &path_config).await {
         Ok((pid, url, password)) => {
             let success_msg = format!("Phoenix daemon started successfully with PID: {}", pid);
-            println!("✅ {}", success_msg);
+            info!("✅ {}", success_msg);
             state.add_log(LogEntry {
                 timestamp: Utc::now(),
                 level: "INFO".to_string(),
@@ -487,7 +489,7 @@ async fn start_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson
         }
         Err(e) => {
             let error_msg = format!("Failed to start Phoenix daemon: {}", e);
-            println!("❌ {}", error_msg);
+            info!("❌ {}", error_msg);
             state.add_log(LogEntry {
                 timestamp: Utc::now(),
                 level: "ERROR".to_string(),
@@ -515,7 +517,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
         Some(mut child) => {
             let pid = child.id();
             
-            println!("🔥 Stopping Phoenix daemon (PID: {:?})...", pid);
+            info!("🔥 Stopping Phoenix daemon (PID: {:?})...", pid);
             state.add_log(LogEntry {
                 timestamp: Utc::now(),
                 level: "INFO".to_string(),
@@ -534,7 +536,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
                                 "Phoenix daemon stopped successfully (PID: {:?}, Exit: {})",
                                 pid, exit_status
                             );
-                            println!("✅ {}", success_msg);
+                            info!("✅ {}", success_msg);
                             state.add_log(LogEntry {
                                 timestamp: Utc::now(),
                                 level: "INFO".to_string(),
@@ -554,7 +556,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
                                 "Phoenix daemon killed (PID: {:?}) but failed to wait for exit: {}",
                                 pid, e
                             );
-                            println!("⚠️ {}", warning_msg);
+                            info!("⚠️ {}", warning_msg);
                             state.add_log(LogEntry {
                                 timestamp: Utc::now(),
                                 level: "WARN".to_string(),
@@ -573,7 +575,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
                 }
                 Err(e) => {
                     let error_msg = format!("Failed to stop Phoenix daemon (PID: {:?}): {}", pid, e);
-                    println!("❌ {}", error_msg);
+                    info!("❌ {}", error_msg);
                     state.add_log(LogEntry {
                         timestamp: Utc::now(),
                         level: "ERROR".to_string(),
@@ -588,7 +590,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
         }
         None => {
             let msg = "Phoenix daemon is not currently running".to_string();
-            println!("ℹ️ {}", msg);
+            info!("ℹ️ {}", msg);
             state.add_log(LogEntry {
                 timestamp: Utc::now(),
                 level: "INFO".to_string(),
@@ -608,7 +610,7 @@ async fn stop_phoenix_api(State(state): State<AppState>) -> Result<ResponseJson<
 
 /// API endpoint to detect existing Phoenix configuration
 async fn detect_phoenix_config_api(State(state): State<AppState>) -> Result<ResponseJson<PhoenixStartResponse>, StatusCode> {
-    println!("🔍 Attempting to detect existing Phoenix configuration...");
+    info!("🔍 Attempting to detect existing Phoenix configuration...");
     
     // Check if Phoenix process is running in our state
     let is_running = {
@@ -618,7 +620,7 @@ async fn detect_phoenix_config_api(State(state): State<AppState>) -> Result<Resp
     
     match get_existing_phoenix_config().await {
         Ok((url, password)) => {
-            println!("✅ Found existing Phoenix configuration (running: {})", is_running);
+            info!("✅ Found existing Phoenix configuration (running: {})", is_running);
             Ok(ResponseJson(PhoenixStartResponse {
                 success: true,
                 message: format!("Existing Phoenix configuration detected (running: {})", is_running),
@@ -630,7 +632,7 @@ async fn detect_phoenix_config_api(State(state): State<AppState>) -> Result<Resp
             }))
         }
         Err(e) => {
-            println!("❌ Could not detect Phoenix configuration: {}", e);
+            info!("❌ Could not detect Phoenix configuration: {}", e);
             // If config doesn't exist but process is running, return minimal info
             if is_running {
                 Ok(ResponseJson(PhoenixStartResponse {
@@ -657,13 +659,13 @@ async fn start_phoenixd_process(state: &AppState, path_config: &PathConfig) -> R
         return Err(format!("Phoenixd binary not found at: {:?}", phoenixd_binary));
     }
     
-    println!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
+    info!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
     
     // Set phoenixd working directory to app data directory to ensure it can write files
     let phoenixd_working_dir = path_config.data_dir.join("phoenixd");
     if let Err(e) = std::fs::create_dir_all(&phoenixd_working_dir) {
-        println!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
-        println!("   Phoenixd will use current directory for data files");
+        info!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
+        info!("   Phoenixd will use current directory for data files");
     }
     
     let mut child = TokioCommand::new(&phoenixd_binary)
@@ -698,22 +700,22 @@ async fn start_phoenixd_process(state: &AppState, path_config: &PathConfig) -> R
         *process_guard = Some(child);
     }
     
-    println!("✅ Phoenix daemon started with PID: {}", pid);
-    println!("⏳ Waiting for Phoenix daemon to initialize and create config file...");
+    info!("✅ Phoenix daemon started with PID: {}", pid);
+    info!("⏳ Waiting for Phoenix daemon to initialize and create config file...");
     
     // Wait for phoenix.conf to be created and get the password
     match wait_for_phoenix_conf_and_get_password().await {
         Ok(password) => {
             let default_url = PHOENIX_DEFAULT_URL.to_string();
-            println!("✅ Phoenix configuration ready:");
-            println!("   URL: {}", default_url);
-            println!("   Password: {}***", &password[..std::cmp::min(4, password.len())]);
+            info!("✅ Phoenix configuration ready:");
+            info!("   URL: {}", default_url);
+            info!("   Password: {}***", &password[..std::cmp::min(4, password.len())]);
             
             Ok((pid, default_url, password))
         }
         Err(e) => {
-            println!("⚠️ Could not get Phoenix password: {}", e);
-            println!("   Phoenix daemon is running but configuration may need manual setup");
+            info!("⚠️ Could not get Phoenix password: {}", e);
+            info!("   Phoenix daemon is running but configuration may need manual setup");
             // Still return success but with empty config
             Ok((pid, PHOENIX_DEFAULT_URL.to_string(), "".to_string()))
         }
@@ -730,7 +732,7 @@ mod tests {
         assert!(result.is_ok(), "Should detect platform successfully");
         
         let (platform, arch) = result.unwrap();
-        println!("Detected platform: {}-{}", platform, arch);
+        info!("Detected platform: {}-{}", platform, arch);
         
         // Verify it's one of the supported combinations
         match platform.as_str() {

@@ -1,10 +1,12 @@
 use log::{info, warn};
+use std::env;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::paths::PathConfig;
+use crate::paths::{is_tauri_context, PathConfig};
 use crate::state::{AppState, LogEntry};
 use crate::torrc_parser;
+use std::process::Stdio; 
 
 /// Get the Tor control password from environment variables
 ///
@@ -111,15 +113,40 @@ impl EltorMode {
             EltorMode::Both => "torrc.relay",
         }
     }
+}
 
+/// Get the PID file path for a given mode and path configuration
+/// 
+/// This centralizes the logic for determining where PID files are stored:
+/// - Tauri mode: Uses app_data_dir (e.g., ~/Library/Application Support/eltor/)
+/// - Web mode: Uses bin_dir/data/
+fn get_pid_file_path(mode: &EltorMode, path_config: &PathConfig) -> std::path::PathBuf {
+    let path = if let Some(app_data_dir) = &path_config.app_data_dir {
+        // Tauri mode - PID files in app data directory
+        match mode {
+            EltorMode::Client => app_data_dir.join("eltord-client.pid"),
+            EltorMode::Relay | EltorMode::Both => app_data_dir.join("eltord-relay.pid"),
+        }
+    } else {
+        // Non-Tauri mode - PID files in bin/data
+        match mode {
+            EltorMode::Client => path_config.bin_dir.join("data").join("eltord-client.pid"),
+            EltorMode::Relay | EltorMode::Both => path_config.bin_dir.join("data").join("eltord-relay.pid"),
+        }
+    };
+    // eprintln!("🔧 [get_pid_file_path] mode={:?}, is_tauri={}, path={:?}", mode, path_config.app_data_dir.is_some(), path);
+    path
+}
+
+impl EltorMode {
     /// Get the control port from torrc file configuration
-    pub fn get_control_port(&self, path_config: &PathConfig) -> String {
+    pub async fn get_control_port(&self, path_config: &PathConfig) -> String {
         // Get the appropriate torrc file for this mode
         let torrc_file = self.get_torrc_file();
         let torrc_path = path_config.get_torrc_path(Some(torrc_file));
 
         // Read the control port from the torrc file
-        let control_ports = torrc_parser::get_torrc_config(&torrc_path, "ControlPort");
+        let control_ports = torrc_parser::get_torrc_config(&torrc_path, "ControlPort").await;
 
         if let Some(control_port) = control_ports.first() {
             // Parse port from config value (handles formats like "9992" or "127.0.0.1:9992")
@@ -145,6 +172,7 @@ impl std::fmt::Display for EltorMode {
 }
 
 /// Core eltor management with separate process tracking
+/// TODO depreciate and remove EltorManager in future release
 pub struct EltorManager {
     pub state: Arc<RwLock<AppState>>,
     pub path_config: PathConfig,
@@ -252,10 +280,10 @@ impl EltorManager {
         let torrc_path = self.path_config.get_torrc_path(Some(&torrc_file));
         let control_port = mode.get_control_port(&self.path_config);
 
-        info!(
-            "🚀 Starting eltor {} as Tokio task with torrc: {:?}, control port: {}",
-            mode, torrc_path, control_port
-        );
+        // info!(
+        //     "🚀 Starting eltor {} as Tokio task with torrc: {:?}, control port: {}",
+        //     mode, torrc_path, control_port
+        // );
 
         // Clean up any residual state first
         info!("🧹 Pre-start cleanup for {} mode", mode);
@@ -273,8 +301,9 @@ impl EltorManager {
                 mode_str.clone(),
                 "-f".to_string(),
                 torrc_path_str.clone(),
-                "-pw".to_string(),
+                "-p".to_string(),
                 control_password,
+                "-k".to_string(),
             ];
 
             info!(
@@ -290,6 +319,9 @@ impl EltorManager {
                 }
             }
 
+            // Turn off logs to avoid blocking eltord binary output (since we log in eltord with -l option)
+            log::set_max_level(log::LevelFilter::Off);
+
             // Run eltor library - this will block until shutdown or abort
             eltor::run_with_args(args).await;
 
@@ -304,11 +336,11 @@ impl EltorManager {
 
         // Discover the PIDs of spawned Tor daemons by checking the control ports
         let mut tor_pids = Vec::new();
-        let control_port = mode.get_control_port(&self.path_config);
+        let control_port = mode.get_control_port(&self.path_config).await;
         
-        info!("🔍 Looking for Tor daemon on control port {}", control_port);
+        // info!("🔍 Looking for Tor daemon on control port {}", control_port);
         if let Ok(port_num) = control_port.parse::<u16>() {
-            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num).await {
                 info!("✅ Found Tor daemon PID {} on port {}", pid, control_port);
                 tor_pids.push(pid);
             } else {
@@ -318,10 +350,10 @@ impl EltorManager {
 
         // For "both" mode, also check the client control port
         if mode == EltorMode::Both {
-            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            let client_port = EltorMode::Client.get_control_port(&self.path_config).await;
             info!("🔍 Looking for client Tor daemon on control port {}", client_port);
             if let Ok(port_num) = client_port.parse::<u16>() {
-                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num).await {
                     info!("✅ Found client Tor daemon PID {} on port {}", pid, client_port);
                     tor_pids.push(pid);
                 } else {
@@ -330,19 +362,19 @@ impl EltorManager {
             }
         }
 
-        info!("📋 Tracking {} Tor daemon PID(s) for {} mode", tor_pids.len(), mode);
+        info!("📋 Tracking {} Tor daemon PID(s) for {} mode", tor_pids.len(), &mode);
 
         Ok(EltorProcessHandle {
             task_handle,
             abort_handle,
-            mode,
+            mode: mode.clone(),
             tor_pids,
         })
     }
 
     /// Cleanup Tor daemon for specific mode - MINIMAL and SAFE cleanup
     async fn cleanup_tor_port(&self, mode: EltorMode) {
-        let port = mode.get_control_port(&self.path_config);
+        let port = mode.get_control_port(&self.path_config).await;
 
         info!("🧹 Minimal cleanup for {} mode", mode);
 
@@ -356,7 +388,7 @@ impl EltorManager {
 
         // For Both mode, also try cleaning up client port
         if mode == EltorMode::Both {
-            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            let client_port = EltorMode::Client.get_control_port(&self.path_config).await;
             if let Err(e) = self.send_tor_shutdown_on_port(&client_port).await {
                 warn!(
                     "⚠️ Failed to send Tor shutdown command on client port {}: {}",
@@ -378,11 +410,11 @@ impl EltorManager {
         // Find PIDs using the control ports
         let mut orphaned_pids = Vec::new();
         
-        let port = mode.get_control_port(&self.path_config);
+        let port = mode.get_control_port(&self.path_config).await;
         info!("🔍 Checking for orphaned process on control port {}", port);
         
         if let Ok(port_num) = port.parse::<u16>() {
-            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+            if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num).await {
                 info!("✅ Found orphaned Tor daemon PID {} on port {}", pid, port);
                 orphaned_pids.push(pid);
             } else {
@@ -392,11 +424,11 @@ impl EltorManager {
 
         // For Both mode, also check client port
         if mode == EltorMode::Both {
-            let client_port = EltorMode::Client.get_control_port(&self.path_config);
+            let client_port = EltorMode::Client.get_control_port(&self.path_config).await;
             info!("🔍 Checking for orphaned client process on port {}", client_port);
             
             if let Ok(port_num) = client_port.parse::<u16>() {
-                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num) {
+                if let Ok(Some(pid)) = crate::ports::get_pid_using_port(port_num).await {
                     info!("✅ Found orphaned client Tor daemon PID {} on port {}", pid, client_port);
                     orphaned_pids.push(pid);
                 } else {
@@ -454,8 +486,8 @@ impl EltorManager {
 
         // Determine the mode based on the port to get the correct password
         // We need to check which mode uses this port
-        let client_port = EltorMode::Client.get_control_port(&self.path_config);
-        let relay_port = EltorMode::Relay.get_control_port(&self.path_config);
+        let client_port = EltorMode::Client.get_control_port(&self.path_config).await;
+        let relay_port = EltorMode::Relay.get_control_port(&self.path_config).await;
 
         let mode = if port == client_port {
             EltorMode::Client
@@ -537,4 +569,453 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
     
     Ok(())
+}
+
+/// Check if eltord is running by reading PID file and verifying process exists
+pub async fn is_eltord_running(mode: EltorMode, path_config: &PathConfig) -> bool {
+    // eprintln!("🔍 [is_eltord_running] Checking mode={:?}, is_tauri={}", mode, path_config.app_data_dir.is_some());
+    let pid_file = get_pid_file_path(&mode, path_config);
+    log::info!("🔍 [is_eltord_running] Checking PID file: {:?} (Tauri: {})", pid_file, path_config.app_data_dir.is_some());
+
+    // Read PID from file
+    let pid = match tokio::fs::read_to_string(&pid_file).await {
+        Ok(content) => match content.trim().parse::<u32>() {
+            Ok(pid) => {
+                // eprintln!("✅ [is_eltord_running] Found PID {} in file {:?}", pid, pid_file);
+                pid
+            },
+            Err(_) => {
+                // eprintln!("❌ [is_eltord_running] Invalid PID in file {:?}", pid_file);
+                return false;
+            }
+        },
+        Err(e) => {
+            // eprintln!("❌ [is_eltord_running] No PID file at {:?}: {}", pid_file, e);
+            return false;
+        }
+    };
+
+    // Verify process is actually running
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command as StdCommand;
+        match StdCommand::new("kill")
+            .arg("-0") // Signal 0 just checks if process exists
+            .arg(pid.to_string())
+            .output()
+        {
+            Ok(output) => {
+                let is_running = output.status.success();
+                // eprintln!("🔍 [is_eltord_running] Process {} exists: {}", pid, is_running);
+                is_running
+            },
+            Err(e) => {
+                // eprintln!("❌ [is_eltord_running] Failed to check process {}: {}", pid, e);
+                false
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Check if /proc/<pid> exists
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        // Fallback - assume running if PID file exists
+        true
+    }
+}
+
+/// Get eltord status by checking PID files
+pub async fn get_eltord_status_from_pid_files(path_config: &PathConfig) -> EltorStatus {
+    let client_running = is_eltord_running(EltorMode::Client, path_config).await;
+    let relay_running = is_eltord_running(EltorMode::Relay, path_config).await;
+
+    EltorStatus {
+        running: client_running || relay_running,
+        client_running,
+        relay_running,
+        recent_logs: vec![], // No logs tracking in this simple approach
+    }
+}
+
+/// Deactivate eltord by reading PID file and killing the process
+pub fn deactivate_eltord_process(mode: String) -> Result<String, String> {
+    // eprintln!("🛑 [deactivate_eltord_process] Called with mode={}", mode);
+    let mode_enum = match EltorMode::from_str(&mode) {
+        Ok(m) => m,
+        Err(_) => {
+            return Err(format!("Invalid eltor mode: {}", mode));
+        }
+    };
+
+    // Get path config
+    let path_config = match crate::paths::PathConfig::new() {
+        Ok(pc) => {
+            // eprintln!("🛑 [deactivate_eltord_process] PathConfig: is_tauri={}", pc.app_data_dir.is_some());
+            pc
+        },
+        Err(e) => {
+            return Err(format!("Failed to get path config: {}", e));
+        }
+    };
+    
+    let pid_file = get_pid_file_path(&mode_enum, &path_config);
+    log::info!("🛑 [deactivate_eltord_process] Looking for PID file: {:?} (Tauri: {})", pid_file, path_config.app_data_dir.is_some());
+
+    // Read PID from file
+    let pid = match std::fs::read_to_string(&pid_file) {
+        Ok(content) => match content.trim().parse::<u32>() {
+            Ok(pid) => {
+                // eprintln!("✅ [deactivate_eltord_process] Found PID {} in {:?}", pid, pid_file);
+                pid
+            },
+            Err(_) => {
+                // eprintln!("❌ [deactivate_eltord_process] Invalid PID in file {:?}", pid_file);
+                return Err(format!("Invalid PID in file {:?}", pid_file));
+            }
+        },
+        Err(e) => {
+            // eprintln!("❌ [deactivate_eltord_process] No PID file found at {:?}: {}", pid_file, e);
+            return Err(format!("No PID file found at {:?} - process may not be running", pid_file));
+        }
+    };
+
+    log::info!("🛑 Stopping eltord {} (PID: {})", mode_enum, pid);
+
+    // Kill the process
+    use crate::ports::kill_process;
+    if let Err(e) = kill_process(pid) {
+        // eprintln!("❌ [deactivate_eltord_process] Failed to kill process {}: {}", pid, e);
+        return Err(format!("Failed to kill process {}: {}", pid, e));
+    }
+    // eprintln!("✅ [deactivate_eltord_process] Killed process {}", pid);
+
+    // Remove PID file
+    if let Err(e) = std::fs::remove_file(&pid_file) {
+        // eprintln!("⚠️ [deactivate_eltord_process] Failed to remove PID file {:?}: {}", pid_file, e);
+        log::warn!("⚠️ Failed to remove PID file {:?}: {}", pid_file, e);
+    } else {
+        // eprintln!("✅ [deactivate_eltord_process] Removed PID file: {:?}", pid_file);
+        log::info!("🗑️ Removed PID file: {:?}", pid_file);
+    }
+
+    log::info!("✅ Eltord {} stopped (PID: {})", mode_enum, pid);
+    // eprintln!("✅ [deactivate_eltord_process] Successfully deactivated {} (PID: {})", mode_enum, pid);
+    Ok(format!("Eltord {} deactivated", mode_enum))
+}
+
+/// Cleanup all eltord processes across all modes
+/// This is useful for shutdown handlers in both Tauri and Axum
+pub fn cleanup_all_eltord_processes() {
+    log::info!("🧹 Cleaning up all eltord processes...");
+    
+    for mode in &["client", "relay", "both"] {
+        match deactivate_eltord_process(mode.to_string()) {
+            Ok(msg) => log::info!("✅ {}", msg),
+            Err(e) => {
+                // Only warn if it's not a "no PID file" error
+                if !e.contains("No PID file found") && !e.contains("not running") {
+                    log::warn!("⚠️ {}", e);
+                }
+            }
+        }
+    }
+    
+    log::info!("✅ All eltord processes cleaned up");
+}
+
+// TODO clean this up
+pub fn activate_eltord_process(mode: String) {
+    // eprintln!("🚀 [activate_eltord_process] Called with mode={}", mode);
+
+    let mode_enum = match EltorMode::from_str(&mode) {
+        Ok(m) => m,
+        Err(_) => {
+            warn!("⚠️ Invalid eltor mode specified for activation: {}", mode);
+            return;
+        }
+    };
+
+    // Get path config based on context (Tauri vs web)
+    let path_config = if is_tauri_context() {
+        // eprintln!("🚀 [activate_eltord_process] Running in Tauri mode");
+        // In Tauri, use app data directory
+        let app_data_dir = match dirs::data_dir() {
+            Some(dir) => dir.join("eltor"),
+            None => {
+                warn!("⚠️ Failed to get app data directory");
+                return;
+            }
+        };
+        
+        // Try to create app data directory
+        if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
+            warn!("⚠️ Failed to create app data directory: {}", e);
+            return;
+        }
+        
+        // In Tauri mode, bin_dir should come from environment variable set by Tauri frontend
+        // This allows Tauri to pass the resource directory path
+        let bin_dir = if let Ok(tauri_bin_dir) = env::var("ELTOR_TAURI_BIN_DIR") {
+            let bin_path = std::path::PathBuf::from(tauri_bin_dir);
+            // eprintln!("🚀 [activate_eltord_process] Using ELTOR_TAURI_BIN_DIR: {:?}", bin_path);
+            bin_path
+        } else {
+            // Fallback for development mode
+            match env::current_dir() {
+                Ok(cwd) => {
+                    let dev_bin = cwd.join("../../backend/bin");
+                    if dev_bin.exists() {
+                        // eprintln!("🚀 [activate_eltord_process] Using development bin dir: {:?}", dev_bin);
+                        dev_bin
+                    } else {
+                        warn!("⚠️ ELTOR_TAURI_BIN_DIR not set and dev bin not found, using app_data_dir");
+                        app_data_dir.clone()
+                    }
+                }
+                Err(_) => {
+                    warn!("⚠️ Could not determine bin_dir, using app_data_dir");
+                    app_data_dir.clone()
+                }
+            }
+        };
+        
+        PathConfig {
+            bin_dir,
+            data_dir: app_data_dir.clone(),
+            app_data_dir: Some(app_data_dir),
+        }
+    } else {
+        // eprintln!("🚀 [activate_eltord_process] Running in web mode");
+        // Non-Tauri mode - use standard path detection
+        match PathConfig::new() {
+            Ok(pc) => pc,
+            Err(e) => {
+                warn!("⚠️ Failed to get path config: {}", e);
+                return;
+            }
+        }
+    };
+    
+    let torrc_file = mode_enum.get_torrc_file();
+    let torrc_path = path_config.get_torrc_path(Some(torrc_file));
+    let torrc_path_str = torrc_path.to_string_lossy().to_string();
+    let control_password = std::env::var(match mode_enum {
+        EltorMode::Client => "APP_ELTOR_TOR_CONTROL_PASSWORD",
+        EltorMode::Relay | EltorMode::Both => "APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD",
+    })
+    .unwrap_or_else(|_| "password1234_".to_string());
+    let eltord_path = path_config.bin_dir.join("eltord");
+    // Determine correct log path based on context
+    let eltord_log_path = if let Some(app_data_dir) = path_config.app_data_dir.as_ref() {
+        // Tauri mode - use app data directory
+        app_data_dir.join("eltor.log")
+    } else {
+        // Non-Tauri mode - use bin/data directory
+        path_config.bin_dir.join("data").join("eltor.log")
+    };
+    
+    let pid_file = get_pid_file_path(&mode_enum, &path_config);
+    log::info!("🚀 [activate_eltord_process] Will write PID file to: {:?} (Tauri: {})", pid_file, path_config.app_data_dir.is_some());
+
+    // if is_tauri_context() {
+    //     eprintln!("isTauriContext=true, {:?}", path_config);
+    // } else {
+    //     eprintln!("isTauriContext=false, {:?}", path_config);
+    // }
+
+    let log_path_str = eltord_log_path.to_str().unwrap_or_default().to_string();
+
+    log::info!("🚀 Spawning eltord {} with torrc: {:?}", mode_enum, torrc_path);
+    log::info!("   Torrc path string: {}", torrc_path_str);
+    log::info!("   Log path: {:?}", eltord_log_path);
+    log::info!("   Log path string: {}", log_path_str);
+    log::info!("   PID file: {:?}", pid_file);
+    log::info!("   Working dir: {:?}", path_config.bin_dir);
+
+    // Use std::process::Command for true isolation - NO tokio involvement
+    use std::process::Command as StdCommand;
+    
+    #[cfg(target_os = "macos")]
+    {
+        // macOS-specific: Use posix_spawn to avoid fork() issues in multi-threaded environments
+        // Tauri apps create multiple threads (WebView, UI, etc.), and fork() after threading
+        // causes crashes with "multi-threaded process forked" errors
+        // By not using .pre_exec(), std::process::Command uses posix_spawn instead of fork+exec
+        
+        log::info!("🚀 [macOS] Attempting to spawn eltord:");
+        log::info!("   Binary: {:?}", eltord_path);
+        log::info!("   Exists: {}", eltord_path.exists());
+        log::info!("   Working dir: {:?}", path_config.bin_dir);
+        log::info!("   Mode: {}", mode_enum);
+        log::info!("   Torrc: {}", torrc_path_str);
+        log::info!("   Log file: {}", log_path_str);
+        log::info!("   PID file: {:?}", pid_file);
+        
+        // Check if binary exists and is executable
+        if !eltord_path.exists() {
+            let error_msg = format!("❌ eltord binary not found at {:?}", eltord_path);
+            // eprintln!("{}", error_msg);
+            log::error!("{}", error_msg);
+            return;
+        }
+        
+        match StdCommand::new(&eltord_path)
+            .arg(mode_enum.to_string())
+            .arg("-f")
+            .arg(&torrc_path_str)
+            .arg("-p")
+            .arg(&control_password)
+            .arg("-l")
+            .arg(&log_path_str)
+            .arg("-k")
+            .current_dir(&path_config.bin_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            // On macOS, prefer posix_spawn over fork (avoid multi-thread fork issues)
+            // This is critical for Tauri apps which have multiple threads running
+            .spawn()
+        {
+            Ok(child) => {
+                let pid = child.id();
+                log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
+                log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
+                
+                // Write PID to file synchronously
+                if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
+                    // eprintln!("⚠️ [activate_eltord_process] Failed to write PID file {:?}: {}", pid_file, e);
+                    log::warn!("⚠️ Failed to write PID file {:?}: {}", pid_file, e);
+                } else {
+                    // eprintln!("✅ [activate_eltord_process] Wrote PID {} to {:?}", pid, pid_file);
+                    log::info!("✅ Wrote PID {} to {:?}", pid, pid_file);
+                }
+                
+                // Process is now 100% isolated - we don't even wait on it
+                // It will be reaped by init when it exits
+                std::mem::forget(child); // Don't wait, don't reap, just let it run
+                
+                // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
+                log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
+            }
+            Err(e) => {
+                let error_msg = format!("❌ Failed to spawn eltord {}: {}", mode_enum, e);
+                // eprintln!("[activate_eltord_process] {}", error_msg);
+                log::error!("{}", error_msg);
+                log::error!("   Error kind: {:?}", e.kind());
+                log::error!("   Binary path: {:?}", eltord_path);
+                log::error!("   Working dir: {:?}", path_config.bin_dir);
+                
+                // Try to get more details about why it failed
+                if let Some(os_error) = e.raw_os_error() {
+                    log::error!("   OS error code: {}", os_error);
+                }
+            }
+        }
+    }
+    
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        use std::os::unix::process::CommandExt;
+        
+        match unsafe {
+            StdCommand::new(&eltord_path)
+                .arg(mode_enum.to_string())
+                .arg("-f")
+                .arg(&torrc_path_str)
+                .arg("-p")
+                .arg(&control_password)
+                .arg("-l")
+                .arg(&log_path_str)
+                .arg("-k")
+                .current_dir(&path_config.bin_dir)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .stdin(Stdio::null())
+                .pre_exec(|| {
+                    // Create new session - completely detach from parent
+                    unsafe {
+                        libc::setsid();
+                    }
+                    
+                    // Close all file descriptors except stdin/out/err
+                    // This prevents inheriting any open sockets or files
+                    let max_fd = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
+                    if max_fd > 0 {
+                        for fd in 3..max_fd {
+                            unsafe { libc::close(fd as i32); }
+                        }
+                    }
+                    
+                    Ok(())
+                })
+                .spawn()
+        } {
+            Ok(child) => {
+                let pid = child.id();
+                log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
+                log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
+                
+                // Write PID to file synchronously
+                if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
+                    // eprintln!("⚠️ [activate_eltord_process] Failed to write PID file {:?}: {}", pid_file, e);
+                    log::warn!("⚠️ Failed to write PID file {:?}: {}", pid_file, e);
+                } else {
+                    // eprintln!("✅ [activate_eltord_process] Wrote PID {} to {:?}", pid, pid_file);
+                }
+                
+                // Process is now 100% isolated - we don't even wait on it
+                // It will be reaped by init when it exits
+                std::mem::forget(child); // Don't wait, don't reap, just let it run
+                
+                // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
+                log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
+            }
+            Err(e) => {
+                // eprintln!("❌ [activate_eltord_process] Failed to spawn eltord {}: {}", mode_enum, e);
+                log::error!("❌ Failed to spawn eltord {}: {}", mode_enum, e);
+            }
+        }
+    }
+    
+    #[cfg(not(unix))]
+    {
+        match StdCommand::new(&eltord_path)
+            .arg(mode_enum.to_string())
+            .arg("-f")
+            .arg(&torrc_path_str)
+            .arg("-p")
+            .arg(&control_password)
+            .arg("-l")
+            .arg(&log_path_str)
+            .arg("-k")
+            .current_dir(&path_config.bin_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => {
+                let pid = child.id();
+                log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
+                log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
+                
+                // Write PID to file synchronously
+                if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
+                    log::warn!("⚠️ Failed to write PID file {:?}: {}", pid_file, e);
+                }
+                
+                std::mem::forget(child);
+                
+                log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
+            }
+            Err(e) => {
+                log::error!("❌ Failed to spawn eltord {}: {}", mode_enum, e);
+            }
+        }
+    }
 }
