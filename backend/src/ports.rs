@@ -2,8 +2,9 @@ use crate::paths::PathConfig;
 use crate::state::AppState;
 use std::env;
 use std::fs;
-use std::process::Command;
 use log::info;
+use netstat2::{get_sockets_info, AddressFamilyFlags, ProtocolFlags};
+use sysinfo::{System, Pid};
 
 
 /// Default ports used by the application
@@ -138,93 +139,84 @@ pub fn get_ports_to_check_with_torrc(torrc_filename: &str) -> Result<Vec<PortInf
     Ok(ports)
 }
 
-/// Check if a port is in use on macOS
+/// Check if a port is in use (cross-platform)
 pub fn is_port_in_use(port: u16) -> Result<bool, String> {
-    let output = Command::new("lsof")
-        .args(["-i", &format!(":{}", port), "-t"])
-        .output()
-        .map_err(|e| format!("Failed to run lsof: {}", e))?;
-
-    Ok(!output.stdout.is_empty())
+    let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
+    let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
+    
+    let sockets = get_sockets_info(af_flags, proto_flags)
+        .map_err(|e| format!("Failed to get socket info: {}", e))?;
+    
+    Ok(sockets.iter().any(|s| s.local_port() == port))
 }
 
-/// Get the PID of the process using a specific port
+/// Get the PID of the process using a specific port (cross-platform)
 pub async fn get_pid_using_port(port: u16) -> Result<Option<u32>, String> {
-    // Use tokio::task::spawn_blocking to avoid blocking the async runtime
     tokio::task::spawn_blocking(move || {
-        use std::process::Command;
+        let af_flags = AddressFamilyFlags::IPV4 | AddressFamilyFlags::IPV6;
+        let proto_flags = ProtocolFlags::TCP | ProtocolFlags::UDP;
         
-        let output = Command::new("lsof")
-            .args(["-i", &format!(":{}", port), "-t"])
-            .output()
-            .map_err(|e| format!("Failed to run lsof: {}", e))?;
-
-        if output.stdout.is_empty() {
-            return Ok(None);
+        let sockets = get_sockets_info(af_flags, proto_flags)
+            .map_err(|e| format!("Failed to get socket info: {}", e))?;
+        
+        for socket in sockets {
+            if socket.local_port() == port {
+                if let Some(&pid) = socket.associated_pids.first() {
+                    return Ok(Some(pid));
+                }
+            }
         }
-
-        let pid_str = String::from_utf8_lossy(&output.stdout);
-        let pid_str = pid_str.trim();
-
-        if let Ok(pid) = pid_str.parse::<u32>() {
-            Ok(Some(pid))
-        } else {
-            Ok(None)
-        }
+        
+        Ok(None)
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
 }
 
-/// Get process information for a given PID
+/// Get process information for a given PID (cross-platform)
 pub fn get_process_info(pid: u32) -> Result<String, String> {
-    let output = Command::new("ps")
-        .args(["-p", &pid.to_string(), "-o", "comm="])
-        .output()
-        .map_err(|e| format!("Failed to run ps: {}", e))?;
-
-    let process_name = String::from_utf8_lossy(&output.stdout);
-    Ok(process_name.trim().to_string())
+    let system = System::new_all();
+    
+    if let Some(process) = system.process(Pid::from_u32(pid)) {
+        Ok(process.name().to_string_lossy().to_string())
+    } else {
+        Err(format!("Process {} not found", pid))
+    }
 }
 
-/// Kill a process by PID
+/// Kill a process by PID (cross-platform)
 pub fn kill_process(pid: u32) -> Result<(), String> {
-    let output = Command::new("kill")
-        .args(["-TERM", &pid.to_string()])
-        .output()
-        .map_err(|e| format!("Failed to kill process {}: {}", pid, e))?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Failed to kill process {}: {}", pid, error));
-    }
-
-    // Wait a moment and try SIGKILL if process is still running
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    if is_port_in_use_by_pid(pid)? {
-        let output = Command::new("kill")
-            .args(["-KILL", &pid.to_string()])
-            .output()
-            .map_err(|e| format!("Failed to force kill process {}: {}", pid, e))?;
-
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Failed to force kill process {}: {}", pid, error));
+    let system = System::new_all();
+    
+    if let Some(process) = system.process(Pid::from_u32(pid)) {
+        // Try graceful kill first (SIGTERM on Unix, TerminateProcess on Windows)
+        if !process.kill() {
+            return Err(format!("Failed to kill process {}", pid));
         }
+        
+        // Wait a moment and verify
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        
+        // Refresh and check if still running
+        let system = System::new_all();
+        if system.process(Pid::from_u32(pid)).is_some() {
+            // Force kill if still running (SIGKILL on Unix)
+            if let Some(process) = system.process(Pid::from_u32(pid)) {
+                process.kill();
+            }
+        }
+        
+        Ok(())
+    } else {
+        Ok(()) // Process already dead
     }
-
-    Ok(())
 }
 
-/// Check if a specific PID is still running
+/// Check if a specific PID is still running (cross-platform)
+#[allow(dead_code)]
 fn is_port_in_use_by_pid(pid: u32) -> Result<bool, String> {
-    let output = Command::new("ps")
-        .args(["-p", &pid.to_string()])
-        .output()
-        .map_err(|e| format!("Failed to check if PID {} exists: {}", pid, e))?;
-
-    Ok(output.status.success())
+    let system = System::new_all();
+    Ok(system.process(Pid::from_u32(pid)).is_some())
 }
 
 /// Clean up ports used by the application using AppState torrc configuration

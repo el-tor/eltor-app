@@ -36,26 +36,8 @@ FROM builder AS backend-builder
 
 WORKDIR /root/code
 
-# Clone and build git dependencies
-RUN git clone https://github.com/el-tor/eltor.git /root/code/eltor && \
-    git clone https://github.com/lightning-node-interface/lni.git /root/code/lni && \
-    git clone https://github.com/el-tor/libeltor-sys.git /root/code/libeltor-sys && \
-    git clone https://github.com/el-tor/libeltor.git /root/code/libeltor && \
-    git clone https://github.com/el-tor/eltord.git /root/code/eltord
-
-# Checkout specific branches
-# TODO change to master
-# RUN cd /root/code/lni && git checkout search
-
-# Build libeltor-sys
-RUN cd /root/code/libeltor-sys && \
-    ./scripts/copy.sh && \
-    mkdir -p patches libtor-src/patches && \
-    touch patches/.keep libtor-src/patches/.keep && \
-    ./scripts/build.sh
-
-# Build eltord
-RUN cd /root/code/eltord && cargo build --release
+# Clone and build lni dependency (needed for backend)
+RUN git clone https://github.com/lightning-node-interface/lni.git /root/code/lni
 
 # Copy eltor-app backend and build it
 COPY backend /root/code/eltor-app/backend
@@ -63,7 +45,27 @@ WORKDIR /root/code/eltor-app/backend
 RUN cargo build --release
 
 # =============================================================================
-# Stage 3: Download Phoenix
+# Stage 3: Download eltord from GitHub Releases
+# =============================================================================
+FROM builder AS eltord-downloader
+
+# Detect architecture and download appropriate eltord binary
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+        ELTORD_PLATFORM="linux-arm64"; \
+    else \
+        ELTORD_PLATFORM="linux-x86_64"; \
+    fi && \
+    echo "Downloading eltord for $ELTORD_PLATFORM..." && \
+    ELTORD_VERSION=$(curl -s "https://api.github.com/repos/el-tor/eltord/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') && \
+    echo "Latest eltord version: $ELTORD_VERSION" && \
+    ELTORD_URL="https://github.com/el-tor/eltord/releases/download/${ELTORD_VERSION}/eltord-${ELTORD_PLATFORM}.zip" && \
+    curl -L -o /tmp/eltord.zip "$ELTORD_URL" && \
+    unzip -j /tmp/eltord.zip "eltord" -d /tmp && \
+    chmod +x /tmp/eltord
+
+# =============================================================================
+# Stage 4: Download Phoenix
 # =============================================================================
 FROM builder AS phoenix-downloader
 
@@ -132,7 +134,7 @@ RUN mkdir -p /home/user/code/eltor-app/backend/bin \
     && chmod -R g+rwx /home/user/data 
 
 # Copy built binaries from previous stages
-COPY --from=backend-builder /root/code/eltord/target/release/eltor /home/user/code/eltor-app/backend/bin/eltord
+COPY --from=eltord-downloader /tmp/eltord /home/user/code/eltor-app/backend/bin/eltord
 COPY --from=backend-builder /root/code/eltor-app/backend/target/release/eltor-backend /home/user/code/eltor-app/backend/bin/eltor-backend
 COPY --from=phoenix-downloader /usr/local/bin/phoenixd /home/user/code/eltor-app/backend/bin/phoenixd
 COPY --from=phoenix-downloader /usr/local/bin/phoenix-cli /home/user/code/eltor-app/backend/bin/phoenix-cli

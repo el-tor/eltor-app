@@ -11,6 +11,7 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 - setup [env vars](#environment-setup)
 - tauri https://v2.tauri.app/start/prerequisites/
 - install nix
+- `./scripts/download-eltord.sh`
 
 ### 🌐 Web Mode
 ```bash
