@@ -184,6 +184,31 @@ async fn stream_eltord_logs_invoke(
 }
 
 #[command]
+async fn stop_eltord_logs_invoke(
+    tauri_state: State<'_, TauriState>,
+    mode: String,
+) -> Result<(), String> {
+    let backend_state = tauri_state.backend_state.read().await;
+    
+    // Cancel the appropriate log stream
+    if mode == "client" {
+        let mut client_cancel = backend_state.client_log_cancel.lock().unwrap();
+        if let Some(token) = client_cancel.take() {
+            token.cancel();
+            info!("⏸️ [Tauri] Cancelled client log stream");
+        }
+    } else if mode == "relay" {
+        let mut relay_cancel = backend_state.relay_log_cancel.lock().unwrap();
+        if let Some(token) = relay_cancel.take() {
+            token.cancel();
+            info!("⏸️ [Tauri] Cancelled relay log stream");
+        }
+    }
+    
+    Ok(())
+}
+
+#[command]
 async fn get_node_info(tauri_state: State<'_, TauriState>) -> Result<serde_json::Value, String> {
     // Get the lightning node from backend AppState (cached)
     let backend_state = tauri_state.backend_state.read().await;
@@ -1177,6 +1202,7 @@ fn main() {
             get_eltord_status_invoke,
             get_eltord_logs_invoke,
             stream_eltord_logs_invoke,
+            stop_eltord_logs_invoke,
             test_log_event,
             get_node_info,
             get_wallet_transactions,

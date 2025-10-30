@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { apiService, LogEntry } from '../services/apiService'
 import { useDispatch, useSelector } from '../hooks'
+import { IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react'
 
 interface LogViewerProps {
   className?: string
   height?: string
   mode?: 'client' | 'relay' // Determines which log state to use
   scroll?: boolean
+  autoScroll?: boolean
+  onAutoScrollChange?: (value: boolean) => void
 }
 
 const LogViewer: React.FC<LogViewerProps> = ({
@@ -14,8 +17,12 @@ const LogViewer: React.FC<LogViewerProps> = ({
   height = '300px',
   mode = 'client',
   scroll = true,
+  autoScroll: externalAutoScroll,
+  onAutoScrollChange,
 }) => {
-  const [autoScroll, setAutoScroll] = useState(scroll)
+  const [internalAutoScroll, setInternalAutoScroll] = useState(scroll)
+  const autoScroll = externalAutoScroll !== undefined ? externalAutoScroll : internalAutoScroll
+  const setAutoScroll = onAutoScrollChange || setInternalAutoScroll
   const logsEndRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dispatch = useDispatch()
@@ -160,15 +167,6 @@ const LogViewer: React.FC<LogViewerProps> = ({
           <span className="text-xs text-gray-400">
             {mode.charAt(0).toUpperCase() + mode.slice(1)} Logs ({logs?.length || 0})
           </span>
-          <label className="flex items-center gap-1 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
-              className="w-3 h-3"
-            />
-            Auto-scroll
-          </label>
         </div>
       </div>
 

@@ -20,6 +20,7 @@ import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
 import { clearLogsClient } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
+import { logStreamService } from '../services/logStreamService'
 // @ts-ignore
 import styles from '../globals.module.css'
 import MapComponent from '../components/Map/MapComponent'
@@ -28,7 +29,7 @@ import { useEltord } from '../hooks/useEltord'
 import { useBootstrapping } from '../hooks/useBootstrapping'
 import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
-import { IconChevronDown, IconPlug } from '@tabler/icons-react'
+import { IconChevronDown, IconPlug, IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
 import { SocksProxyHelp } from '../components/SocksProxyHelp'
@@ -43,6 +44,7 @@ export const Connect = () => {
   const { defaultWallet } = useSelector((state) => state.wallet)
   const [openedWizard, { open: openWizard, close: closeWizard }] =
     useDisclosure(false)
+  const [logsPlaying, setLogsPlaying] = useState(false)
 
   const {
     logsClient,
@@ -314,7 +316,7 @@ export const Connect = () => {
                 w="500px"
                 title={
                   <Group gap="xs" wrap="nowrap">
-                    <Text>Connected! Socks5 Proxy Ready</Text>
+                    <Text>Connected! SOCKS Proxy Ready</Text>
                     
                   </Group>
                 }
@@ -382,11 +384,30 @@ export const Connect = () => {
               height="260px"
               className="mt-[-130px] z-10 relative max-w-full"
               mode="client"
-              scroll={false}
+              scroll={true}
             />
           </pre>
+          <Tooltip label={logsPlaying ? 'Pause Logs' : 'Start Logs'}>
+            <Button
+              size="xs"
+              style={{ position: 'absolute', bottom: 4, right: 70, height: 24 }}
+              onClick={() => {
+                if (logsPlaying) {
+                  logStreamService.pause('client')
+                  setLogsPlaying(false)
+                } else {
+                  logStreamService.resume('client')
+                  setLogsPlaying(true)
+                }
+              }}
+              variant={logsPlaying ? 'filled' : 'default'}
+            >
+              {logsPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+            </Button>
+          </Tooltip>
           <Button
             size="xs"
+            variant='default'
             style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
             onClick={() => dispatch(clearLogsClient())}
           >

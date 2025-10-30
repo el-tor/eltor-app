@@ -211,6 +211,8 @@ pub async fn initialize_phoenixd(state: Arc<RwLock<AppState>>) -> Result<(), Str
             torrc_file_name: app_state.torrc_file_name.clone(),
             eltor_manager: app_state.eltor_manager.clone(),
             path_config: app_state.path_config.clone(),
+            client_log_cancel: app_state.client_log_cancel.clone(),
+            relay_log_cancel: app_state.relay_log_cancel.clone(),
         };
         drop(app_state);
         wallet::start_phoenixd(cloned_state).await
@@ -300,14 +302,30 @@ pub async fn stream_eltord_logs_internal(
     mode: String,
     emit_fn: Arc<dyn Fn(String) + Send + Sync>,
 ) -> Result<(), String> {
+    use tokio_util::sync::CancellationToken;
+    
     let app_state = state.read().await;
     let path_config = app_state.path_config.clone();
+    
+    // Create cancellation token and store it
+    let cancel_token = CancellationToken::new();
+    let cancel_token_clone = cancel_token.clone();
+    
+    if mode == "client" {
+        let mut client_cancel = app_state.client_log_cancel.lock().unwrap();
+        *client_cancel = Some(cancel_token_clone);
+    } else {
+        let mut relay_cancel = app_state.relay_log_cancel.lock().unwrap();
+        *relay_cancel = Some(cancel_token_clone);
+    }
+    
     drop(app_state);
     
     // Spawn a task to tail the log file
     tokio::spawn(async move {
         use tokio::fs::File;
         use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
+        use tokio::select;
         
         // Determine log file path - use app_data_dir if available (Tauri mode)
         let log_file = if let Some(app_data_dir) = &path_config.app_data_dir {
@@ -332,8 +350,15 @@ pub async fn stream_eltord_logs_internal(
         // Wait for file to exist
         let mut attempts = 0;
         while !log_file.exists() && attempts < 20 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-            attempts += 1;
+            select! {
+                _ = tokio::time::sleep(tokio::time::Duration::from_millis(500)) => {
+                    attempts += 1;
+                }
+                _ = cancel_token.cancelled() => {
+                    log::info!("⏸️ [Tauri] Log stream cancelled before file existed for mode: {}", mode);
+                    return;
+                }
+            }
         }
         
         if !log_file.exists() {
@@ -361,21 +386,37 @@ pub async fn stream_eltord_logs_internal(
         loop {
             line.clear();
             
-            match reader.read_line(&mut line).await {
-                Ok(0) => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                    continue;
+            select! {
+                result = reader.read_line(&mut line) => {
+                    match result {
+                        Ok(0) => {
+                            // No data, sleep a bit
+                            select! {
+                                _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
+                                _ = cancel_token.cancelled() => {
+                                    log::info!("⏸️ [Tauri] Log stream cancelled for mode: {}", mode);
+                                    break;
+                                }
+                            }
+                        }
+                        Ok(_) => {
+                            // Emit event via callback
+                            emit_fn(line.trim().to_string());
+                        }
+                        Err(e) => {
+                            log::error!("❌ [Tauri] Error reading log: {}", e);
+                            break;
+                        }
+                    }
                 }
-                Ok(_) => {
-                    // Emit event via callback
-                    emit_fn(line.trim().to_string());
-                }
-                Err(e) => {
-                    log::error!("❌ [Tauri] Error reading log: {}", e);
+                _ = cancel_token.cancelled() => {
+                    log::info!("⏸️ [Tauri] Log stream cancelled for mode: {}", mode);
                     break;
                 }
             }
         }
+        
+        log::info!("🧹 [Tauri] Log stream ended for mode: {}", mode);
     });
     
     Ok(())

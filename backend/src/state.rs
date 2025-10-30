@@ -3,6 +3,7 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use crate::lightning::LightningNode;
 use crate::eltor::EltorManager;
 use crate::paths::PathConfig;
@@ -45,6 +46,8 @@ pub struct AppState {
     pub torrc_file_name: String,
     pub eltor_manager: Option<Arc<EltorManager>>,
     pub path_config: Arc<PathConfig>,
+    pub client_log_cancel: Arc<Mutex<Option<CancellationToken>>>,
+    pub relay_log_cancel: Arc<Mutex<Option<CancellationToken>>>,
 }
 
 impl AppState {
@@ -60,6 +63,8 @@ impl AppState {
             torrc_file_name: "torrc".to_string(),
             eltor_manager: None,
             path_config: Arc::new(path_config),
+            client_log_cancel: Arc::new(Mutex::new(None)),
+            relay_log_cancel: Arc::new(Mutex::new(None)),
         }
     }
 

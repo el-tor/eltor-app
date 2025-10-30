@@ -11,25 +11,30 @@ class LogStreamService {
   private dispatch: Dispatch | null = null
   private initializingClient = false
   private initializingRelay = false
+  private clientPaused = true  // Start paused by default
+  private relayPaused = true   // Start paused by default
 
   public async initialize(dispatch: Dispatch, mode: 'client' | 'relay' | 'both' = 'client') {
     this.dispatch = dispatch
 
-    if (mode === 'both' || mode === 'client') {
-      await this.initializeMode('client')
-    }
-    
-    if (mode === 'both' || mode === 'relay') {
-      await this.initializeMode('relay')
-    }
+    // Don't auto-start streams if paused - just store the dispatch
+    // Streams will start when user clicks Play
+    console.log(`📋 LogStreamService: Initialized with dispatch, waiting for user to start streaming`)
   }
 
   private async initializeMode(mode: 'client' | 'relay') {
     const isSetup = mode === 'client' ? this.clientSetup : this.relaySetup
     const isInitializing = mode === 'client' ? this.initializingClient : this.initializingRelay
+    const isPaused = mode === 'client' ? this.clientPaused : this.relayPaused
     
-    if (isSetup || isInitializing) {
-      console.log(`🔧 LogStreamService: ${mode} already initialized or initializing, skipping`)
+    // Don't reinitialize if already setup and not resuming from pause
+    if (isSetup && !isPaused) {
+      console.log(`🔧 LogStreamService: ${mode} already initialized, skipping`)
+      return
+    }
+    
+    if (isInitializing) {
+      console.log(`🔧 LogStreamService: ${mode} already initializing, skipping`)
       return
     }
 
@@ -260,6 +265,51 @@ class LogStreamService {
     if (mode === 'client') return this.clientSetup
     if (mode === 'relay') return this.relaySetup
     return this.clientSetup || this.relaySetup
+  }
+
+  public async pause(mode: 'client' | 'relay') {
+    console.log(`⏸️ LogStreamService: Pausing ${mode} logs`)
+    if (mode === 'client') {
+      this.clientPaused = true
+      if (this.clientCleanup) {
+        console.log('🧹 LogStreamService: Closing client stream')
+        this.clientCleanup()
+        this.clientCleanup = undefined
+      }
+      this.clientSetup = false
+      // For Tauri, also call the stop command
+      if (isTauri()) {
+        await apiService.stopLogStream('client')
+      }
+    } else {
+      this.relayPaused = true
+      if (this.relayCleanup) {
+        console.log('🧹 LogStreamService: Closing relay stream')
+        this.relayCleanup()
+        this.relayCleanup = undefined
+      }
+      this.relaySetup = false
+      // For Tauri, also call the stop command
+      if (isTauri()) {
+        await apiService.stopLogStream('relay')
+      }
+    }
+  }
+
+  public async resume(mode: 'client' | 'relay') {
+    console.log(`▶️ LogStreamService: Resuming ${mode} logs`)
+    if (mode === 'client') {
+      this.clientPaused = false
+    } else {
+      this.relayPaused = false
+    }
+    
+    // Reinitialize the stream
+    await this.initializeMode(mode)
+  }
+
+  public isPaused(mode: 'client' | 'relay'): boolean {
+    return mode === 'client' ? this.clientPaused : this.relayPaused
   }
 }
 

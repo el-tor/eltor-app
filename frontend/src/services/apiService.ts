@@ -360,6 +360,16 @@ class ApiService {
     }
   }
 
+  // Stop log streaming (Tauri only - for web mode, just close the EventSource via cleanup function)
+  async stopLogStream(mode: 'client' | 'relay'): Promise<void> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      console.log(`🛑 Stopping Tauri log stream for mode: ${mode}`)
+      await tauriInvoke('stop_eltord_logs_invoke', { mode })
+    }
+    // For web mode, the cleanup function returned by createLogStream handles closing
+  }
+
   // IP Location lookup
   async lookupIpLocation(ip: string): Promise<IpLocationResponse> {
     if (isTauri()) {
