@@ -200,10 +200,21 @@ export const Connect = () => {
                 resetBootstrapping()
                 setShowSocksModal(false)
 
+                // Only resume logs if they're not already paused by user preference
+                // Check current pause state before making changes
+                const shouldEnableLogging = !logStreamService.isPaused('client')
+                
+                // If logs are not paused, ensure they're playing for bootstrapping progress
+                if (shouldEnableLogging) {
+                  logStreamService.resume('client')
+                  setLogsPlaying(true)
+                }
+
                 // Start bootstrapping UI immediately at 1%
                 startBootstrapping()
 
-                await activate()
+                // Activate with logging based on whether logs were paused or not
+                await activate(shouldEnableLogging)
                 setTimeout(() => setShowSocksModal(true), 3000)
 
                 // Don't show SOCKS modal immediately - wait for bootstrapping to complete

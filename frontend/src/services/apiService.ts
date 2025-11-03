@@ -19,11 +19,26 @@ const loadTauriAPIs = async () => {
 const getApiBaseUrl = () => {
   // In Tauri mode, we need to use the backend server port, not the frontend port
   if (isTauri()) {
-    // Tauri dev mode: frontend is on 1420, backend is on 5174
-    // Tauri prod mode: both should be on the same port (backend serves frontend)
-    const backendUrl = `${window.location.protocol}//localhost:5174`
-    console.log('apiService - Using Tauri backend URL:', backendUrl)
-    return backendUrl
+    // Prefer explicit config value if available
+    if (config.API_BASE_URL && !config.API_BASE_URL.includes('undefined')) {
+      console.log('apiService - Using configured API_BASE_URL:', config.API_BASE_URL)
+      return config.API_BASE_URL
+    }
+    
+    // Derive from window.location based on port
+    // Dev mode: frontend on 1420, backend on 5174
+    // Prod mode: both on same port (backend serves frontend)
+    if (window.location.port === '1420') {
+      // Development mode - use dev backend port
+      const backendUrl = `${window.location.protocol}//${window.location.hostname}:5174`
+      console.log('apiService - Tauri dev mode, using backend URL:', backendUrl)
+      return backendUrl
+    } else {
+      // Production/packaged mode - use current host/port
+      const backendUrl = `${window.location.protocol}//${window.location.host}`
+      console.log('apiService - Tauri prod mode, using current location:', backendUrl)
+      return backendUrl
+    }
   }
   
   // In web mode, frontend and backend are on the same server
@@ -164,21 +179,22 @@ class ApiService {
   // Eltord methods
   async activateEltord(
     mode: 'client' | 'relay' | 'both',
+    enableLogging?: boolean,
   ): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
       return await tauriInvoke('activate_eltord_invoke', {
         mode: mode || 'client',
+        enableLogging: enableLogging ?? false,
       })
     } else {
       // Build endpoint based on provided parameters
-      let endpoint = `${getApiBaseUrl()}/api/eltord/activate`
+      let endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}`
       
-        // Only mode specified
-        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(
-          mode,
-        )}`
-      
+      // Add query parameter for logging if specified
+      if (enableLogging !== undefined) {
+        endpoint += `?enable_logging=${enableLogging}`
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',

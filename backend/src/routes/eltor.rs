@@ -11,21 +11,30 @@ use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use std::io::SeekFrom;
+use serde::Deserialize;
 
 use crate::eltor::activate_eltord_process;
 use crate::state::{AppState, EltordStatusResponse, MessageResponse};
 
+#[derive(Deserialize)]
+pub struct ActivateParams {
+    #[serde(default)]
+    enable_logging: bool,
+}
+
 #[axum::debug_handler(state = AppState)]
 pub async fn activate_eltord_route(
     axum::extract::Path(mode): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<ActivateParams>,
 ) -> ResponseJson<MessageResponse> {
     
     let mode_clone = mode.clone();
+    let enable_logging = params.enable_logging;
     
     // **Important** Spawn on blocking thread pool to completely isolate from tokio runtime
     // This prevents any async code in activate_eltord_process from interfering
     tokio::task::spawn_blocking(move || {
-        activate_eltord_process(mode_clone);
+        activate_eltord_process(mode_clone, enable_logging);
     });
 
     ResponseJson(MessageResponse {

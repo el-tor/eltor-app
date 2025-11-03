@@ -48,15 +48,15 @@ export function useEltord(options: UseEltordOptions) {
     }
   }
 
-  const activate = async () => {
-    console.log(`🚀 [useEltord] Starting activation for mode: ${mode}`)
+  const activate = async (enableLogging?: boolean) => {
+    console.log(`🚀 [useEltord] Starting activation for mode: ${mode}, enableLogging: ${enableLogging}`)
     setLoading(true)
     try {
       // Since processes can now run independently, we don't need to check
       // if another mode is running. Each mode can be activated independently.
       
       console.log(`📡 [useEltord] Calling apiService.activateEltord mode: ${mode}`)
-      await apiService.activateEltord( mode)
+      await apiService.activateEltord(mode, enableLogging)
       console.log(`✅ [useEltord] Successfully activated ${mode} mode`)
       
       setTimeout(() => {

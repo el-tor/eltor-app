@@ -950,8 +950,9 @@ pub async fn cleanup_all_eltord_processes() {
 }
 
 // TODO clean this up
-pub fn activate_eltord_process(mode: String) {
-    // eprintln!("🚀 [activate_eltord_process] Called with mode={}", mode);
+pub fn activate_eltord_process(mode: String, enable_logging: bool) {
+    // eprintln!("🚀 [activate_eltord_process] Called with mode={}, enable_logging={}", mode, enable_logging);
+    log::info!("🚀 [activate_eltord_process] mode={}, enable_logging={}", mode, enable_logging);
 
     let mode_enum = match EltorMode::from_str(&mode) {
         Ok(m) => m,
@@ -1088,22 +1089,28 @@ pub fn activate_eltord_process(mode: String) {
             return;
         }
         
-        match StdCommand::new(&eltord_path)
-            .arg(mode_enum.to_string())
+        let mut cmd = StdCommand::new(&eltord_path);
+        cmd.arg(mode_enum.to_string())
             .arg("-f")
             .arg(&torrc_path_str)
             .arg("-p")
-            .arg(&control_password)
-            //.arg("-l")
-            //.arg(&log_path_str)
-            //.arg("-k")
-            .current_dir(&path_config.bin_dir)
+            .arg(&control_password);
+        
+        // Conditionally add logging arguments if enabled
+        if enable_logging {
+            cmd.arg("-l")
+                .arg(&log_path_str)
+                .arg("-k");
+        }
+        
+        cmd.current_dir(&path_config.bin_dir);
             //.stdout(Stdio::null())
             //.stderr(Stdio::null())
             //.stdin(Stdio::null())
             // On macOS, prefer posix_spawn over fork (avoid multi-thread fork issues)
             // This is critical for Tauri apps which have multiple threads running
-            .spawn()
+        
+        match cmd.spawn()
         {
             Ok(child) => {
                 let pid = child.id();
@@ -1146,39 +1153,43 @@ pub fn activate_eltord_process(mode: String) {
     {
         use std::os::unix::process::CommandExt;
         
-        match unsafe {
-            StdCommand::new(&eltord_path)
-                .arg(mode_enum.to_string())
-                .arg("-f")
-                .arg(&torrc_path_str)
-                .arg("-p")
-                .arg(&control_password)
-                .arg("-l")
+        let mut cmd = StdCommand::new(&eltord_path);
+        cmd.arg(mode_enum.to_string())
+            .arg("-f")
+            .arg(&torrc_path_str)
+            .arg("-p")
+            .arg(&control_password);
+        
+        // Conditionally add logging arguments if enabled
+        if enable_logging {
+            cmd.arg("-l")
                 .arg(&log_path_str)
-                .arg("-k")
-                .current_dir(&path_config.bin_dir)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .stdin(Stdio::null())
-                .pre_exec(|| {
-                    // Create new session - completely detach from parent
-                    unsafe {
-                        libc::setsid();
+                .arg("-k");
+        }
+        
+        cmd.current_dir(&path_config.bin_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .stdin(Stdio::null())
+            .pre_exec(|| {
+                // Create new session - completely detach from parent
+                unsafe {
+                    libc::setsid();
+                }
+                
+                // Close all file descriptors except stdin/out/err
+                // This prevents inheriting any open sockets or files
+                let max_fd = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
+                if max_fd > 0 {
+                    for fd in 3..max_fd {
+                        unsafe { libc::close(fd as i32); }
                     }
-                    
-                    // Close all file descriptors except stdin/out/err
-                    // This prevents inheriting any open sockets or files
-                    let max_fd = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
-                    if max_fd > 0 {
-                        for fd in 3..max_fd {
-                            unsafe { libc::close(fd as i32); }
-                        }
-                    }
-                    
-                    Ok(())
-                })
-                .spawn()
-        } {
+                }
+                
+                Ok(())
+            });
+        
+        match unsafe { cmd.spawn() } {
             Ok(child) => {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
@@ -1208,20 +1219,26 @@ pub fn activate_eltord_process(mode: String) {
     
     #[cfg(not(unix))]
     {
-        match StdCommand::new(&eltord_path)
-            .arg(mode_enum.to_string())
+        let mut cmd = StdCommand::new(&eltord_path);
+        cmd.arg(mode_enum.to_string())
             .arg("-f")
             .arg(&torrc_path_str)
             .arg("-p")
-            .arg(&control_password)
-            .arg("-l")
-            .arg(&log_path_str)
-            .arg("-k")
-            .current_dir(&path_config.bin_dir)
+            .arg(&control_password);
+        
+        // Conditionally add logging arguments if enabled
+        if enable_logging {
+            cmd.arg("-l")
+                .arg(&log_path_str)
+                .arg("-k");
+        }
+        
+        cmd.current_dir(&path_config.bin_dir)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .spawn()
+            .stdin(Stdio::null());
+        
+        match cmd.spawn()
         {
             Ok(child) => {
                 let pid = child.id();

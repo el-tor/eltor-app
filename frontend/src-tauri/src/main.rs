@@ -119,13 +119,14 @@ async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
 }
 
 #[command]
-fn activate_eltord_invoke(mode: String) -> Result<String, String>  {
+fn activate_eltord_invoke(mode: String, enable_logging: Option<bool>) -> Result<String, String>  {
     info!(
         "🔧 Current working directory: {:?}",
         std::env::current_dir()
     );
     // info!("🚀 Starting activation with mode: {:?}", mode);
-    eltor_backend::eltor::activate_eltord_process(mode);
+    let enable_logging = enable_logging.unwrap_or(false);
+    eltor_backend::eltor::activate_eltord_process(mode, enable_logging);
     Ok("Activation started".to_string())
 }
 
@@ -665,7 +666,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     .expect("can't show");
             }
             "activate" => {
-                let _ = activate_eltord("client".to_string());
+                let _ = activate_eltord("client".to_string(), false);
             }
             "deactivate" => {
                 let app_handle = app.clone();

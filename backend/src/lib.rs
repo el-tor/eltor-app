@@ -223,11 +223,11 @@ pub async fn initialize_phoenixd(state: Arc<RwLock<AppState>>) -> Result<(), Str
 }
 
 /// Activate eltord - requires manager in AppState
-pub fn activate_eltord(mode: String) -> Result<String, String> {
+pub fn activate_eltord(mode: String, enable_logging: bool) -> Result<String, String> {
     // **Important** Use spawn_blocking to isolate the synchronous process spawning from the async runtime
     // or else the C tor binary maybe have networking issues and interruptions
     tokio::task::spawn_blocking(move || {
-        eltor::activate_eltord_process(mode);
+        eltor::activate_eltord_process(mode, enable_logging);
     });
     
     Ok("activation started".to_string())
