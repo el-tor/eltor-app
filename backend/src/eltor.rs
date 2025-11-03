@@ -138,6 +138,99 @@ fn get_pid_file_path(mode: &EltorMode, path_config: &PathConfig) -> std::path::P
     path
 }
 
+/// Clean up old data files before activation
+fn cleanup_old_data_files(mode: &EltorMode, path_config: &PathConfig) {
+    use std::fs;
+    
+    log::info!("🧹 Cleaning up old data files for mode: {:?}", mode);
+    
+    // Determine base data directory
+    let data_dir = if let Some(app_data_dir) = &path_config.app_data_dir {
+        // Tauri mode
+        app_data_dir.clone()
+    } else {
+        // Non-Tauri mode
+        path_config.bin_dir.join("data")
+    };
+    
+    // Always clean eltor.log, regardless of mode
+    let log_file = data_dir.join("eltor.log");
+    if log_file.exists() {
+        match fs::remove_file(&log_file) {
+            Ok(_) => log::info!("🧹 Deleted: {:?}", log_file),
+            Err(e) => log::warn!("⚠️ Failed to delete {:?}: {}", log_file, e),
+        }
+    }
+    
+    // Always clean payment files, regardless of mode
+    let payments_sent = data_dir.join("payments_sent.json");
+    if payments_sent.exists() {
+        match fs::remove_file(&payments_sent) {
+            Ok(_) => log::info!("🧹 Deleted: {:?}", payments_sent),
+            Err(e) => log::warn!("⚠️ Failed to delete {:?}: {}", payments_sent, e),
+        }
+    }
+    
+    let payments_received = data_dir.join("payments_received.json");
+    if payments_received.exists() {
+        match fs::remove_file(&payments_received) {
+            Ok(_) => log::info!("🧹 Deleted: {:?}", payments_received),
+            Err(e) => log::warn!("⚠️ Failed to delete {:?}: {}", payments_received, e),
+        }
+    }
+    
+    // Define Tor cache files to delete
+    let tor_cache_files = [
+        "cached-consensus",
+        "cached-certs",
+        "cached-extrainfo",
+        "cached-extrainfo.new",
+        "cached-consensus.new",
+        "cached-descriptors",
+        "cached-descriptors.new",
+        "cached-microdesc-consensus",
+        "cached-microdesc-consensus.new",
+        "cached-microdescs",
+        "cached-microdescs.new",
+        "my-consensus-microdesc",
+        "my-consensus-ns",
+        "router-stability",
+        "state",
+        "sr-state",
+        "unverified-consensus",
+        "v3-status-votes",
+    ];
+    
+    // Always clean Tor log files and cache files for both client and relay, regardless of mode
+    for subdir in ["client", "relay"] {
+        let tor_data_path = data_dir.join("tor_data").join(subdir);
+        
+        // Delete log files
+        for log_name in ["debug.log", "info.log", "notice.log"] {
+            let log_path = tor_data_path.join(log_name);
+            if log_path.exists() {
+                match fs::remove_file(&log_path) {
+                    Ok(_) => log::info!("🧹 Deleted: {:?}", log_path),
+                    Err(e) => log::warn!("⚠️ Failed to delete {:?}: {}", log_path, e),
+                }
+            }
+        }
+        
+        // Delete cache files
+        for cache_file in &tor_cache_files {
+            let cache_path = tor_data_path.join(cache_file);
+            if cache_path.exists() {
+                match fs::remove_file(&cache_path) {
+                    Ok(_) => log::info!("🧹 Deleted: {:?}", cache_path),
+                    Err(e) => log::warn!("⚠️ Failed to delete {:?}: {}", cache_path, e),
+                }
+            }
+        }
+    }
+    
+    log::info!("✅ Cleanup completed");
+}
+
 impl EltorMode {
     /// Get the control port from torrc file configuration
     pub async fn get_control_port(&self, path_config: &PathConfig) -> String {
@@ -830,6 +923,9 @@ pub fn activate_eltord_process(mode: String) {
 
     let log_path_str = eltord_log_path.to_str().unwrap_or_default().to_string();
 
+    // Clean up old data files before activation
+    cleanup_old_data_files(&mode_enum, &path_config);
+
     log::info!("🚀 Spawning eltord {} with torrc: {:?}", mode_enum, torrc_path);
     log::info!("   Torrc path string: {}", torrc_path_str);
     log::info!("   Log path: {:?}", eltord_log_path);
@@ -870,13 +966,13 @@ pub fn activate_eltord_process(mode: String) {
             .arg(&torrc_path_str)
             .arg("-p")
             .arg(&control_password)
-            .arg("-l")
-            .arg(&log_path_str)
-            .arg("-k")
+            //.arg("-l")
+            //.arg(&log_path_str)
+            //.arg("-k")
             .current_dir(&path_config.bin_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
+            //.stdout(Stdio::null())
+            //.stderr(Stdio::null())
+            //.stdin(Stdio::null())
             // On macOS, prefer posix_spawn over fork (avoid multi-thread fork issues)
             // This is critical for Tauri apps which have multiple threads running
             .spawn()
