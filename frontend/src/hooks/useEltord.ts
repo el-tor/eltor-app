@@ -67,6 +67,7 @@ export function useEltord(options: UseEltordOptions) {
       console.log(`📊 [useEltord] Status checked after activation`)
     } catch (error) {
       console.error(`❌ [useEltord] Failed to activate eltord (${mode}):`, error)
+      setLoading(false)
       throw error
     } finally {
       console.log(`🏁 [useEltord] Finished activation attempt for ${mode}`)
