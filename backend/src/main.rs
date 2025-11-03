@@ -250,7 +250,7 @@ async fn main() {
         info!("🛑 Received shutdown signal (CTRL+C), cleaning up...");
         
         // Cleanup all eltord processes
-        eltor_backend::cleanup_all_eltord_processes();
+        eltor_backend::cleanup_all_eltord_processes().await;
         
         // Stop phoenixd if it was started
         if use_phoenixd_embedded {

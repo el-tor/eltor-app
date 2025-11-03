@@ -39,20 +39,10 @@ pub async fn deactivate_eltord_route(
     axum::extract::Path(mode): axum::extract::Path<String>,
 ) -> ResponseJson<MessageResponse> {
     
-    let mode_clone = mode.clone();
-    
-    // Spawn on blocking thread pool to completely isolate from tokio runtime
-    let result = tokio::task::spawn_blocking(move || {
-        crate::eltor::deactivate_eltord_process(mode_clone)
-    })
-    .await;
-
-    match result {
-        Ok(Ok(message)) => ResponseJson(MessageResponse { message }),
-        Ok(Err(e)) => ResponseJson(MessageResponse { message: e }),
-        Err(e) => ResponseJson(MessageResponse { 
-            message: format!("Failed to deactivate: {}", e) 
-        }),
+    // Directly await the async deactivate function
+    match crate::eltor::deactivate_eltord_process(mode).await {
+        Ok(message) => ResponseJson(MessageResponse { message }),
+        Err(e) => ResponseJson(MessageResponse { message: e }),
     }
 }
 

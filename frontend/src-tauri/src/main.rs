@@ -130,13 +130,13 @@ fn activate_eltord_invoke(mode: String) -> Result<String, String>  {
 }
 
 #[command]
-fn deactivate_eltord_invoke(
+async fn deactivate_eltord_invoke(
     mode: String,
 ) -> Result<String, String> {
     info!("🛑 deactivate_eltord_invoke command called with mode: {:?}", mode);
     
-    // Use the simple PID file-based deactivation (same as activate)
-    eltor_backend::eltor::deactivate_eltord_process(mode)
+    // Use the async PID file-based deactivation with graceful shutdown
+    eltor_backend::eltor::deactivate_eltord_process(mode).await
 }
 
 #[command]

@@ -735,8 +735,94 @@ pub async fn get_eltord_status_from_pid_files(path_config: &PathConfig) -> Eltor
     }
 }
 
-/// Deactivate eltord by reading PID file and killing the process
-pub fn deactivate_eltord_process(mode: String) -> Result<String, String> {
+/// Helper function to send Tor shutdown command to a control port
+async fn send_tor_shutdown_command(
+    port: &str,
+    mode: &EltorMode,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpStream;
+
+    info!(
+        "🔌 Connecting to Tor control port {} to send shutdown...",
+        port
+    );
+
+    let mut stream = match tokio::time::timeout(
+        tokio::time::Duration::from_secs(2),
+        TcpStream::connect(format!("127.0.0.1:{}", port)),
+    )
+    .await
+    {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(e)) => {
+            warn!("⚠️ Could not connect to Tor control port {}: {}", port, e);
+            return Err(e.into());
+        }
+        Err(_) => {
+            warn!("⚠️ Timeout connecting to Tor control port {}", port);
+            return Err("Connection timeout".into());
+        }
+    };
+
+    let password = get_tor_control_password(mode);
+
+    // Authenticate
+    let auth_command = format!("AUTHENTICATE \"{}\"\r\n", password);
+    stream.write_all(auth_command.as_bytes()).await?;
+
+    let mut buf = vec![0; 1024];
+    let n = tokio::time::timeout(tokio::time::Duration::from_secs(2), stream.read(&mut buf))
+        .await??;
+    let response = String::from_utf8_lossy(&buf[..n]);
+
+    if response.contains("250 OK") {
+        let shutdown_command = "SIGNAL SHUTDOWN\r\n";
+        stream.write_all(shutdown_command.as_bytes()).await?;
+        info!("🛑 Sent shutdown command to Tor on port {}", port);
+
+        // Give Tor a moment to process the shutdown command
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+    } else {
+        warn!(
+            "⚠️ Failed to authenticate with Tor control port {}: {}",
+            port,
+            response.trim()
+        );
+    }
+
+    Ok(())
+}
+
+/// Helper function to check if a process with given PID is still running
+fn is_process_running(pid: u32) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command as StdCommand;
+        match StdCommand::new("kill")
+            .arg("-0") // Signal 0 just checks if process exists
+            .arg(pid.to_string())
+            .output()
+        {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        // Fallback - we can't reliably check, so assume it's running
+        true
+    }
+}
+
+/// Deactivate eltord by reading PID file and attempting graceful shutdown first
+pub async fn deactivate_eltord_process(mode: String) -> Result<String, String> {
     // eprintln!("🛑 [deactivate_eltord_process] Called with mode={}", mode);
     let mode_enum = match EltorMode::from_str(&mode) {
         Ok(m) => m,
@@ -777,12 +863,54 @@ pub fn deactivate_eltord_process(mode: String) -> Result<String, String> {
         }
     };
 
-    log::info!("🛑 Stopping eltord {} (PID: {})", mode_enum, pid);
+    log::info!("🛑 Attempting graceful shutdown of eltord {} (PID: {})", mode_enum, pid);
 
-    // Kill the process
+    // Step 1: Attempt graceful shutdown via Tor control port
+    let control_port = mode_enum.get_control_port(&path_config).await;
+    
+    // Try to send shutdown command - log errors but don't fail
+    if let Err(e) = send_tor_shutdown_command(&control_port, &mode_enum).await {
+        log::warn!("⚠️ Failed to send graceful shutdown to Tor control port {}: {}", control_port, e);
+        log::info!("   Will attempt forceful shutdown as fallback");
+    } else {
+        log::info!("✅ Graceful shutdown command sent, waiting for process to exit...");
+        
+        // Step 2: Poll for process exit with timeout (total ~8 seconds)
+        const POLL_INTERVAL_MS: u64 = 200;
+        const MAX_POLLS: u32 = 40; // 40 * 200ms = 8 seconds
+        
+        for poll_count in 0..MAX_POLLS {
+            tokio::time::sleep(tokio::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+            
+            if !is_process_running(pid) {
+                log::info!("✅ Process {} exited gracefully after {}ms", 
+                    pid, poll_count * POLL_INTERVAL_MS as u32);
+                
+                // Process has exited - skip kill_process and just clean up PID file
+                if let Err(e) = std::fs::remove_file(&pid_file) {
+                    // eprintln!("⚠️ [deactivate_eltord_process] Failed to remove PID file {:?}: {}", pid_file, e);
+                    log::warn!("⚠️ Failed to remove PID file {:?}: {}", pid_file, e);
+                } else {
+                    // eprintln!("✅ [deactivate_eltord_process] Removed PID file: {:?}", pid_file);
+                    log::info!("🗑️ Removed PID file: {:?}", pid_file);
+                }
+                
+                log::info!("✅ Eltord {} stopped gracefully (PID: {})", mode_enum, pid);
+                // eprintln!("✅ [deactivate_eltord_process] Successfully deactivated {} (PID: {})", mode_enum, pid);
+                return Ok(format!("Eltord {} deactivated gracefully", mode_enum));
+            }
+        }
+        
+        log::warn!("⚠️ Process {} did not exit after {}s, will force kill", 
+            pid, (MAX_POLLS * POLL_INTERVAL_MS as u32) / 1000);
+    }
+
+    // Step 3: Fallback to forceful kill if graceful shutdown failed or timed out
+    log::info!("🔪 Force killing eltord {} (PID: {})", mode_enum, pid);
     use crate::ports::kill_process;
     if let Err(e) = kill_process(pid) {
         // eprintln!("❌ [deactivate_eltord_process] Failed to kill process {}: {}", pid, e);
+        log::error!("❌ Failed to force kill process {}: {}", pid, e);
         return Err(format!("Failed to kill process {}: {}", pid, e));
     }
     // eprintln!("✅ [deactivate_eltord_process] Killed process {}", pid);
@@ -796,18 +924,18 @@ pub fn deactivate_eltord_process(mode: String) -> Result<String, String> {
         log::info!("🗑️ Removed PID file: {:?}", pid_file);
     }
 
-    log::info!("✅ Eltord {} stopped (PID: {})", mode_enum, pid);
+    log::info!("✅ Eltord {} stopped (force killed, PID: {})", mode_enum, pid);
     // eprintln!("✅ [deactivate_eltord_process] Successfully deactivated {} (PID: {})", mode_enum, pid);
-    Ok(format!("Eltord {} deactivated", mode_enum))
+    Ok(format!("Eltord {} deactivated (force killed)", mode_enum))
 }
 
 /// Cleanup all eltord processes across all modes
 /// This is useful for shutdown handlers in both Tauri and Axum
-pub fn cleanup_all_eltord_processes() {
+pub async fn cleanup_all_eltord_processes() {
     log::info!("🧹 Cleaning up all eltord processes...");
     
     for mode in &["client", "relay", "both"] {
-        match deactivate_eltord_process(mode.to_string()) {
+        match deactivate_eltord_process(mode.to_string()).await {
             Ok(msg) => log::info!("✅ {}", msg),
             Err(e) => {
                 // Only warn if it's not a "no PID file" error

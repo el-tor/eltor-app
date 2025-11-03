@@ -439,7 +439,7 @@ pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String
     }
 
     // Step 1b: Also cleanup any PID-file based eltord processes (failsafe)
-    cleanup_all_eltord_processes();
+    cleanup_all_eltord_processes().await;
 
     // Step 2: Stop phoenixd process if running
     let app_state = state.read().await;
