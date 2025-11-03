@@ -1,6 +1,6 @@
 [package]
 name = "eltor-backend"
-version = "0.0.15"
+version = "0.0.16"
 edition = "2021"
 
 [lib]
@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 axum = { version = "0.7", features = ["macros"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -17,16 +18,20 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 dirs = "5.0"
 futures = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
+async-stream = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 dotenv = "0.15"
-lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="c6b6e46d8b4231f7c1cd57ac64aa218d211eee8b"}
+lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="0f36a410e0109498909d032bc444f5805df06254"}
 # lni = { path = "../../lni/crates/lni" }
 uuid = { version = "1.0", features = ["v4"] }
 ip2location = "0.5"
-eltor = { git = "https://github.com/el-tor/eltord.git", rev = "a938e585e5ef16424d6d281291eb34accf0cae14" }
+eltor = { git = "https://github.com/el-tor/eltord.git", rev = "42bf7fd8ef5f4ad89cd9239a96b026d05ffca1a5" }
 # eltor = { path = "../../eltord" }
 env_logger = "0.11"
 log = "0.4"
 rand = "0.8"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
 zip = "0.6"
+libc = "0.2"
+netstat2 = "0.11.2"
+sysinfo = "0.31"

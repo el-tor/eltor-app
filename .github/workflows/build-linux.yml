@@ -114,6 +114,11 @@ jobs:
         with:
           version: latest
 
+      - name: Download eltord binary for ARM64
+        run: |
+          chmod +x scripts/download-eltord.sh
+          scripts/download-eltord.sh latest linux-arm64
+
       - name: Build eltor-app ARM64
         run: |
           cd frontend
@@ -179,6 +184,11 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: latest
+
+      - name: Download eltord binary for x86_64
+        run: |
+          chmod +x scripts/download-eltord.sh
+          scripts/download-eltord.sh latest linux-x86_64
 
       - name: Build eltor-app x86_64
         run: |

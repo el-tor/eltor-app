@@ -1,6 +1,6 @@
 {
   "name": "eltor-app-monorepo",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "private": true,
   "description": "Monorepo for eltor-app",
   "scripts": {

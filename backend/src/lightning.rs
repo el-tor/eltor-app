@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::sync::Arc;
+use log::info;
+
 
 // Re-export LNI types for easier use
 pub use lni::cln::{ClnConfig, ClnNode};
@@ -56,11 +58,11 @@ pub struct NodeConfig {
     pub accept_invalid_certs: Option<bool>,
 }
 
-/// Response structure for node info - includes raw NodeInfo plus node_type
+/// Response structure for node info - includes raw Nodinfo plus node_type
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NodeInfoResponse {
     #[serde(flatten)]
-    pub node_info: lni::NodeInfo,
+    pub node_info: lni::types::NodeInfo,
     pub node_type: String,
 }
 
@@ -110,14 +112,14 @@ pub struct PayInvoiceResponse {
 
 impl LightningNode {
     /// Create a new lightning node connection based on torrc configuration
-    pub fn from_torrc<P: AsRef<std::path::Path>>(torrc_path: P) -> Result<Self, String> {
+    pub async fn from_torrc<P: AsRef<std::path::Path>>(torrc_path: P) -> Result<Self, String> {
         let accept_invalid_certs = Some(env::var("ACCEPT_INVALID_CERTS")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(true));
             
         // Get all lightning configs and find the default one
-        let configs = get_all_payment_lightning_configs(&torrc_path)?;
+        let configs = get_all_payment_lightning_configs(&torrc_path).await?;
         let default_config = configs
             .into_iter()
             .find(|config| config.is_default)
@@ -264,25 +266,42 @@ impl LightningNode {
         })
     }
 
-    /// Create an invoice (async to handle blocking LNI calls)
+    /// Get or create a BOLT12 offer (async to handle blocking LNI calls)
     pub async fn get_offer(&self) -> Result<CreateInvoiceResponse, String> {
-        let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt12,
-            amount_msats: None,
-            description: Some("El Tor Offer".to_string()),
-            ..Default::default()
-        };
+        // Try to get an existing offer first
+        match self.inner.get_offer(None).await {
+            Ok(paycode) => {
+                info!("✅ Retrieved existing BOLT12 offer from node");
+                Ok(CreateInvoiceResponse {
+                    payment_request: paycode.bolt12,
+                    payment_hash: String::new(), // Not applicable for offers
+                    amount_sats: None,
+                    expiry: None,
+                })
+            }
+            Err(e) => {
+                // If getting offer fails, create a new offer
+                info!("⚠️  No existing offer found ({}), creating new offer...", e);
+                
+                let params = CreateOfferParams {
+                    amount_msats: None,
+                    description: Some("El Tor".to_string()),
+                };
 
-        let transaction = self.inner.create_invoice(params)
-            .await
-            .map_err(|e| format!("Failed to create invoice: {:?}", e))?;
+                let offer = self.inner.create_offer(params)
+                    .await
+                    .map_err(|e| format!("Failed to create offer: {:?}", e))?;
 
-        Ok(CreateInvoiceResponse {
-            payment_request: transaction.invoice,
-            payment_hash: transaction.payment_hash,
-            amount_sats: Some((transaction.amount_msats / 1000) as u64),
-            expiry: None,
-        })
+                Ok(CreateInvoiceResponse {
+                    payment_request: offer.bolt12,
+                    payment_hash: "".to_string(),
+                    amount_sats: offer
+                        .amount_msats
+                        .map(|msats| (msats / 1000) as u64),
+                    expiry: None,
+                })
+            }
+        }
     }
 
     /// Get node type as string

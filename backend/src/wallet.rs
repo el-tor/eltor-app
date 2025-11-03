@@ -2,6 +2,7 @@ use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader as AsyncBufReader};
 use tokio::process::Command as TokioCommand;
 use chrono::Utc;
+use log::info;
 
 use crate::paths::PathConfig;
 use crate::state::{AppState, LogEntry};
@@ -28,12 +29,12 @@ pub async fn read_phoenixd_logs(
                         mode: None, // Wallet logs are system-wide
                     };
                     
-                    println!("[phoenixd-{}] {}", source, trimmed);
+                    info!("[phoenixd-{}] {}", source, trimmed);
                     state.add_log(entry);
                 }
             }
             Err(e) => {
-                println!("Error reading phoenixd {} logs: {}", source, e);
+                info!("Error reading phoenixd {} logs: {}", source, e);
                 break;
             }
         }
@@ -62,12 +63,12 @@ pub async fn read_phoenixd_stderr_logs(
                         mode: None, // Wallet logs are system-wide
                     };
                     
-                    println!("[phoenixd-{}] {}", source, trimmed);
+                    info!("[phoenixd-{}] {}", source, trimmed);
                     state.add_log(entry);
                 }
             }
             Err(e) => {
-                println!("Error reading phoenixd {} logs: {}", source, e);
+                info!("Error reading phoenixd {} logs: {}", source, e);
                 break;
             }
         }
@@ -86,7 +87,7 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
                 }
                 Ok(None) => {
                     // Process is still running
-                    println!("⚠️ Phoenixd process already running, skipping startup");
+                    info!("⚠️ Phoenixd process already running, skipping startup");
                     return Ok(());
                 }
                 Err(_) => {
@@ -109,13 +110,13 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
         return Err(format!("Phoenixd binary not found at: {:?}", phoenixd_binary));
     }
     
-    println!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
+    info!("🔥 Starting phoenixd from: {:?}", phoenixd_binary);
     
     // Set phoenixd working directory to app data directory to ensure it can write files
     let phoenixd_working_dir = path_config.data_dir.join("phoenixd");
     if let Err(e) = std::fs::create_dir_all(&phoenixd_working_dir) {
-        println!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
-        println!("   Phoenixd will use current directory for data files");
+        info!("⚠️ Warning: Could not create phoenixd directory {:?}: {}", phoenixd_working_dir, e);
+        info!("   Phoenixd will use current directory for data files");
     }
     
     let mut child = TokioCommand::new(&phoenixd_binary)
@@ -150,7 +151,7 @@ pub async fn start_phoenixd(state: AppState) -> Result<(), String> {
         *process_guard = Some(child);
     }
     
-    println!("✅ Phoenixd process started with PID: {}", pid);
+    info!("✅ Phoenixd process started with PID: {}", pid);
     
     // Add startup log
     state.add_log(LogEntry {
@@ -174,9 +175,9 @@ pub async fn stop_phoenixd(state: AppState) -> Result<(), String> {
     if let Some(ref mut child) = child {
         match child.kill().await {
             Ok(_) => {
-                println!("🛑 Killing phoenixd process...");
+                info!("🛑 Killing phoenixd process...");
                 let _ = child.wait().await; // Wait for process to actually terminate
-                println!("✅ Phoenixd process terminated successfully");
+                info!("✅ Phoenixd process terminated successfully");
                 
                 // Add shutdown log
                 state.add_log(LogEntry {

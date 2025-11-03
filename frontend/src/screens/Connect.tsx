@@ -10,6 +10,9 @@ import {
   Box,
   Badge,
   Notification,
+  Progress,
+  Tooltip,
+  Anchor
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -17,16 +20,19 @@ import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
 import { clearLogsClient } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
+import { logStreamService } from '../services/logStreamService'
 // @ts-ignore
 import styles from '../globals.module.css'
 import MapComponent from '../components/Map/MapComponent'
 import './Connect.css'
 import { useEltord } from '../hooks/useEltord'
+import { useBootstrapping } from '../hooks/useBootstrapping'
 import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
-import { IconChevronDown, IconPlug } from '@tabler/icons-react'
+import { IconChevronDown, IconPlug, IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
+import { SocksProxyHelp } from '../components/SocksProxyHelp'
 
 export const Connect = () => {
   const params: any = useParams()
@@ -35,10 +41,10 @@ export const Connect = () => {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
-  const [showSocksModal, setShowSocksModal] = useState(false)
   const { defaultWallet } = useSelector((state) => state.wallet)
   const [openedWizard, { open: openWizard, close: closeWizard }] =
     useDisclosure(false)
+  const [logsPlaying, setLogsPlaying] = useState(false)
 
   const {
     logsClient,
@@ -57,6 +63,7 @@ export const Connect = () => {
     mode === 'client'
       ? debugInfo?.torrc_socks_port
       : debugInfo?.torrc_relay_socks_port
+  const [showSocksModal, setShowSocksModal] = useState(clientActive || relayActive)
   const {
     isRunning,
     loading: isLoadingActivate,
@@ -65,6 +72,17 @@ export const Connect = () => {
     deactivate,
   } = useEltord({
     mode,
+  })
+
+  // Use bootstrapping hook to monitor Tor connection progress
+  const {
+    progress: bootstrapProgress,
+    isBootstrapping: showBootstrapping,
+    reset: resetBootstrapping,
+    start: startBootstrapping,
+  } = useBootstrapping({
+    logs: logsClient,
+    onComplete: () => setShowSocksModal(true),
   })
 
   const preRef = useRef<HTMLPreElement>(null)
@@ -107,54 +125,6 @@ export const Connect = () => {
         {defaultWallet === 'none' && <Wizard close={closeWizard} />}
 
         <Group>
-          <Button
-            onClick={async () => {
-              await activate()
-              setShowSocksModal(true)
-            }}
-            disabled={isRunning || loading}
-            color="green"
-            loading={loading || isLoadingActivate}
-          >
-            {isRunning ? 'Active' : 'Activate'}
-          </Button>
-
-          <Button
-            onClick={async () => {
-              try {
-                await deactivate()
-                setShowSocksModal(false)
-              } catch (error) {
-                console.error('❌ [Connect] Deactivate error:', error)
-                // Handle the case where backend says "No eltord client process is currently running"
-                // This means the frontend state is out of sync with backend
-                if (
-                  error instanceof Error &&
-                  error.message.includes(
-                    'No eltord client process is currently running',
-                  )
-                ) {
-                  console.log(
-                    '🔄 [Connect] Backend says client not running, syncing frontend state',
-                  )
-                  // The useEltord hook should handle state updates through the 'eltord-error' event
-                  // But in case it doesn't, we can dispatch the state change here if needed
-                }
-              }
-            }}
-            disabled={!isRunning || loading}
-            color="red"
-            loading={loading || isLoadingDeactivate}
-          >
-            Deactivate
-          </Button>
-          <Badge
-            ml="xl"
-            style={{ cursor: 'pointer' }}
-            onClick={() => navigate('/relay')}
-          >
-            Mode: {mode === 'both' ? 'Client+Relay' : mode}
-          </Badge>
           {/* {isTauri() && (
             <Button
               onClick={async () => {
@@ -207,50 +177,195 @@ export const Connect = () => {
         /> */}
         <Group ml="auto">
           <Center> {loading && <Loader size="sm" />}</Center>
+        </Group>
+      </Group>
 
-          <Stack align="left" gap="2px">
-            <Group>
+      <Box
+        className="map-container-mobile"
+        style={{ position: 'relative', marginTop: '-20px' }}
+      >
+        <MapComponent h={500} />
+
+        {/* Activate/Deactivate buttons - top left */}
+        <Box
+          className="glass-effect map-overlay-top-left"
+          style={{
+            padding: '12px',
+          }}
+        >
+          <Group gap="xs">
+            <Button
+              onClick={async () => {
+                // Reset any previous state
+                resetBootstrapping()
+                setShowSocksModal(false)
+
+                // Only resume logs if they're not already paused by user preference
+                // Check current pause state before making changes
+                const shouldEnableLogging = !logStreamService.isPaused('client')
+                
+                // If logs are not paused, ensure they're playing for bootstrapping progress
+                if (shouldEnableLogging) {
+                  logStreamService.resume('client')
+                  setLogsPlaying(true)
+                }
+
+                // Start bootstrapping UI immediately at 1%
+                startBootstrapping()
+
+                // Activate with logging based on whether logs were paused or not
+                await activate(shouldEnableLogging)
+                setTimeout(() => setShowSocksModal(true), 3000)
+
+                // Don't show SOCKS modal immediately - wait for bootstrapping to complete
+                // The useBootstrapping hook will show it after 100%
+              }}
+              disabled={isRunning || loading}
+              color="green"
+              loading={loading || isLoadingActivate}
+            >
+              {isRunning ? 'Active' : 'Activate'}
+            </Button>
+
+            <Button
+              onClick={async () => {
+                try {
+                  await deactivate()
+                  setShowSocksModal(false)
+                  resetBootstrapping()
+                } catch (error) {
+                  console.error('❌ [Connect] Deactivate error:', error)
+                  // Handle the case where backend says "No eltord client process is currently running"
+                  // This means the frontend state is out of sync with backend
+                  if (
+                    error instanceof Error &&
+                    error.message.includes(
+                      'No eltord client process is currently running',
+                    )
+                  ) {
+                    console.log(
+                      '🔄 [Connect] Backend says client not running, syncing frontend state',
+                    )
+                    // The useEltord hook should handle state updates through the 'eltord-error' event
+                    // But in case it doesn't, we can dispatch the state change here if needed
+                  }
+                }
+              }}
+              disabled={!isRunning || loading}
+              color="red"
+              loading={loading || isLoadingDeactivate}
+            >
+              Deactivate
+            </Button>
+          </Group>
+        </Box>
+
+        {/* Status overlay - top right */}
+        <Box
+          className="glass-effect map-overlay-top-right"
+          style={{
+            padding: '12px 16px',
+            maxWidth: '200px',
+          }}
+        >
+          <Stack align="left" gap="8px">
+            <Badge
+              style={{ cursor: 'pointer' }}
+              onClick={() => navigate('/relay')}
+            >
+              Mode: {mode === 'both' ? 'Client+Relay' : mode}
+            </Badge>
+            <Group gap="xs">
               <Text>Client</Text>
               <Circle
                 color={isRunning && clientEnabled ? 'lightgreen' : '#FF6347'}
               />
             </Group>
-            <Group>
+            <Group gap="xs">
               <Text>Relay&nbsp;</Text>
               <Circle
                 color={isRunning && relayEnabled ? 'lightgreen' : '#FF6347'}
               />
             </Group>
-            <Group>
+            <Group gap="xs">
               <Text>{defaultWallet !== 'none' ? defaultWallet : ''}</Text>
             </Group>
-            {circuitInUse.id && isRunning && (
-              <Text>Circuit: {circuitInUse.id}</Text>
-            )}
+            {circuitInUse.id &&
+              isRunning &&
+              (() => {
+                const circuitIdStr = String(circuitInUse.id)
+                return (
+                  <Tooltip
+                    label={circuitIdStr}
+                    disabled={circuitIdStr.length <= 6}
+                  >
+                    <Text
+                      style={{
+                        cursor: circuitIdStr.length > 6 ? 'help' : 'default',
+                      }}
+                    >
+                      Circuit:{' '}
+                      {circuitIdStr.length > 6
+                        ? `${circuitIdStr.substring(0, 6)}...`
+                        : circuitIdStr}
+                    </Text>
+                  </Tooltip>
+                )
+              })()}
           </Stack>
-        </Group>
-      </Group>
-      {showSocksModal && (
-        <Center>
-          <Notification
-            title="Connected! Socks5 Proxy Ready"
-            icon={<IconPlug />}
-            onClose={() => setShowSocksModal(false)}
-          >
-            <Text mb="xs" mt="xs">
-              Open a browser and configure it to use a Socks5 proxy at:
-            </Text>
-            <CopyableTextBox
-              text={`${window.location.hostname}:${socksPort}`}
-              h="44px"
-            />
-          </Notification>
-        </Center>
-      )}
+        </Box>
 
-      <MapComponent h={500} />
+        {showSocksModal && (
+          <Center className="bootstrap-notification">
+            <Box
+              className="glass-effect"
+              style={{
+                pointerEvents: 'auto',
+              }}
+            >
+              <Notification
+                w="500px"
+                title={
+                  <Group gap="xs" wrap="nowrap">
+                    <Text>Connected! SOCKS Proxy Ready</Text>
+                    
+                  </Group>
+                }
+                icon={<IconPlug />}
+                onClose={() => {
+                  setShowSocksModal(false)
+                  resetBootstrapping()
+                }}
+                color={'green'}
+                styles={{
+                  root: {
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                  },
+                }}
+              >
+                <>
+                  <Text mb="xs" mt="xs" size="sm">
+                    Open a browser and configure it to use a SOCKS5 proxy. Or configure a system-wide SOCKS5 proxy:
+                      <SocksProxyHelp
+                        hostname={window.location.hostname}
+                        port={socksPort}
+                      />
+                  </Text>
+                  <CopyableTextBox
+                    text={`${window.location.hostname}:${socksPort}`}
+                    h="44px"
+                  />
+                  <Text mb="xs" mt="xs" size="xs">*Note: It could take up to 30 seconds for the connection to be stable</Text>
+                </>
+              </Notification>
+            </Box>
+          </Center>
+        )}
+      </Box>
       <Center>
         <Box
+          className="terminal-container"
           style={{
             width: '100%',
             position: 'relative',
@@ -280,11 +395,30 @@ export const Connect = () => {
               height="260px"
               className="mt-[-130px] z-10 relative max-w-full"
               mode="client"
-              scroll={false}
+              scroll={true}
             />
           </pre>
+          <Tooltip label={logsPlaying ? 'Pause Logs' : 'Start Logs'}>
+            <Button
+              size="xs"
+              style={{ position: 'absolute', bottom: 4, right: 70, height: 24 }}
+              onClick={() => {
+                if (logsPlaying) {
+                  logStreamService.pause('client')
+                  setLogsPlaying(false)
+                } else {
+                  logStreamService.resume('client')
+                  setLogsPlaying(true)
+                }
+              }}
+              variant={logsPlaying ? 'filled' : 'default'}
+            >
+              {logsPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+            </Button>
+          </Tooltip>
           <Button
             size="xs"
+            variant='default'
             style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
             onClick={() => dispatch(clearLogsClient())}
           >
@@ -337,15 +471,25 @@ export const Connect = () => {
                 }}
               >
                 {JSON.stringify(
-                  { ...debugInfo, torrc_file: 'see below' },
+                  {
+                    ...debugInfo,
+                    torrc_file: 'see below',
+                    torrc_relay_file: 'see below',
+                  },
                   null,
                   2,
                 )}
               </pre>
             </Text>
-            <Title order={5}>Raw torrc File</Title>
-            <Title order={5}>============</Title>
+            <Title order={5}>Raw torrc File (Client)</Title>
+            <Title order={5}>========================</Title>
             <pre>{debugInfo?.torrc_file ?? ''}</pre>
+
+            <Title order={5} mt="lg">
+              Raw torrc Relay File
+            </Title>
+            <Title order={5}>====================</Title>
+            <pre>{debugInfo?.torrc_relay_file ?? ''}</pre>
           </Box>
         </Collapse>
       </Box>

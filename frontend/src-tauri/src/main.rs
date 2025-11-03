@@ -3,18 +3,20 @@
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
 use serde::Serialize;
-use std::env;
+use std::{env};
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
+use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent, Theme};
 use tokio::sync::RwLock;
+use log::info;
 
 // Import backend library
 use eltor_backend::{
-    activate_eltord, deactivate_eltord, get_eltord_status, get_log_receiver, init_ip_database,
+    activate_eltord, deactivate_eltord, get_eltord_logs,
+    stream_eltord_logs_internal, init_ip_database,
     initialize_app_state_with_path_config, initialize_phoenixd, lightning,
-    lookup_ip_location, ports, setup_broadcast_logger, shutdown_cleanup, torrc_parser, AppState,
+    lookup_ip_location, ports, shutdown_cleanup, torrc_parser, AppState,
     DebugInfo, IpLocationResponse, LogEntry, PathConfig, start_phoenix_with_config,
 };
 
@@ -51,13 +53,22 @@ struct TauriState {
 
 impl TauriState {
     fn new() -> Self {
-        let backend_state = eltor_backend::create_app_state(true); // Enable embedded phoenixd for Tauri
+        // Create a default PathConfig (will be updated later with proper resource dir)
+        let path_config = PathConfig::new().unwrap_or_else(|_| {
+            PathConfig::with_overrides(
+                Some(std::env::current_dir().unwrap().join("bin")),
+                Some(std::env::current_dir().unwrap().join("bin/data")),
+            )
+            .unwrap()
+        });
+        
+        let backend_state = eltor_backend::create_app_state(true, path_config); // Enable embedded phoenixd for Tauri
 
         // Set up the broadcast logger to capture ALL logs (including from eltor library)
-        if let Err(e) = setup_broadcast_logger(backend_state.clone()) {
-            eprintln!("⚠️  Failed to set up broadcast logger: {}", e);
-            eprintln!("   Eltor logs will go to stdout, only manual logs will stream to frontend");
-        }
+        // if let Err(e) = setup_broadcast_logger(backend_state.clone()) {
+        //     info!("⚠️  Failed to set up broadcast logger: {}", e);
+        //     info!("   Eltor logs will go to stdout, only manual logs will stream to frontend");
+        // }
 
         Self {
             backend_state: Arc::new(RwLock::new(backend_state)),
@@ -77,7 +88,7 @@ impl TauriState {
             drop(app_state);
             initialize_phoenixd(self.backend_state.clone()).await
         } else {
-            println!("🔗 Using external phoenixd instance");
+            info!("🔗 Using external phoenixd instance");
             Ok(())
         }
     }
@@ -85,7 +96,7 @@ impl TauriState {
 
 #[command]
 async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
-    println!("test_log_event command called");
+    info!("test_log_event command called");
 
     let test_log = TauriLogEntry {
         timestamp: chrono::Utc::now().to_rfc3339(),
@@ -97,176 +108,105 @@ async fn test_log_event(app_handle: AppHandle) -> Result<String, String> {
 
     match app_handle.emit("eltord-log", &test_log) {
         Ok(_) => {
-            println!("Successfully emitted test eltord-log event");
+            info!("Successfully emitted test eltord-log event");
             Ok("Test log event emitted successfully".to_string())
         }
         Err(e) => {
-            println!("Failed to emit test eltord-log event: {}", e);
+            info!("Failed to emit test eltord-log event: {}", e);
             Err(format!("Failed to emit test event: {}", e))
         }
     }
 }
 
 #[command]
-async fn activate_eltord_invoke(
-    tauri_state: State<'_, TauriState>,
-    app_handle: AppHandle,
-    mode: String, // Accept as string and convert to EltorMode
-) -> Result<String, String> {
-    // Convert string mode to EltorMode
-    let eltor_mode = match mode.as_str() {
-        "client" => EltorMode::Client,
-        "relay" => EltorMode::Relay,
-        "both" => EltorMode::Both,
-        _ => {
-            return Err(format!(
-                "Invalid mode: {}. Expected 'client', 'relay', or 'both'",
-                mode
-            ))
-        }
-    };
-
-    let backend_state = tauri_state.backend_state.clone();
-
-    println!(
+fn activate_eltord_invoke(mode: String, enable_logging: Option<bool>) -> Result<String, String>  {
+    info!(
         "🔧 Current working directory: {:?}",
         std::env::current_dir()
     );
-    println!("🚀 Starting activation with mode: {:?}", eltor_mode);
-
-    // Use the backend activate function directly
-    match activate_eltord(backend_state.clone(), eltor_mode).await {
-        Ok(message) => {
-            println!("✅ Backend activation successful: {}", message);
-
-            // Check if log listener is already active
-            let mut listener_active = tauri_state.log_listener_active.lock().await;
-            if !*listener_active {
-                *listener_active = true;
-                println!("📡 Starting new log listener task");
-
-                // Set up single log listener for this activation
-                let listener_flag = tauri_state.log_listener_active.clone();
-                let backend_state_clone = backend_state.clone();
-                tokio::spawn(async move {
-                    println!("📡 Log listener task starting...");
-                    let mut log_receiver = get_log_receiver(backend_state_clone).await;
-                    println!("📡 Log receiver obtained, starting listen loop...");
-
-                    let mut log_count = 0;
-                    loop {
-                        match log_receiver.recv().await {
-                            Ok(log_entry) => {
-                                log_count += 1;
-                                println!(
-                                    "📡 Log #{}: Received log entry from backend: {:?}",
-                                    log_count, log_entry.message
-                                );
-                                let tauri_log: TauriLogEntry = log_entry.into();
-                                match app_handle.emit("eltord-log", &tauri_log) {
-                                    Ok(_) => {
-                                        println!(
-                                            "📡 Log #{}: Successfully emitted eltord-log event",
-                                            log_count
-                                        );
-                                    }
-                                    Err(e) => {
-                                        println!(
-                                            "❌ Log #{}: Failed to emit log event: {}",
-                                            log_count, e
-                                        );
-                                        break;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                println!("❌ Log receiver error: {}", e);
-                                break;
-                            }
-                        }
-                    }
-
-                    // Reset flag when listener stops
-                    *listener_flag.lock().await = false;
-                    println!(
-                        "📡 Log listener task stopped after receiving {} logs",
-                        log_count
-                    );
-                });
-            } else {
-                println!("📡 Log listener already active, skipping spawn");
-            }
-
-            Ok(message)
-        }
-        Err(e) => {
-            println!("❌ Backend activation failed: {}", e);
-            Err(e)
-        }
-    }
+    // info!("🚀 Starting activation with mode: {:?}", mode);
+    let enable_logging = enable_logging.unwrap_or(false);
+    eltor_backend::eltor::activate_eltord_process(mode, enable_logging);
+    Ok("Activation started".to_string())
 }
 
 #[command]
 async fn deactivate_eltord_invoke(
-    tauri_state: State<'_, TauriState>,
-    _app_handle: AppHandle,
-    mode: String, // Add mode parameter
+    mode: String,
 ) -> Result<String, String> {
-    println!("deactivate_eltord command called with mode: {:?}", mode);
-
-    // Convert string mode to EltorMode
-    let eltor_mode = match mode.as_str() {
-        "client" => EltorMode::Client,
-        "relay" => EltorMode::Relay,
-        "both" => EltorMode::Both,
-        _ => {
-            return Err(format!(
-                "Invalid mode: {}. Expected 'client', 'relay', or 'both'",
-                mode
-            ))
-        }
-    };
-
-    let backend_state = tauri_state.backend_state.clone();
-
-    println!("🛑 Starting deactivation with mode: {:?}", eltor_mode);
-
-    // Use the backend deactivate function directly
-    match deactivate_eltord(backend_state.clone(), eltor_mode).await {
-        Ok(message) => {
-            println!("✅ Backend deactivation successful: {}", message);
-            Ok(message)
-        }
-        Err(e) => {
-            println!("❌ Backend deactivation failed: {}", e);
-            Err(e)
-        }
-    }
+    info!("🛑 deactivate_eltord_invoke command called with mode: {:?}", mode);
+    
+    // Use the async PID file-based deactivation with graceful shutdown
+    eltor_backend::eltor::deactivate_eltord_process(mode).await
 }
 
 #[command]
 async fn get_eltord_status_invoke(
-    tauri_state: State<'_, TauriState>,
+    app_handle: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    let backend_state = tauri_state.backend_state.clone();
+    // Get the path config for this Tauri instance
+    let path_config = create_tauri_path_config(Some(&app_handle))?;
+    
+    // Use the backend function that checks PID files directly
+    let status = eltor_backend::eltor::get_eltord_status_from_pid_files(&path_config).await;
 
-    // Use backend wrapper function
-    let status = get_eltord_status(backend_state.clone()).await;
-
-    // Convert backend logs to Tauri format
-    let tauri_logs: Vec<TauriLogEntry> = status
-        .recent_logs
-        .into_iter()
-        .map(|log| log.into())
-        .collect();
-
-    // Return the new status structure with client_running and relay_running
+    // Return the status structure with client_running and relay_running
     Ok(serde_json::json!({
         "running": status.running,
         "client_running": status.client_running,
         "relay_running": status.relay_running,
-        "recent_logs": tauri_logs
+        "recent_logs": [] // No logs in status response, use streaming for logs
     }))
+}
+
+#[command]
+async fn get_eltord_logs_invoke(
+    tauri_state: State<'_, TauriState>,
+    mode: String,
+) -> Result<Vec<String>, String> {
+    let backend_state = tauri_state.backend_state.clone();
+    get_eltord_logs(backend_state, mode).await
+}
+
+#[command]
+async fn stream_eltord_logs_invoke(
+    tauri_state: State<'_, TauriState>,
+    app_handle: AppHandle,
+    mode: String,
+) -> Result<(), String> {
+    let backend_state = tauri_state.backend_state.clone();
+    
+    // Create emit function that captures app_handle
+    let emit_fn = Arc::new(move |message: String| {
+        let _ = app_handle.emit("eltord-log", message);
+    });
+    
+    stream_eltord_logs_internal(backend_state, mode, emit_fn).await
+}
+
+#[command]
+async fn stop_eltord_logs_invoke(
+    tauri_state: State<'_, TauriState>,
+    mode: String,
+) -> Result<(), String> {
+    let backend_state = tauri_state.backend_state.read().await;
+    
+    // Cancel the appropriate log stream
+    if mode == "client" {
+        let mut client_cancel = backend_state.client_log_cancel.lock().unwrap();
+        if let Some(token) = client_cancel.take() {
+            token.cancel();
+            info!("⏸️ [Tauri] Cancelled client log stream");
+        }
+    } else if mode == "relay" {
+        let mut relay_cancel = backend_state.relay_log_cancel.lock().unwrap();
+        if let Some(token) = relay_cancel.take() {
+            token.cancel();
+            info!("⏸️ [Tauri] Cancelled relay log stream");
+        }
+    }
+    
+    Ok(())
 }
 
 #[command]
@@ -284,14 +224,14 @@ async fn get_node_info(tauri_state: State<'_, TauriState>) -> Result<serde_json:
         // Get the balance from the lightning node
         match lightning_node.get_node_info().await {
             Ok(balance) => {
-                println!(
+                info!(
                     "✅ Send wallet balance: {} sats",
                     balance.node_info.send_balance_msat / 1000
                 );
                 Ok(serde_json::json!(balance))
             }
             Err(e) => {
-                println!("❌ Failed to get wallet balance: {}", e);
+                info!("❌ Failed to get wallet balance: {}", e);
                 Err(format!("Failed to get wallet balance: {}", e))
             }
         }
@@ -323,7 +263,7 @@ async fn get_wallet_transactions(
         match lightning_node.list_transactions(params).await {
             Ok(transactions) => Ok(serde_json::json!(transactions)),
             Err(e) => {
-                println!("❌ Failed to get wallet txns: {}", e);
+                info!("❌ Failed to get wallet txns: {}", e);
                 Err(format!("Failed to get wallet txns: {}", e))
             }
         }
@@ -347,11 +287,11 @@ async fn get_offer(tauri_state: State<'_, TauriState>) -> Result<serde_json::Val
         // Get the offer from the lightning node
         match lightning_node.get_offer().await {
             Ok(offer) => {
-                println!("✅ Retrieved BOLT12 offer: {}", offer.payment_request);
+                info!("✅ Retrieved BOLT12 offer: {}", offer.payment_request);
                 Ok(serde_json::json!(offer))
             }
             Err(e) => {
-                println!("❌ Failed to get BOLT12 offer: {}", e);
+                info!("❌ Failed to get BOLT12 offer: {}", e);
                 Err(format!("Failed to get BOLT12 offer: {}", e))
             }
         }
@@ -367,7 +307,7 @@ async fn lookup_ip_location_tauri(ip: String) -> Result<IpLocationResponse, Stri
 
 #[command]
 async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, String> {
-    println!("🛑 App shutdown command called");
+    info!("🛑 App shutdown command called");
 
     let backend_state = tauri_state.backend_state.clone();
 
@@ -377,6 +317,19 @@ async fn app_shutdown(tauri_state: State<'_, TauriState>) -> Result<String, Stri
     Ok("App shutdown cleanup completed".to_string())
 }
 
+// Helper function for direct cleanup (used by signal handlers)
+async fn perform_cleanup(tauri_state: &TauriState) -> Result<String, String> {
+    info!("🛑 perform_cleanup() called - starting cleanup process...");
+
+    let backend_state = tauri_state.backend_state.clone();
+
+    // Perform comprehensive cleanup
+    shutdown_cleanup(backend_state.clone()).await?;
+
+    info!("✅ perform_cleanup() completed successfully");
+    Ok("Cleanup completed".to_string())
+}
+
 #[command]
 async fn list_lightning_configs(app_handle: AppHandle) -> Result<serde_json::Value, String> {
     // Parse the torrc file to get all lightning configurations
@@ -384,9 +337,9 @@ async fn list_lightning_configs(app_handle: AppHandle) -> Result<serde_json::Val
     path_config.ensure_torrc_files()?;
     let torrc_path = path_config.get_torrc_path(None);
 
-    match torrc_parser::get_all_payment_lightning_configs(&torrc_path) {
+    match torrc_parser::get_all_payment_lightning_configs(&torrc_path).await {
         Ok(configs) => {
-            println!(
+            info!(
                 "✅ Retrieved {} lightning config(s) from torrc",
                 configs.len()
             );
@@ -417,7 +370,7 @@ async fn list_lightning_configs(app_handle: AppHandle) -> Result<serde_json::Val
             }))
         }
         Err(e) => {
-            println!("❌ Failed to get lightning configs from torrc: {}", e);
+            info!("❌ Failed to get lightning configs from torrc: {}", e);
             Err(format!("Failed to get lightning configs: {}", e))
         }
     }
@@ -429,7 +382,7 @@ async fn delete_lightning_config(
     app_handle: AppHandle,
     config: serde_json::Value,
 ) -> Result<String, String> {
-    println!("🗑️  delete_lightning_config called with config: {}", config);
+    info!("🗑️  delete_lightning_config called with config: {}", config);
 
     let path_config = create_tauri_path_config(Some(&app_handle))?;
     path_config.ensure_torrc_files()?;
@@ -458,7 +411,7 @@ async fn delete_lightning_config(
         url.clone(),
         None,
         false,
-    ) {
+    ).await {
         Ok(_) => {
             let message = match url {
                 Some(url) => format!(
@@ -467,23 +420,23 @@ async fn delete_lightning_config(
                 ),
                 None => format!("Successfully deleted {} lightning config", node_type_str),
             };
-            println!("✅ {}", message);
+            info!("✅ {}", message);
 
             // After deletion, try to reinitialize the lightning node in case there's a new default
             if let Err(e) = reinitialize_lightning_node(&tauri_state, &app_handle).await {
-                println!(
+                info!(
                     "⚠️  Failed to reinitialize lightning node after deletion: {}",
                     e
                 );
-                println!("   This is expected if no configs remain.");
+                info!("   This is expected if no configs remain.");
             } else {
-                println!("🔄 Lightning node reinitialized after config deletion");
+                info!("🔄 Lightning node reinitialized after config deletion");
             }
 
             Ok(message)
         }
         Err(e) => {
-            println!("❌ Failed to delete lightning config: {}", e);
+            info!("❌ Failed to delete lightning config: {}", e);
             Err(format!("Failed to delete lightning config: {}", e))
         }
     }
@@ -495,7 +448,7 @@ async fn upsert_lightning_config(
     app_handle: AppHandle,
     config: serde_json::Value,
 ) -> Result<String, String> {
-    println!("💾 upsert_lightning_config called with config: {}", config);
+    info!("💾 upsert_lightning_config called with config: {}", config);
 
     let path_config = create_tauri_path_config(Some(&app_handle))?;
     path_config.ensure_torrc_files()?;
@@ -527,27 +480,27 @@ async fn upsert_lightning_config(
         Some(url.to_string()),
         Some(password.to_string()),
         set_as_default,
-    ) {
+    ).await {
         Ok(_) => {
             let message = format!(
                 "Successfully upserted {} lightning config for {}",
                 node_type_str, url
             );
-            println!("✅ {}", message);
+            info!("✅ {}", message);
 
             // If this config is being set as default, reinitialize the lightning node
             if set_as_default {
                 if let Err(e) = reinitialize_lightning_node(&tauri_state, &app_handle).await {
-                    println!("⚠️  Failed to reinitialize lightning node: {}", e);
+                    info!("⚠️  Failed to reinitialize lightning node: {}", e);
                 } else {
-                    println!("🔄 Lightning node reinitialized with new default config");
+                    info!("🔄 Lightning node reinitialized with new default config");
                 }
             }
 
             Ok(message)
         }
         Err(e) => {
-            println!("❌ Failed to upsert lightning config: {}", e);
+            info!("❌ Failed to upsert lightning config: {}", e);
             Err(format!("Failed to upsert lightning config: {}", e))
         }
     }
@@ -562,9 +515,9 @@ async fn reinitialize_lightning_node(
     path_config.ensure_torrc_files()?;
     let torrc_path = path_config.get_torrc_path(None);
 
-    match lightning::LightningNode::from_torrc(&torrc_path) {
+    match lightning::LightningNode::from_torrc(&torrc_path).await {
         Ok(node) => {
-            println!(
+            info!(
                 "✅ Lightning node reinitialized from torrc ({})",
                 node.node_type()
             );
@@ -576,7 +529,7 @@ async fn reinitialize_lightning_node(
             Ok(())
         }
         Err(e) => {
-            println!("❌ Failed to reinitialize Lightning node from torrc: {}", e);
+            info!("❌ Failed to reinitialize Lightning node from torrc: {}", e);
 
             // Clear the lightning node on error
             let backend_state = tauri_state.backend_state.read().await;
@@ -607,26 +560,26 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         Ok(resource_dir) => {
             // Icons are in Resources/icons/ directory
             let icon_path = resource_dir.join("icons").join("tray-icon.png");
-            println!("🖼️  Attempting to load tray icon from: {:?}", icon_path);
+            info!("🖼️  Attempting to load tray icon from: {:?}", icon_path);
             
             match tauri::image::Image::from_path(&icon_path) {
                 Ok(img) => {
-                    println!("✅ Tray icon loaded successfully");
+                    info!("✅ Tray icon loaded successfully");
                     img
                 }
                 Err(e) => {
-                    println!("⚠️  Failed to load tray icon from resources: {}", e);
-                    println!("   Trying local path fallback...");
+                    info!("⚠️  Failed to load tray icon from resources: {}", e);
+                    info!("   Trying local path fallback...");
                     
                     // Fallback to local path (development mode)
                     match tauri::image::Image::from_path("icons/tray-icon.png") {
                         Ok(img) => {
-                            println!("✅ Tray icon loaded from local path");
+                            info!("✅ Tray icon loaded from local path");
                             img
                         }
                         Err(e) => {
-                            println!("⚠️  Failed to load tray icon from local path: {}", e);
-                            println!("   Using default icon");
+                            info!("⚠️  Failed to load tray icon from local path: {}", e);
+                            info!("   Using default icon");
                             // Create a simple default icon (empty/placeholder)
                             return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
                         }
@@ -635,16 +588,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             }
         }
         Err(e) => {
-            println!("⚠️  Could not get resource directory: {}", e);
-            println!("   Trying local path...");
+            info!("⚠️  Could not get resource directory: {}", e);
+            info!("   Trying local path...");
             
             match tauri::image::Image::from_path("icons/tray-icon.png") {
                 Ok(img) => {
-                    println!("✅ Tray icon loaded from local path");
+                    info!("✅ Tray icon loaded from local path");
                     img
                 }
                 Err(e) => {
-                    println!("⚠️  Failed to load tray icon: {}", e);
+                    info!("⚠️  Failed to load tray icon: {}", e);
                     return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
                 }
             }
@@ -679,14 +632,14 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let tauri_state = app_handle.state::<TauriState>();
-                    println!("🛑 App quit requested - performing cleanup...");
+                    info!("🛑 App quit requested - performing cleanup...");
 
                     match app_shutdown(tauri_state).await {
                         Ok(msg) => {
-                            println!("✅ {}", msg);
+                            info!("✅ {}", msg);
                         }
                         Err(e) => {
-                            println!("⚠️  Shutdown warning: {}", e);
+                            info!("⚠️  Shutdown warning: {}", e);
                         }
                     }
 
@@ -713,22 +666,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     .expect("can't show");
             }
             "activate" => {
-                let app_handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let tauri_state = app_handle.state::<TauriState>();
-                    let backend_state = tauri_state.backend_state.clone();
-                    // Use Client mode as default for tray activation
-                    match activate_eltord(backend_state.clone(), EltorMode::Client).await {
-                        Ok(msg) => {
-                            println!("✅ {}", msg);
-                            let _ = app_handle.emit("eltord-activated", &msg);
-                        }
-                        Err(err) => {
-                            println!("❌ {}", err);
-                            let _ = app_handle.emit("eltord-error", &err);
-                        }
-                    }
-                });
+                let _ = activate_eltord("client".to_string(), false);
             }
             "deactivate" => {
                 let app_handle = app.clone();
@@ -738,11 +676,11 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     // Use Client mode as default for tray deactivation
                     match deactivate_eltord(backend_state.clone(), EltorMode::Client).await {
                         Ok(msg) => {
-                            println!("✅ {}", msg);
+                            info!("✅ {}", msg);
                             let _ = app_handle.emit("eltord-deactivated", &msg);
                         }
                         Err(err) => {
-                            println!("❌ {}", err);
+                            info!("❌ {}", err);
                             let _ = app_handle.emit("eltord-error", &err);
                         }
                     }
@@ -752,7 +690,7 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    println!("✅ Tray icon setup completed successfully");
+    info!("✅ Tray icon setup completed successfully");
     Ok(())
 }
 
@@ -766,14 +704,14 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
 
     // Ensure app data directory exists with fallback to temp directory
     if let Err(e) = std::fs::create_dir_all(&app_data_dir) {
-        println!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
-        println!("   This might be due to running from a read-only DMG. Trying temp directory fallback...");
+        info!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
+        info!("   This might be due to running from a read-only DMG. Trying temp directory fallback...");
         
         // Fallback to temporary directory
         let temp_dir = std::env::temp_dir().join("eltor");
         std::fs::create_dir_all(&temp_dir)
             .map_err(|e| format!("Failed to create temp data directory: {}", e))?;
-        println!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
+        info!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
         
         // Use temp directory for both data and app_data
         let bin_dir = if let Some(app_handle) = app_handle {
@@ -814,11 +752,11 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
                     let ip_db_path = tauri_bin_dir.join("IP2LOCATION-LITE-DB3.BIN");
                     
                     if phoenixd_path.exists() || ip_db_path.exists() {
-                        println!(
+                        info!(
                             "✅ Using Tauri _up_ structure for binaries: {:?}",
                             tauri_bin_dir
                         );
-                        println!(
+                        info!(
                             "✅ Using app data directory for config files: {:?}",
                             app_data_dir
                         );
@@ -837,11 +775,11 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
                 let phoenixd_path = resource_dir.join("phoenixd");
 
                 if ip_db_path.exists() || phoenixd_path.exists() {
-                    println!(
+                    info!(
                         "✅ Using Tauri resource directory for binaries: {:?}",
                         resource_dir
                     );
-                    println!(
+                    info!(
                         "✅ Using app data directory for config files: {:?}",
                         app_data_dir
                     );
@@ -853,22 +791,22 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
                         app_data_dir: Some(app_data_dir),
                     });
                 } else {
-                    println!(
+                    info!(
                         "⚠️  Tauri resource directory exists but no bundled resources found: {:?}",
                         resource_dir
                     );
-                    println!("   This is expected in development mode, falling back to development bin path...");
+                    info!("   This is expected in development mode, falling back to development bin path...");
                 }
             }
             Err(e) => {
-                println!("⚠️  Failed to get Tauri resource directory: {}", e);
-                println!("   Falling back to development bin path...");
+                info!("⚠️  Failed to get Tauri resource directory: {}", e);
+                info!("   Falling back to development bin path...");
             }
         }
     }
 
     // Development fallback: Use development bin directory for binaries/templates
-    println!("🔧 Using development mode with production-like app data paths");
+    info!("🔧 Using development mode with production-like app data paths");
     let current_dir =
         std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
     let bin_dir_path = current_dir.join("../../backend/bin");
@@ -881,20 +819,20 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
             let ip_db_path = canonical_path.join("IP2LOCATION-LITE-DB3.BIN");
 
             if phoenixd_path.exists() || ip_db_path.exists() {
-                println!("✅ Using development bin directory: {:?}", canonical_path);
+                info!("✅ Using development bin directory: {:?}", canonical_path);
                 canonical_path
             } else {
-                println!("⚠️  Development bin directory found but missing required files, using app data directory for templates");
+                info!("⚠️  Development bin directory found but missing required files, using app data directory for templates");
                 app_data_dir.clone()
             }
         }
         Err(_) => {
-            println!("⚠️  Development bin directory not found (expected in bundled builds), using app data directory for templates");
+            info!("⚠️  Development bin directory not found (expected in bundled builds), using app data directory for templates");
             app_data_dir.clone()
         }
     };
 
-    println!(
+    info!(
         "✅ Using app data directory for config files: {:?}",
         app_data_dir
     );
@@ -909,7 +847,7 @@ fn create_tauri_path_config(app_handle: Option<&AppHandle>) -> Result<PathConfig
 #[command]
 async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, String> {
     let path_config = create_tauri_path_config(Some(&app_handle))?;
-    let debug_info = DebugInfo::with_path_config(path_config)?;
+    let debug_info = DebugInfo::with_path_config(path_config).await?;
 
     serde_json::to_value(&debug_info)
         .map_err(|e| format!("Failed to serialize debug info: {}", e))
@@ -919,19 +857,19 @@ async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, Stri
 async fn start_phoenix_daemon(
     app_handle: AppHandle,
 ) -> Result<serde_json::Value, String> {
-    println!("🔥 start_phoenix_daemon called");
+    info!("🔥 start_phoenix_daemon called");
 
     let path_config = create_tauri_path_config(Some(&app_handle))?;
 
     // Use the new start_phoenix_with_config function
     match start_phoenix_with_config(&path_config).await {
         Ok(response) => {
-            println!("✅ Phoenix daemon started successfully with config: {:?}", response);
+            info!("✅ Phoenix daemon started successfully with config: {:?}", response);
             Ok(serde_json::to_value(&response)
                 .map_err(|e| format!("Failed to serialize response: {}", e))?)
         }
         Err(e) => {
-            println!("❌ Failed to start Phoenix daemon: {}", e);
+            info!("❌ Failed to start Phoenix daemon: {}", e);
             Err(format!("Failed to start Phoenix daemon: {}", e))
         }
     }
@@ -941,7 +879,7 @@ async fn start_phoenix_daemon(
 async fn stop_phoenix_daemon(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
-    println!("🛑 stop_phoenix_daemon called");
+    info!("🛑 stop_phoenix_daemon called");
 
     // Stop phoenixd using the existing backend function
     let backend_state = tauri_state.backend_state.read().await;
@@ -950,7 +888,7 @@ async fn stop_phoenix_daemon(
     
     match eltor_backend::stop_phoenixd(app_state).await {
         Ok(()) => {
-            println!("✅ Phoenix daemon stopped successfully");
+            info!("✅ Phoenix daemon stopped successfully");
             
             let response = serde_json::json!({
                 "success": true,
@@ -961,7 +899,7 @@ async fn stop_phoenix_daemon(
         }
         Err(e) => {
             if e.contains("No phoenixd process") || e.contains("not running") {
-                println!("ℹ️  Phoenix daemon was not running");
+                info!("ℹ️  Phoenix daemon was not running");
                 let response = serde_json::json!({
                     "success": true,
                     "message": "Phoenix daemon is not currently running",
@@ -969,7 +907,7 @@ async fn stop_phoenix_daemon(
                 });
                 Ok(response)
             } else {
-                println!("❌ Failed to stop Phoenix daemon: {}", e);
+                info!("❌ Failed to stop Phoenix daemon: {}", e);
                 Err(format!("Failed to stop Phoenix daemon: {}", e))
             }
         }
@@ -980,7 +918,7 @@ async fn stop_phoenix_daemon(
 async fn detect_phoenix_config(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
-    println!("🔍 detect_phoenix_config called");
+    info!("🔍 detect_phoenix_config called");
 
     // Check if Phoenix process is running in our state
     let backend_state = tauri_state.backend_state.read().await;
@@ -1009,7 +947,7 @@ async fn detect_phoenix_config(
                 }
                 
                 if !password.is_empty() {
-                    println!("✅ Found existing Phoenix configuration (running: {})", is_running);
+                    info!("✅ Found existing Phoenix configuration (running: {})", is_running);
                     Ok(serde_json::json!({
                         "success": true,
                         "message": format!("Existing Phoenix configuration detected (running: {})", is_running),
@@ -1029,7 +967,7 @@ async fn detect_phoenix_config(
         }
     } else if is_running {
         // Config doesn't exist but process is running
-        println!("⚠️  Phoenix is running but configuration not yet available");
+        info!("⚠️  Phoenix is running but configuration not yet available");
         Ok(serde_json::json!({
             "success": true,
             "message": "Phoenix is running but configuration not yet available",
@@ -1047,11 +985,17 @@ async fn detect_phoenix_config(
 fn main() {
     // Load environment variables from root .env file
     dotenv::from_path("../../.env").ok();
+    std::env::set_var("ELTOR_TAURI_MODE", "1");
+    
+    // Set bin directory path for backend to use
+    // This needs to be done early, before any backend functions are called
+    // We'll update it later in setup() once we have the app handle
+    
     // Print environment variables for debugging
-    println!("🔧 Tauri Environment variables:");
+    info!("🔧 Tauri Environment variables:");
     for (key, value) in env::vars() {
-        if key.starts_with("APP_") || key.starts_with("BACKEND_") || key.starts_with("PHOENIXD_") {
-            println!("   {}: {}", key, value);
+        if key.starts_with("APP_") || key.starts_with("BACKEND_") || key.starts_with("PHOENIXD_") || key.starts_with("ELTOR_") {
+            info!("   {}: {}", key, value);
         }
     }
 
@@ -1061,15 +1005,15 @@ fn main() {
     match path_config {
         Ok(config) => {
             if let Err(e) = config.ensure_torrc_files() {
-                eprintln!("⚠️  Failed to initialize torrc files: {}", e);
-                eprintln!("   Continuing with startup...");
+                info!("⚠️  Failed to initialize torrc files: {}", e);
+                info!("   Continuing with startup...");
             } else {
-                println!("✅ Pre-startup torrc files ensured with app data directory");
+                info!("✅ Pre-startup torrc files ensured with app data directory");
             }
         }
         Err(e) => {
-            eprintln!("⚠️  Failed to get path configuration: {}", e);
-            eprintln!("   Continuing with startup...");
+            info!("⚠️  Failed to get path configuration: {}", e);
+            info!("   Continuing with startup...");
         }
     }
 
@@ -1077,22 +1021,43 @@ fn main() {
         .setup(|app| {
             // Set up tray with error handling - don't fail the entire app if tray fails
             if let Err(e) = setup_tray(app.handle()) {
-                eprintln!("⚠️  Failed to set up system tray: {}", e);
-                eprintln!("   App will continue without system tray");
+                info!("⚠️  Failed to set up system tray: {}", e);
+                info!("   App will continue without system tray");
             } else {
-                println!("✅ System tray initialized successfully");
+                info!("✅ System tray initialized successfully");
+            }
+
+            // Configure window to match app's dark theme on macOS
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::Theme;
+                // Get the first/main window
+                if let Some(main_window) = app.webview_windows().values().next() {
+                    // Set theme to Dark to match the app's dark background
+                    if let Err(e) = main_window.set_theme(Some(Theme::Dark)) {
+                        info!("⚠️  Failed to set dark theme: {}", e);
+                    } else {
+                        info!("✅ Window theme set to dark to match app background");
+                    }
+                } else {
+                    info!("⚠️  No main window found for theme configuration");
+                }
             }
 
             // Re-initialize with proper app context for production builds
             let app_config = create_tauri_path_config(Some(app.handle()));
             match app_config {
                 Ok(config) => {
+                    // Set the bin_dir as an environment variable for the backend to use
+                    std::env::set_var("ELTOR_TAURI_BIN_DIR", &config.bin_dir);
+                    info!("✅ Set ELTOR_TAURI_BIN_DIR={:?}", config.bin_dir);
+                    
                     if let Err(e) = config.ensure_torrc_files() {
-                        eprintln!("⚠️  Failed to re-initialize torrc files with app context: {}", e);
+                        info!("⚠️  Failed to re-initialize torrc files with app context: {}", e);
                     }
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Failed to get app path configuration: {}", e);
+                    info!("⚠️  Failed to get app path configuration: {}", e);
                 }
             }
 
@@ -1106,15 +1071,15 @@ fn main() {
             tauri::async_runtime::spawn(async move {
                 // Initialize the state with EltorManager first, using proper Tauri PathConfig
                 if let Err(e) = state_for_init.initialize_with_app_handle(&app_handle).await {
-                    eprintln!("❌ Failed to initialize Tauri state: {}", e);
+                    info!("❌ Failed to initialize Tauri state: {}", e);
                     return;
                 }
 
                 // Clean up any processes using our ports
-                println!("🧹 Starting port cleanup...");
+                info!("🧹 Starting port cleanup...");
                 if let Err(e) = ports::cleanup_ports_with_torrc("torrc").await {
-                    eprintln!("⚠️  Port cleanup failed: {}", e);
-                    eprintln!("   Continuing with startup...");
+                    info!("⚠️  Port cleanup failed: {}", e);
+                    info!("   Continuing with startup...");
                 }
 
                 let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
@@ -1125,11 +1090,11 @@ fn main() {
                 if use_phoenixd_embedded {
                     match state_for_init.initialize_phoenixd().await {
                         Ok(_) => {
-                            println!("✅ Phoenixd initialization completed successfully");
+                            info!("✅ Phoenixd initialization completed successfully");
                             let _ = app_handle.emit("phoenixd-ready", "Phoenixd wallet ready");
                         }
                         Err(e) => {
-                            println!("❌ Failed to initialize phoenixd: {}", e);
+                            info!("❌ Failed to initialize phoenixd: {}", e);
                             let _ = app_handle.emit(
                                 "phoenixd-error",
                                 format!("Phoenixd initialization failed: {}", e),
@@ -1142,20 +1107,20 @@ fn main() {
                 let torrc_path = match create_tauri_path_config(Some(&app_handle)) {
                     Ok(path_config) => {
                         if let Err(e) = path_config.ensure_torrc_files() {
-                            println!("❌ Failed to ensure torrc files: {}", e);
+                            info!("❌ Failed to ensure torrc files: {}", e);
                             return;
                         }
                         path_config.get_torrc_path(None)
                     },
                     Err(e) => {
-                        println!("❌ Failed to get path config: {}", e);
+                        info!("❌ Failed to get path config: {}", e);
                         return;
                     }
                 };
-                println!("🔎 Lightning torrc path: {:?}", torrc_path);
-                match lightning::LightningNode::from_torrc(torrc_path) {
+                info!("🔎 Lightning torrc path: {:?}", torrc_path);
+                match lightning::LightningNode::from_torrc(torrc_path).await {
                     Ok(node) => {
-                        println!(
+                        info!(
                             "✅ Lightning node connected from torrc ({})",
                             node.node_type()
                         );
@@ -1166,7 +1131,7 @@ fn main() {
                         let _ = app_handle.emit("lightning-ready", "Lightning node ready");
                     }
                     Err(e) => {
-                        println!("⚠️  Failed to initialize Lightning node from torrc: {}", e);
+                        info!("⚠️  Failed to initialize Lightning node from torrc: {}", e);
                         let _ = app_handle.emit(
                             "lightning-error",
                             format!("Lightning initialization failed: {}", e),
@@ -1178,30 +1143,74 @@ fn main() {
                 let ip_db_path = match create_tauri_path_config(Some(&app_handle)) {
                     Ok(path_config) => path_config.get_executable_path("IP2LOCATION-LITE-DB3.BIN"),
                     Err(e) => {
-                        eprintln!("⚠️  Failed to get path config: {}", e);
+                        info!("⚠️  Failed to get path config: {}", e);
                         return;
                     }
                 };
                 if ip_db_path.exists() {
-                    println!("✅ IP database file found at: {:?}", ip_db_path);
+                    info!("✅ IP database file found at: {:?}", ip_db_path);
                     match init_ip_database(ip_db_path.clone()) {
-                        Ok(()) => println!("✅ IP database initialized successfully"),
-                        Err(e) => eprintln!("❌ Failed to initialize IP database: {}", e),
+                        Ok(()) => info!("✅ IP database initialized successfully"),
+                        Err(e) => info!("❌ Failed to initialize IP database: {}", e),
                     }
                 } else {
-                    eprintln!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
+                    info!("⚠️  IP database not found. Download IP2LOCATION-LITE-DB3.BIN from https://download.ip2location.com/lite/");
                 }
             });
 
             // Store the state for Tauri commands
-            app.manage(tauri_state);
+            app.manage(tauri_state.clone());
+
+            // Setup Ctrl+C signal handler for graceful shutdown when debugging
+            let app_handle_for_signal = app.handle().clone();
+            let state_for_signal = tauri_state.clone();
+            std::thread::spawn(move || {
+                tauri::async_runtime::block_on(async move {
+                    match tokio::signal::ctrl_c().await {
+                        Ok(()) => {
+                            info!("🛑 Ctrl+C received - performing cleanup...");
+                            
+                            match perform_cleanup(&state_for_signal).await {
+                                Ok(msg) => info!("✅ {}", msg),
+                                Err(e) => info!("⚠️  Shutdown warning: {}", e),
+                            }
+                            
+                            info!("🚪 Exiting app after Ctrl+C cleanup");
+                            app_handle_for_signal.exit(0);
+                        }
+                        Err(e) => {
+                            info!("⚠️  Error setting up Ctrl+C handler: {}", e);
+                        }
+                    }
+                });
+            });
 
             Ok(())
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                window.hide().unwrap();
+                // Prevent default close behavior
                 api.prevent_close();
+                
+                // Perform cleanup and exit when window is closed
+                let app_handle = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let tauri_state = app_handle.state::<TauriState>();
+                    info!("🛑 Window close requested - performing cleanup...");
+
+                    match perform_cleanup(&tauri_state).await {
+                        Ok(msg) => {
+                            info!("✅ {}", msg);
+                        }
+                        Err(e) => {
+                            info!("⚠️  Shutdown warning: {}", e);
+                        }
+                    }
+
+                    // Exit after cleanup
+                    info!("🚪 Exiting app after cleanup");
+                    app_handle.exit(0);
+                });
             }
         })
         .plugin(tauri_plugin_shell::init())
@@ -1209,6 +1218,9 @@ fn main() {
             activate_eltord_invoke,
             deactivate_eltord_invoke,
             get_eltord_status_invoke,
+            get_eltord_logs_invoke,
+            stream_eltord_logs_invoke,
+            stop_eltord_logs_invoke,
             test_log_event,
             get_node_info,
             get_wallet_transactions,

@@ -8,14 +8,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::{
     lightning::{
-        CreateInvoiceRequest, CreateInvoiceResponse, ListTransactionsParams,
-        ListTransactionsResponse, NodeInfoResponse, PayInvoiceRequest, PayInvoiceResponse,
+        CreateInvoiceRequest, CreateInvoiceResponse, ListTransactionsParams, ListTransactionsResponse, NodeInfoResponse, PayInvoiceRequest, PayInvoiceResponse
     },
     state::{AppState, MessageResponse},
     torrc_parser::{
-        get_all_payment_lightning_configs, modify_payment_lightning_config, NodeType, Operation,
-    }, PathConfig,
+        get_all_payment_lightning_configs, modify_payment_lightning_config, NodeType, Operation
+    }
 };
+use log::info;
+
 
 // Request types for lightning config management
 #[derive(Debug, Deserialize)]
@@ -169,10 +170,37 @@ async fn get_wallet_transactions(
 async fn get_offer(
     State(state): State<AppState>,
 ) -> Result<ResponseJson<CreateInvoiceResponse>, (StatusCode, String)> {
+    // Use PathConfig from state (no blocking I/O)
+    let torrc_relay_path = state.path_config.get_torrc_relay_path();
+    
+    // First, try to get the offer from torrc.relay file
+    let existing_offers = crate::torrc_parser::get_torrc_config(&torrc_relay_path, "PaymentBolt12Offer").await;
+    
+    if !existing_offers.is_empty() && !existing_offers[0].is_empty() {
+        info!("✅ Using existing PaymentBolt12Offer from torrc.relay");
+        return Ok(ResponseJson(CreateInvoiceResponse {
+            payment_request: existing_offers[0].clone(),
+            payment_hash: String::new(), // Not needed for cached offer
+            amount_sats: None,
+            expiry: None,
+        }));
+    }
+    
+    info!("📡 No BOLT12 offer found in torrc.relay, fetching from Lightning node...");
+    
     // Get the cached lightning node from app state
     match get_lightning_node_from_state(&state).await {
         Ok(node) => match node.get_offer().await {
             Ok(response) => {
+                // Update torrc.relay with the new offer
+                if let Err(e) = crate::torrc_parser::update_torrc_config_line(
+                    &torrc_relay_path,
+                    "PaymentBolt12Offer",
+                    &response.payment_request,
+                ).await {
+                    info!("⚠️ Warning: Failed to update PaymentBolt12Offer in torrc.relay: {}", e);
+                }
+                
                 Ok(ResponseJson(response))
             }
             Err(e) => Err((
@@ -205,40 +233,119 @@ async fn upsert_lightning_config(
         }
     };
 
-    // Get torrc file path
-    let path_config = PathConfig::new().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to get path config: {}", e),
-        )
-    })?;
-    path_config.ensure_torrc_files().map_err(|e| {
+    // Use PathConfig from state and ensure torrc files exist
+    state.path_config.ensure_torrc_files().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to ensure torrc files: {}", e),
         )
     })?;
-    let torrc_path = path_config.get_torrc_path(None);
+    let torrc_path = state.path_config.get_torrc_path(None);
+    let torrc_relay_path = state.path_config.get_torrc_relay_path();
 
-    // Modify the payment lightning config
+    // Check if the node type is changing (before we modify the config)
+    let node_type_changed = if request.set_as_default {
+        let previous_configs = crate::torrc_parser::get_all_payment_lightning_configs(&torrc_path).await
+            .unwrap_or_else(|_| Vec::new());
+        
+        info!("🔍 All configs before update: {:?}", previous_configs);
+        
+        // Find the current default config
+        let previous_default = previous_configs.iter()
+            .find(|config| config.is_default);
+        
+        if let Some(prev_default) = previous_default {
+            let prev_type = &prev_default.node_type;
+            let new_type = &request.node_type;
+            let changed = prev_type != new_type;
+            info!("🔍 Previous default node type: '{}' (len: {}), New node type: '{}' (len: {}), Changed: {}", 
+                prev_type, prev_type.len(), new_type, new_type.len(), changed);
+            info!("🔍 Byte comparison: prev={:?}, new={:?}", prev_type.as_bytes(), new_type.as_bytes());
+            changed
+        } else {
+            info!("🔍 No previous default found, this is the first default config");
+            false
+        }
+    } else {
+        false
+    };
+
+    // Modify the payment lightning config in torrc (client config)
     match modify_payment_lightning_config(
         &torrc_path,
         Operation::Upsert,
-        node_type,
+        node_type.clone(),
         Some(request.url.clone()),
         Some(request.password.clone()),
         request.set_as_default,
-    ) {
+    ).await {
         Ok(_) => {
+            // Also update torrc.relay with the same config
+            if let Err(e) = modify_payment_lightning_config(
+                &torrc_relay_path,
+                Operation::Upsert,
+                node_type,
+                Some(request.url.clone()),
+                Some(request.password.clone()),
+                request.set_as_default,
+            ).await {
+                info!("⚠️  Failed to update PaymentLightningNodeConfig in torrc.relay: {}", e);
+            } else {
+                info!("✅ Updated PaymentLightningNodeConfig in torrc.relay");
+            }
+            
             // If this is being set as default, reload the lightning node in app state
+            // and update the BOLT12 offer in torrc.relay
             if request.set_as_default {
-                match crate::lightning::LightningNode::from_torrc(&torrc_path) {
+                match crate::lightning::LightningNode::from_torrc(&torrc_path).await {
                     Ok(new_node) => {
+                        // Determine if we should fetch a new offer
+                        let should_fetch_new_offer = if node_type_changed {
+                            // Always fetch new offer when node type changes
+                            true
+                        } else {
+                            // Check if offer exists in torrc.relay
+                            let existing_offers = crate::torrc_parser::get_torrc_config(&torrc_relay_path, "PaymentBolt12Offer").await;
+                            existing_offers.is_empty() || existing_offers.first().map(|s| s.is_empty()).unwrap_or(true)
+                        };
+                        
+                        if should_fetch_new_offer {
+                            // Fetch a new offer from the lightning node
+                            if node_type_changed {
+                                info!("📡 Lightning node type changed, fetching new BOLT12 offer...");
+                            } else {
+                                info!("📡 No BOLT12 offer found in torrc.relay, fetching from lightning node...");
+                            }
+                            
+                            match new_node.get_offer().await {
+                                Ok(offer_response) => {
+                                    // Update PaymentBolt12Offer in torrc.relay
+                                    if let Err(e) = crate::torrc_parser::update_torrc_config_line(
+                                        &torrc_relay_path,
+                                        "PaymentBolt12Offer",
+                                        &offer_response.payment_request,
+                                    ).await {
+                                        info!("⚠️  Failed to update PaymentBolt12Offer in torrc.relay: {}", e);
+                                    } else {
+                                        info!("✅ Updated PaymentBolt12Offer in torrc.relay: {}", &offer_response.payment_request);
+                                    }
+                                }
+                                Err(e) => {
+                                    info!("⚠️  Failed to get BOLT12 offer from lightning node: {}", e);
+                                }
+                            }
+                        } else {
+                            let existing_offers = crate::torrc_parser::get_torrc_config(&torrc_relay_path, "PaymentBolt12Offer").await;
+                            if let Some(offer) = existing_offers.first() {
+                                info!("✅ PaymentBolt12Offer already exists in torrc.relay: {}", offer);
+                            }
+                        }
+                        
                         state.set_lightning_node(new_node);
-                        println!("✅ Lightning node reloaded from torrc after upsert");
+                        info!("✅ Lightning node reloaded from torrc after upsert");
                     }
                     Err(e) => {
-                        println!("⚠️  Failed to reload lightning node: {}", e);
+                        info!("⚠️  Failed to reload lightning node: {}", e);
                     }
                 }
             }
@@ -275,40 +382,49 @@ async fn delete_lightning_config(
         }
     };
 
-    // Get torrc file path
-    let path_config = PathConfig::new().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to get path config: {}", e),
-        )
-    })?;
-    path_config.ensure_torrc_files().map_err(|e| {
+    // Use PathConfig from state
+    state.path_config.ensure_torrc_files().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to ensure torrc files: {}", e),
         )
     })?;
-    let torrc_path = path_config.get_torrc_path(None);
+    let torrc_path = state.path_config.get_torrc_path(None);
+    let torrc_relay_path = state.path_config.get_torrc_relay_path();
 
-    // Delete the lightning config
+    // Delete the lightning config from torrc (client config)
     match modify_payment_lightning_config(
         &torrc_path,
         Operation::Delete,
-        node_type,
+        node_type.clone(),
         request.url.clone(),
         None,
         false,
-    ) {
+    ).await {
         Ok(_) => {
+            // Also delete from torrc.relay
+            if let Err(e) = modify_payment_lightning_config(
+                &torrc_relay_path,
+                Operation::Delete,
+                node_type,
+                request.url.clone(),
+                None,
+                false,
+            ).await {
+                info!("⚠️  Failed to delete PaymentLightningNodeConfig from torrc.relay: {}", e);
+            } else {
+                info!("✅ Deleted PaymentLightningNodeConfig from torrc.relay");
+            }
+            
             // After deletion, try to reload the lightning node with any new default
-            match crate::lightning::LightningNode::from_torrc(&torrc_path) {
+            match crate::lightning::LightningNode::from_torrc(&torrc_path).await {
                 Ok(new_node) => {
                     state.set_lightning_node(new_node);
-                    println!("✅ Lightning node reloaded from torrc after deletion");
+                    info!("✅ Lightning node reloaded from torrc after deletion");
                 }
                 Err(e) => {
                     // It's okay if there's no default config after deletion
-                    println!("⚠️  No default lightning node after deletion: {}", e);
+                    info!("⚠️  No default lightning node after deletion: {}", e);
                     let mut node_guard = state.lightning_node.lock().unwrap();
                     *node_guard = None;
                 }
@@ -335,25 +451,19 @@ async fn delete_lightning_config(
 
 // List all lightning configurations
 async fn list_lightning_configs(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> Result<ResponseJson<ListLightningConfigsResponse>, (StatusCode, String)> {
-    // Get torrc file path
-    let path_config = PathConfig::new().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to get path config: {}", e),
-        )
-    })?;
-    path_config.ensure_torrc_files().map_err(|e| {
+    // Use PathConfig from state
+    state.path_config.ensure_torrc_files().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to ensure torrc files: {}", e),
         )
     })?;
-    let torrc_path = path_config.get_torrc_path(None);
+    let torrc_path = state.path_config.get_torrc_path(None);
 
     // Get all payment lightning configs
-    match get_all_payment_lightning_configs(&torrc_path) {
+    match get_all_payment_lightning_configs(&torrc_path).await {
         Ok(configs) => {
             let response_configs: Vec<LightningConfigResponse> = configs
                 .into_iter()

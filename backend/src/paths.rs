@@ -76,7 +76,7 @@ impl PathConfig {
     pub fn ensure_torrc_files(&self) -> Result<(), String> {
         // Create data directory if it doesn't exist
         if let Err(e) = fs::create_dir_all(&self.data_dir) {
-            eprintln!("⚠️ Warning: Failed to create data directory {:?}: {}", self.data_dir, e);
+            info!("⚠️ Warning: Failed to create data directory {:?}: {}", self.data_dir, e);
             return Err(format!("Failed to create data directory: {}", e));
         }
 
@@ -86,12 +86,12 @@ impl PathConfig {
         let relay_dir = tor_data_dir.join("relay");
         
         if let Err(e) = fs::create_dir_all(&client_dir) {
-            eprintln!("⚠️ Warning: Failed to create client directory {:?}: {}", client_dir, e);
+            info!("⚠️ Warning: Failed to create client directory {:?}: {}", client_dir, e);
             return Err(format!("Failed to create client directory: {}", e));
         }
         
         if let Err(e) = fs::create_dir_all(&relay_dir) {
-            eprintln!("⚠️ Warning: Failed to create relay directory {:?}: {}", relay_dir, e);
+            info!("⚠️ Warning: Failed to create relay directory {:?}: {}", relay_dir, e);
             return Err(format!("Failed to create relay directory: {}", e));
         }
 
@@ -132,19 +132,19 @@ impl PathConfig {
 }
 
 /// Detect paths based on current environment
-fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
+pub fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
     let current_dir = env::current_dir()
         .map_err(|e| format!("Failed to get current directory: {}", e))?;
     
-    println!("🔍 PathConfig Debug - detect_paths():");
-    println!("   Current dir: {:?}", current_dir);
+    info!("🔍 PathConfig Debug - detect_paths():");
+    info!("   Current dir: {:?}", current_dir);
     if let Ok(exe_path) = env::current_exe() {
-        println!("   Current exe: {:?}", exe_path);
+        info!("   Current exe: {:?}", exe_path);
     }
     
     // Check environment variable override first
     if let Ok(override_path) = env::var("ELTOR_BIN_DIR") {
-        println!("   Using ELTOR_BIN_DIR override: {}", override_path);
+        info!("   Using ELTOR_BIN_DIR override: {}", override_path);
         let bin_dir = PathBuf::from(override_path);
         let data_dir = if let Ok(data_override) = env::var("ELTOR_DATA_DIR") {
             PathBuf::from(data_override)
@@ -157,7 +157,7 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
     // Docker environment detection
     if env::var("ELTOR_DOCKER_ENV").is_ok() || 
        Path::new("/home/user/code/eltor-app").exists() {
-        println!("   Detected Docker environment");
+        info!("   Detected Docker environment");
         let base = PathBuf::from("/home/user/code/eltor-app/backend");
         return Ok((base.join("bin"), base.join("bin/data"), None));
     }
@@ -168,7 +168,7 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
         
         // Check if we're in a macOS app bundle
         if exe_path.to_string_lossy().contains(".app/Contents/MacOS/") {
-            println!("   Detected macOS app bundle");
+            info!("   Detected macOS app bundle");
             let app_data_dir = get_app_data_dir()?;
             
             // In a macOS app bundle, resources are in ../Resources/
@@ -176,21 +176,21 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
             // So we need: App.app/Contents/Resources/
             if let Some(contents_dir) = exe_dir.parent() {
                 let resources_dir = contents_dir.join("Resources");
-                println!("   Checking Resources directory: {:?}", resources_dir);
+                info!("   Checking Resources directory: {:?}", resources_dir);
                 
                 if resources_dir.exists() {
-                    println!("   ✅ Found Resources directory");
+                    info!("   ✅ Found Resources directory");
                     
                     // Check for Tauri's _up_ structure (when resources use relative paths like ../../)
                     let tauri_bin_dir = resources_dir.join("_up_").join("_up_").join("backend").join("bin");
                     if tauri_bin_dir.exists() {
-                        println!("   ✅ Found Tauri _up_ structure at: {:?}", tauri_bin_dir);
+                        info!("   ✅ Found Tauri _up_ structure at: {:?}", tauri_bin_dir);
                         
                         // List files for debugging
                         if let Ok(entries) = fs::read_dir(&tauri_bin_dir) {
-                            println!("   📁 Files in Tauri bin directory:");
+                            info!("   📁 Files in Tauri bin directory:");
                             for entry in entries.flatten() {
-                                println!("      - {:?}", entry.file_name());
+                                info!("      - {:?}", entry.file_name());
                             }
                         }
                         
@@ -199,29 +199,29 @@ fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
                     
                     // Otherwise check if files are directly in Resources
                     if let Ok(entries) = fs::read_dir(&resources_dir) {
-                        println!("   📁 Files in Resources:");
+                        info!("   📁 Files in Resources:");
                         for entry in entries.flatten() {
-                            println!("      - {:?}", entry.file_name());
+                            info!("      - {:?}", entry.file_name());
                         }
                     }
                     
                     return Ok((resources_dir, app_data_dir.clone(), Some(app_data_dir)));
                 } else {
-                    println!("   ⚠️  Resources directory not found at: {:?}", resources_dir);
+                    info!("   ⚠️  Resources directory not found at: {:?}", resources_dir);
                 }
             }
         }
         
         // Check if we're in a general bundled context (resources in same directory)
         if exe_dir.join("torrc.template").exists() || exe_dir.join("phoenixd").exists() {
-            println!("   Detected bundled context (resources in exe dir)");
+            info!("   Detected bundled context (resources in exe dir)");
             let app_data_dir = get_app_data_dir()?;
             return Ok((exe_dir.to_path_buf(), app_data_dir.clone(), Some(app_data_dir)));
         }
     }
 
     // Development environment detection
-    println!("   Using development environment paths");
+    info!("   Using development environment paths");
     let backend_dir = find_backend_dir(&current_dir)?;
     let bin_dir = backend_dir.join("bin");
     let data_dir = bin_dir.join("data");
@@ -266,16 +266,8 @@ fn find_backend_dir(current_dir: &Path) -> Result<PathBuf, String> {
     }
 }
 
-fn is_tauri_context() -> bool {
-    env::var("TAURI_ENV").is_ok() || 
-    env::current_exe()
-        .map(|exe| {
-            let exe_str = exe.to_string_lossy();
-            exe_str.contains("tauri") || 
-            exe_str.contains(".app/Contents/MacOS/") ||
-            exe_str.contains("eltor") // Our app name
-        })
-        .unwrap_or(false)
+pub fn is_tauri_context() -> bool {
+    env::var("ELTOR_TAURI_MODE").is_ok()
 }
 
 fn get_app_data_dir() -> Result<PathBuf, String> {
@@ -287,15 +279,15 @@ fn get_app_data_dir() -> Result<PathBuf, String> {
     match fs::create_dir_all(&app_data_dir) {
         Ok(_) => Ok(app_data_dir),
         Err(e) => {
-            eprintln!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
-            eprintln!("   This might be due to running from a read-only DMG. Using temp directory fallback...");
+            info!("⚠️ Warning: Could not create app data directory {:?}: {}", app_data_dir, e);
+            info!("   This might be due to running from a read-only DMG. Using temp directory fallback...");
             
             // Fallback to temporary directory
             let temp_dir = std::env::temp_dir().join("eltor");
             fs::create_dir_all(&temp_dir)
                 .map_err(|e| format!("Failed to create temp data directory: {}", e))?;
             
-            eprintln!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
+            info!("✅ Using temporary directory for DMG compatibility: {:?}", temp_dir);
             Ok(temp_dir)
         }
     }
@@ -315,7 +307,7 @@ fn create_torrc_from_template(torrc_path: &Path, bin_dir: &Path) -> Result<(), S
     fs::write(torrc_path, content)
         .map_err(|e| format!("Failed to write torrc file: {}", e))?;
 
-    println!("✅ Created torrc file at: {:?}", torrc_path);
+    info!("✅ Created torrc file at: {:?}", torrc_path);
     Ok(())
 }
 
@@ -333,7 +325,7 @@ fn create_torrc_relay_from_template(torrc_relay_path: &Path, bin_dir: &Path) -> 
     fs::write(torrc_relay_path, content)
         .map_err(|e| format!("Failed to write torrc.relay file: {}", e))?;
 
-    println!("✅ Created torrc.relay file at: {:?}", torrc_relay_path);
+    info!("✅ Created torrc.relay file at: {:?}", torrc_relay_path);
     Ok(())
 }
 
@@ -357,7 +349,7 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
             let tor_data_path = dir.join("tor_data");
             // Ensure the directory exists and is writable
             if let Err(e) = fs::create_dir_all(&tor_data_path) {
-                println!("⚠️ Warning: Could not create tor data directory {:?}: {}", tor_data_path, e);
+                info!("⚠️ Warning: Could not create tor data directory {:?}: {}", tor_data_path, e);
                 return "/tmp/tor".to_string();
             }
             tor_data_path.to_string_lossy().to_string()

@@ -10,7 +10,7 @@ pub async fn get_debug_info(State(_state): State<AppState>) -> Result<ResponseJs
     let path_config = PathConfig::new().map_err(|e| format!("Failed to create path config: {}", e))?;
     
     // Create debug info
-    let debug_info = DebugInfo::with_path_config(path_config)
+    let debug_info = DebugInfo::with_path_config(path_config).await
         .map_err(|e| format!("Failed to create debug info: {}", e))?;
     
     // Convert to JSON value

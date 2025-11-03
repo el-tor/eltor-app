@@ -75,6 +75,26 @@ AccountingMax 0
 PaymentBolt12Offer $APP_ELTOR_LN_BOLT12
 PaymentRateMsats $APP_ELTOR_TOR_RELAY_PAYMENT_RATE_MSATS
 PaymentInterval $APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL
-PaymentInvervalRounds 10
+PaymentIntervalRounds 10
 PaymentCircuitMaxFee $APP_ELTOR_TOR_RELAY_PAYMENT_CIRCUIT_MAX_FEE
 PaymentLightningNodeConfig $APP_ELTOR_LN_CONFIG
+
+# LearnCircuitBuildTimeout = Don't wait to "learn" optimal timeouts, just build circuits immediately with whatever descriptors you have
+# CircuitBuildTimeout = Fixed timeout when not learning (10s for test networks, 30-60s for production)
+# These settings speed up boot from 5-30 seconds to only 2 seconds
+# Use this setting only if you have a background service download new descriptors every hour for security purposes
+LearnCircuitBuildTimeout 0
+CircuitBuildTimeout 10                   
+UseMicrodescriptors 1
+# Skip downloads on bootstrap
+FetchDirInfoEarly 0
+# No pre-fetching            
+FetchDirInfoExtraEarly 0
+# Accept 7 days old descriptors
+TestingDirConnectionMaxStall 604800
+# 24 hours in seconds
+MaxCircuitDirtiness 86400  
+CircuitPriorityHalflife 0
+
+#__DisablePredictedCircuits 0
+#__LeaveStreamsUnattached 0

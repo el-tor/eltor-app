@@ -48,26 +48,28 @@ export function useEltord(options: UseEltordOptions) {
     }
   }
 
-  const activate = async () => {
-    console.log(`🚀 [useEltord] Starting activation for mode: ${mode}`)
+  const activate = async (enableLogging?: boolean) => {
+    console.log(`🚀 [useEltord] Starting activation for mode: ${mode}, enableLogging: ${enableLogging}`)
     setLoading(true)
     try {
       // Since processes can now run independently, we don't need to check
       // if another mode is running. Each mode can be activated independently.
       
       console.log(`📡 [useEltord] Calling apiService.activateEltord mode: ${mode}`)
-      await apiService.activateEltord( mode)
+      await apiService.activateEltord(mode, enableLogging)
       console.log(`✅ [useEltord] Successfully activated ${mode} mode`)
       
-      // Check status from backend to sync state
-      await checkStatus()
-      
+      setTimeout(() => {
+        // Extra check after short delay to ensure state is synced
+        checkStatus()
+        setLoading(false)
+      }, 2000)
       console.log(`📊 [useEltord] Status checked after activation`)
     } catch (error) {
       console.error(`❌ [useEltord] Failed to activate eltord (${mode}):`, error)
+      setLoading(false)
       throw error
     } finally {
-      setLoading(false)
       console.log(`🏁 [useEltord] Finished activation attempt for ${mode}`)
     }
   }
@@ -79,10 +81,7 @@ export function useEltord(options: UseEltordOptions) {
       // Both Tauri and web mode now support mode-specific deactivation
       console.log(`📡 [useEltord] Calling apiService.deactivateEltord for ${mode}`)
       await apiService.deactivateEltord(mode)
-      
-      // Check status from backend to sync state
-      await checkStatus()
-      
+      checkStatus()
       console.log(`📊 [useEltord] Status checked after deactivation`)
     } catch (error) {
       console.error(`❌ [useEltord] Failed to deactivate eltord (${mode}):`, error)
@@ -191,15 +190,13 @@ export function useEltord(options: UseEltordOptions) {
         cleanup = unsubscribe
       })
 
-    // For web mode, poll status every 5 seconds
-    let interval: NodeJS.Timeout | undefined
-    if (!isTauri()) {
-      interval = setInterval(checkStatus, 5000)
-    }
+    // Poll status every 5 seconds (both Tauri and web mode)
+    // This ensures UI stays in sync even if events are missed
+    const interval = setInterval(checkStatus, 5000)
 
     return () => {
       cleanup?.()
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
     }
   }, [mode, dispatch])
 

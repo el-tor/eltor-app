@@ -17,7 +17,6 @@ import CopyableTextBox from '../components/CopyableTextBox'
 import { useDispatch, useSelector } from '../hooks'
 import { isTauri } from '../utils/platform'
 import { useEltord } from '../hooks/useEltord'
-import { LogEntry } from '../services/apiService'
 import LogViewer from '../components/LogViewer'
 // @ts-ignore
 import styles from '../globals.module.css'
@@ -117,7 +116,10 @@ export const Relay = () => {
       <Text>
         <b>2. Get Paid</b> - You will get paid out to this wallet offer
       </Text>
-      <CopyableTextBox text={wallet.bolt12Offer} limitChars={80} />
+      <CopyableTextBox 
+        text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'} 
+        limitChars={80} 
+      />
       <Text>
         <b>3. OS Firewall</b> - Make sure to open this onion router port on your
         OS firewall

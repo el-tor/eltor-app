@@ -19,7 +19,9 @@
         "minHeight": 600,
         "resizable": true,
         "fullscreen": false,
-        "devtools": true
+        "devtools": true,
+        "decorations": true,
+        "transparent": true
       }
     ],
     "security": {
@@ -41,6 +43,7 @@
       "../../backend/bin/torrc.relay.template",
       "../../backend/bin/phoenix-cli",
       "../../backend/bin/phoenixd",
+      "../../backend/bin/eltord",
       "../../backend/bin/IP2LOCATION-LITE-DB3.BIN",
       "icons/tray-icon.png",
       "icons/tray-icon@2x.png"

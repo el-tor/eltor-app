@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
+use log::info;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpLocationResponse {
@@ -32,7 +34,7 @@ pub fn init_ip_database(db_path: PathBuf) -> Result<(), String> {
     IP_DB.set(Some(Arc::new(Mutex::new(db))))
         .map_err(|_| "Database already initialized".to_string())?;
     
-    println!("✅ IP2Location database loaded from: {}", db_path.display());
+    info!("✅ IP2Location database loaded from: {}", db_path.display());
     Ok(())
 }
 
@@ -66,7 +68,7 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
         }
     };    // Extract coordinates from the record or use defaults
     let (lat, lng) = if let (Some(latitude), Some(longitude)) = (location_record.latitude, location_record.longitude) {
-        println!("✅ Using exact coordinates from IP database: ({}, {})", latitude, longitude);
+        info!("✅ Using exact coordinates from IP database: ({}, {})", latitude, longitude);
         (latitude as f64, longitude as f64)
     } else {
         // Fallback to city/country coordinates
@@ -74,13 +76,13 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
             .map(|c| c.as_ref())
             .unwrap_or("Unknown");
 
-        println!("🔍 No coordinates in IP record, falling back to city lookup for: '{}'", city_name);
-        println!("🔍 Raw city from database: {:?}", location_record.city);
+        info!("🔍 No coordinates in IP record, falling back to city lookup for: '{}'", city_name);
+        info!("🔍 Raw city from database: {:?}", location_record.city);
         
         if !city_name.is_empty() && city_name != "-" && city_name != "Unknown" {
             // Try city coordinates first
             if let Some(coords) = city_to_coordinates(city_name) {
-                println!("📍 City '{}' mapped to known coordinates: ({}, {})", city_name, coords.0, coords.1);
+                info!("📍 City '{}' mapped to known coordinates: ({}, {})", city_name, coords.0, coords.1);
                 coords
             } else {
                 // Unknown city, try region fallback
@@ -88,17 +90,17 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
                     .map(|r| r.as_ref())
                     .unwrap_or("Unknown");
                 
-                println!("🌍 Unknown city '{}', trying region '{}' for coordinates", city_name, region_name);
+                info!("🌍 Unknown city '{}', trying region '{}' for coordinates", city_name, region_name);
                 
                 // For US regions, try to map them to state center coordinates
                 if let Some(coords) = us_region_to_coordinates(region_name) {
-                    println!("📍 US region '{}' mapped to coordinates: ({}, {})", region_name, coords.0, coords.1);
+                    info!("📍 US region '{}' mapped to coordinates: ({}, {})", region_name, coords.0, coords.1);
                     coords
                 } else {
                     // Final fallback: country coordinates, then hash if needed
                     let country_code = "US"; // Default for now
                     let coords = country_center_coordinates(country_code);
-                    println!("🏳️ Falling back to country '{}' coordinates: ({}, {})", country_code, coords.0, coords.1);
+                    info!("🏳️ Falling back to country '{}' coordinates: ({}, {})", country_code, coords.0, coords.1);
                     coords
                 }
             }
@@ -108,17 +110,17 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
                 .map(|r| r.as_ref())
                 .unwrap_or("Unknown");
             
-            println!("🌍 No valid city, trying region '{}' for coordinates", region_name);
+            info!("🌍 No valid city, trying region '{}' for coordinates", region_name);
             
             // For US regions, try to map them to state center coordinates
             if let Some(coords) = us_region_to_coordinates(region_name) {
-                println!("📍 US region '{}' mapped to coordinates: ({}, {})", region_name, coords.0, coords.1);
+                info!("📍 US region '{}' mapped to coordinates: ({}, {})", region_name, coords.0, coords.1);
                 coords
             } else {
                 // Final fallback to country coordinates
                 let country_code = "US"; // Default for now
                 let coords = country_center_coordinates(country_code);
-                println!("🏳️ Falling back to country '{}' coordinates: ({}, {})", country_code, coords.0, coords.1);
+                info!("🏳️ Falling back to country '{}' coordinates: ({}, {})", country_code, coords.0, coords.1);
                 coords
             }
         }
@@ -138,7 +140,7 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
         .unwrap_or("Unknown")
         .to_string();
 
-    println!("📊 Final extracted data - City: '{}', Region: '{}', Coordinates: ({}, {})", 
+    info!("📊 Final extracted data - City: '{}', Region: '{}', Coordinates: ({}, {})", 
              city, region, lat, lng);
 
     // Extract country information from the location record
@@ -161,7 +163,7 @@ pub fn lookup_ip_location(ip: &str) -> Result<IpLocationResponse, String> {
         ("Unknown".to_string(), "XX".to_string())
     };
 
-    println!("🏳️ Country extracted - Name: '{}', Code: '{}'", country, country_code);
+    info!("🏳️ Country extracted - Name: '{}', Code: '{}'", country, country_code);
 
     Ok(IpLocationResponse {
         ip: ip.to_string(),
@@ -335,7 +337,7 @@ fn city_to_coordinates(city: &str) -> Option<(f64, f64)> {
         "singapore" => Some((1.3521, 103.8198)),
         _ => {
             // Log unknown cities so we can add them to the database
-            println!("❓ Unknown city '{}' (lowercase: '{}') - no coordinates found", city, city.to_lowercase());
+            info!("❓ Unknown city '{}' (lowercase: '{}') - no coordinates found", city, city.to_lowercase());
             None
         }
     }

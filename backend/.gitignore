@@ -56,5 +56,6 @@ temp/
 !**/torrc.relay.template
 !**/torrc_parser.rs
 
-payments_sent.json
-payments_received.json
+payments.json*
+payments_sent.json*
+payments_received.json*

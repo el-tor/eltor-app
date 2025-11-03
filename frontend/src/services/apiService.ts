@@ -17,8 +17,31 @@ const loadTauriAPIs = async () => {
 
 // Web API base URL - construct from current location
 const getApiBaseUrl = () => {
-  // Just use the current location's protocol, hostname, and port
-  // This works because the frontend is served from the same server as the API
+  // In Tauri mode, we need to use the backend server port, not the frontend port
+  if (isTauri()) {
+    // Prefer explicit config value if available
+    if (config.API_BASE_URL && !config.API_BASE_URL.includes('undefined')) {
+      console.log('apiService - Using configured API_BASE_URL:', config.API_BASE_URL)
+      return config.API_BASE_URL
+    }
+    
+    // Derive from window.location based on port
+    // Dev mode: frontend on 1420, backend on 5174
+    // Prod mode: both on same port (backend serves frontend)
+    if (window.location.port === '1420') {
+      // Development mode - use dev backend port
+      const backendUrl = `${window.location.protocol}//${window.location.hostname}:5174`
+      console.log('apiService - Tauri dev mode, using backend URL:', backendUrl)
+      return backendUrl
+    } else {
+      // Production/packaged mode - use current host/port
+      const backendUrl = `${window.location.protocol}//${window.location.host}`
+      console.log('apiService - Tauri prod mode, using current location:', backendUrl)
+      return backendUrl
+    }
+  }
+  
+  // In web mode, frontend and backend are on the same server
   const currentUrl = `${window.location.protocol}//${window.location.host}`
   console.log('apiService - Using current location as API base:', currentUrl)
   return currentUrl
@@ -73,9 +96,16 @@ class ApiService {
   // Central event dispatcher that all Tauri events go through
   private dispatchEvent(eventName: string, payload: any) {
     console.log(`📡 Dispatching event: ${eventName}`, payload)
+    console.log(`📡 Number of subscribers: ${this.eventSubscriptions.size}`)
+    
+    let callbackCount = 0
     this.eventSubscriptions.forEach((subscription) => {
+      console.log(`📞 Calling subscription ${subscription.id} with event ${eventName}`)
       subscription.callback(eventName, payload)
+      callbackCount++
     })
+    
+    console.log(`📡 Dispatched to ${callbackCount} callbacks`)
   }
 
   // Setup the Tauri event system only once
@@ -121,11 +151,15 @@ class ApiService {
 
     const subscriptionId = this.generateSubscriptionId()
     console.log(`📝 Creating event subscription: ${subscriptionId}`)
+    console.log(`📝 Total subscriptions before add: ${this.eventSubscriptions.size}`)
 
     this.eventSubscriptions.set(subscriptionId, {
       id: subscriptionId,
       callback,
     })
+    
+    console.log(`📝 Total subscriptions after add: ${this.eventSubscriptions.size}`)
+    console.log(`📝 Event system setup: ${this.isEventSystemSetup}`)
 
     // Return unsubscribe function
     return () => {
@@ -145,21 +179,22 @@ class ApiService {
   // Eltord methods
   async activateEltord(
     mode: 'client' | 'relay' | 'both',
+    enableLogging?: boolean,
   ): Promise<string> {
     if (isTauri()) {
       await loadTauriAPIs()
       return await tauriInvoke('activate_eltord_invoke', {
         mode: mode || 'client',
+        enableLogging: enableLogging ?? false,
       })
     } else {
       // Build endpoint based on provided parameters
-      let endpoint = `${getApiBaseUrl()}/api/eltord/activate`
+      let endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(mode)}`
       
-        // Only mode specified
-        endpoint = `${getApiBaseUrl()}/api/eltord/activate/${encodeURIComponent(
-          mode,
-        )}`
-      
+      // Add query parameter for logging if specified
+      if (enableLogging !== undefined) {
+        endpoint += `?enable_logging=${enableLogging}`
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -231,40 +266,124 @@ class ApiService {
     return await this.subscribeToEvents(callback)
   }
 
-  // Log streaming for web mode (Server-Sent Events)
-  createLogStream(
-    onLog: (log: LogEntry) => void,
-    onError?: (error: Error) => void,
-  ): () => void {
+  // Get recent logs (last 100 lines)
+  async getRecentLogs(mode: 'client' | 'relay' = 'client'): Promise<string[]> {
     if (isTauri()) {
-      // In Tauri mode, logs come through events
-      console.warn(
-        'Log streaming not available in Tauri mode - use listenToEvents instead',
+      await loadTauriAPIs()
+      return await tauriInvoke('get_eltord_logs_invoke', { mode })
+    } else {
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/eltord/logs/${mode}`,
       )
-      return () => {}
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent logs')
+      }
+      const data = await response.json()
+      return data.logs
     }
+  }
 
-    const eventSource = new EventSource(`${getApiBaseUrl()}/api/eltord/logs`)
+  // Log streaming for both web (SSE) and Tauri (events)
+  async createLogStream(
+    mode: 'client' | 'relay',
+    onLog: (log: string) => void,
+    onError?: (error: Error) => void,
+  ): Promise<() => void> {
+    if (isTauri()) {
+      // In Tauri mode, use the stream command which emits 'eltord-log' events
+      await loadTauriAPIs()
+      
+      console.log(`📡 Starting Tauri log stream for mode: ${mode}`)
+      console.log(`📡 Tauri APIs loaded:`, { 
+        tauriInvoke: !!tauriInvoke, 
+        tauriListen: !!tauriListen 
+      })
+      
+      // Subscribe to log events through the centralized event system FIRST
+      console.log(`📡 Setting up event subscription for mode: ${mode}`)
+      const unsubscribe = await this.subscribeToEvents((eventName, payload) => {
+        console.log(`📬 Event received: ${eventName}`, payload)
+        if (eventName === 'eltord-log') {
+          console.log(`📨 Tauri received log event for ${mode}:`, payload)
+          // Payload is the log line string
+          onLog(payload)
+        } else {
+          console.log(`⚠️ Ignoring event: ${eventName}`)
+        }
+      })
+      console.log(`✅ Event subscription created`)
+      
+      // Then start the stream (this will emit 'eltord-log' events)
+      console.log(`📡 Invoking stream_eltord_logs_invoke for mode: ${mode}`)
+      tauriInvoke('stream_eltord_logs_invoke', { mode })
+        .then(() => {
+          console.log(`✅ stream_eltord_logs_invoke completed successfully for mode: ${mode}`)
+        })
+        .catch((error: any) => {
+          console.error(`❌ Failed to start Tauri log stream for ${mode}:`, error)
+          onError?.(error)
+        })
 
-    eventSource.onmessage = (event) => {
-      try {
-        const logEntry: LogEntry = JSON.parse(event.data)
-        onLog(logEntry)
-      } catch (error) {
-        console.error('Failed to parse log entry:', error)
-        onError?.(new Error('Failed to parse log entry'))
+      console.log(`✅ Tauri log stream setup complete for mode: ${mode}`)
+      return unsubscribe
+    } else {
+      // In Web mode, use Server-Sent Events
+      const url = `${getApiBaseUrl()}/api/eltord/logs/stream/${mode}`
+      console.log(`📡 Creating SSE connection to: ${url}`)
+      
+      const eventSource = new EventSource(url)
+
+      console.log(`📡 SSE EventSource created, readyState: ${eventSource.readyState}`)
+
+      // Listen for connection open
+      eventSource.addEventListener('open', () => {
+        console.log(`✅ SSE connection opened for mode: ${mode}`)
+      })
+
+      // Listen for "log" events (backend sends with .event("log"))
+      eventSource.addEventListener('log', (event: MessageEvent) => {
+        console.log(`📨 SSE received log event:`, event.data)
+        try {
+          // The backend sends the log line as plain text
+          onLog(event.data)
+        } catch (error) {
+          console.error('Failed to process log entry:', error)
+          onError?.(new Error('Failed to process log entry'))
+        }
+      })
+
+      // Listen for any message (including keep-alive)
+      eventSource.addEventListener('message', (event: MessageEvent) => {
+        console.log(`📨 SSE received message event:`, event.data)
+      })
+
+      eventSource.onerror = (error) => {
+        console.error(`❌ SSE error for mode ${mode}, readyState: ${eventSource.readyState}`, error)
+        console.error('SSE error details:', {
+          type: error.type,
+          target: error.target,
+          readyState: eventSource.readyState,
+        })
+        onError?.(new Error('Log stream connection error'))
+        // Don't close immediately, let it try to reconnect
+      }
+
+      // Return cleanup function
+      return () => {
+        console.log(`🧹 Closing SSE log stream for mode: ${mode}`)
+        eventSource.close()
       }
     }
+  }
 
-    eventSource.onerror = (error) => {
-      console.error('SSE error:', error)
-      onError?.(new Error('Log stream connection error'))
+  // Stop log streaming (Tauri only - for web mode, just close the EventSource via cleanup function)
+  async stopLogStream(mode: 'client' | 'relay'): Promise<void> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      console.log(`🛑 Stopping Tauri log stream for mode: ${mode}`)
+      await tauriInvoke('stop_eltord_logs_invoke', { mode })
     }
-
-    // Return cleanup function
-    return () => {
-      eventSource.close()
-    }
+    // For web mode, the cleanup function returned by createLogStream handles closing
   }
 
   // IP Location lookup
