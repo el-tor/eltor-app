@@ -7,7 +7,7 @@ use std::{env};
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent};
+use tauri::{command, generate_context, AppHandle, Builder, Emitter, Manager, State, WindowEvent, Theme};
 use tokio::sync::RwLock;
 use log::info;
 
@@ -1025,6 +1025,23 @@ fn main() {
                 info!("   App will continue without system tray");
             } else {
                 info!("✅ System tray initialized successfully");
+            }
+
+            // Configure window to match app's dark theme on macOS
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::Theme;
+                // Get the first/main window
+                if let Some(main_window) = app.webview_windows().values().next() {
+                    // Set theme to Dark to match the app's dark background
+                    if let Err(e) = main_window.set_theme(Some(Theme::Dark)) {
+                        info!("⚠️  Failed to set dark theme: {}", e);
+                    } else {
+                        info!("✅ Window theme set to dark to match app background");
+                    }
+                } else {
+                    info!("⚠️  No main window found for theme configuration");
+                }
             }
 
             // Re-initialize with proper app context for production builds
