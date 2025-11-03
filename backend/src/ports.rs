@@ -249,7 +249,7 @@ pub async fn cleanup_ports_with_torrc(torrc_filename: &str) -> Result<(), String
                             port_info.port, port_info.description, pid, process_name
                         );
 
-                        print!("   Killing process... ");
+                        // print!("   Killing process... ");
                         match kill_process(pid) {
                             Ok(()) => {
                                 info!("✅ Killed successfully");
@@ -324,7 +324,7 @@ pub async fn cleanup_tor_ports_only(torrc_filename: &str) -> Result<(), String> 
                             port_info.port, port_info.description, pid, process_name
                         );
 
-                        print!("   Killing process... ");
+                        // print!("   Killing process... ");
                         match kill_process(pid) {
                             Ok(()) => {
                                 info!("✅ Killed successfully");

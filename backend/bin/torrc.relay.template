@@ -75,7 +75,7 @@ AccountingMax 0
 PaymentBolt12Offer $APP_ELTOR_LN_BOLT12
 PaymentRateMsats $APP_ELTOR_TOR_RELAY_PAYMENT_RATE_MSATS
 PaymentInterval $APP_ELTOR_TOR_RELAY_PAYMENT_INTERVAL
-PaymentInvervalRounds 10
+PaymentIntervalRounds 10
 PaymentCircuitMaxFee $APP_ELTOR_TOR_RELAY_PAYMENT_CIRCUIT_MAX_FEE
 PaymentLightningNodeConfig $APP_ELTOR_LN_CONFIG
 

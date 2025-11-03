@@ -64,9 +64,9 @@ backend/target/
 
 data/
 
-payments.json**
-payments_sent.json**
-payments_received.json**
+payments.json*
+payments_sent.json*
+payments_received.json*
 
 
 .github/instructions/instructions.instructions.md
