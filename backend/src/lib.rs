@@ -2,17 +2,18 @@
 // This allows the backend to be imported as a library by Tauri
 
 use std::sync::Arc;
-use axum::extract::path;
 use tokio::sync::RwLock;
-use log::{Log, Metadata, Record, info};
+use log::{Log, Metadata, Record, info, warn};
 use chrono::Utc;
 
+pub mod arti;
 pub mod eltor;
 pub mod ip;
 pub mod lightning;
 pub mod paths;
 pub mod ports;
 pub mod routes;
+pub mod socks;
 pub mod state;
 pub mod static_files;
 pub mod torrc_parser;
@@ -20,10 +21,12 @@ pub mod wallet;
 pub mod debug_info;
 
 // Re-export commonly used types for convenience
+pub use arti::{start_arti_with_eltord, stop_arti, is_arti_running, get_arti_status, cleanup_arti};
 pub use eltor::{
     EltorActivateParams, EltorDeactivateParams,
     EltorManager, EltorStatus, cleanup_all_eltord_processes,
 };
+pub use socks::{start_socks_router, stop_socks_router, is_socks_router_running, SocksRouterConfig};
 pub use lightning::{LightningNode, ListTransactionsResponse, WalletBalanceResponse};
 pub use paths::PathConfig;
 pub use ports::{
@@ -41,7 +44,7 @@ pub use routes::ip::{init_ip_database, lookup_ip_location, IpLocationResponse};
 // Re-export Phoenix download functions
 pub use routes::phoenix::{download_phoenix, download_phoenix_default, start_phoenix_with_config, PhoenixStartResponse};
 
-use crate::eltor::{activate_eltord_process, EltorMode};
+use crate::eltor::EltorMode;
 
 // Custom logger that captures all log messages and sends them to the broadcast channel
 struct BroadcastLogger {
@@ -157,7 +160,7 @@ pub fn create_app_state(use_phoenixd_embedded: bool, path_config: PathConfig) ->
 
 /// Set up custom logger to capture ALL logs (including from eltor library) and send them to broadcast channel
 /// This should be called early in the application startup, before any other logging occurs
-pub fn setup_broadcast_logger(state: AppState) -> Result<(), String> {
+pub fn setup_broadcast_logger(_state: AppState) -> Result<(), String> {
     // let broadcast_logger = BroadcastLogger::new(state);
     
     // // Initialize the custom logger FIRST to capture all subsequent log output
@@ -426,7 +429,17 @@ pub async fn stream_eltord_logs_internal(
 pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String> {
     info!("🛑 Starting comprehensive app shutdown cleanup...");
 
-    // Step 1: Stop managed eltord processes (from EltorManager)
+    // Step 1: Stop SOCKS router
+    info!("🛑 Stopping SOCKS Router...");
+    if let Err(e) = crate::socks::stop_socks_router().await {
+        warn!("⚠️ Failed to stop SOCKS router: {}", e);
+    }
+
+    // Step 2: Stop Arti process
+    info!("🛑 Stopping Arti...");
+    crate::arti::cleanup_arti().await;
+
+    // Step 3: Stop managed eltord processes (from EltorManager)
     match deactivate_eltord(state.clone(), EltorMode::Relay).await {
         Ok(msg) => info!("✅ Relay: {}", msg),
         Err(e) => {
@@ -438,10 +451,10 @@ pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String
         }
     }
 
-    // Step 1b: Also cleanup any PID-file based eltord processes (failsafe)
+    // Step 4: Also cleanup any PID-file based eltord processes (failsafe)
     cleanup_all_eltord_processes().await;
 
-    // Step 2: Stop phoenixd process if running
+    // Step 5: Stop phoenixd process if running
     let app_state = state.read().await;
     let phoenixd_state = app_state.clone(); // Clone the AppState for phoenixd functions
     drop(app_state);
@@ -457,7 +470,7 @@ pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String
         }
     }
 
-    // Step 3: Clean up all ports (including phoenixd)
+    // Step 6: Clean up all ports (including phoenixd)
     info!("🧹 Cleaning up all application ports...");
     match cleanup_ports_with_torrc(&phoenixd_state.torrc_file_name).await {
         Ok(_) => info!("✅ All ports cleaned up successfully"),
