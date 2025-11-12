@@ -56,6 +56,18 @@ async fn main() {
         }
     }
 
+    // Show Arti configuration
+    let arti_socks_port = env::var("APP_ARTI_SOCKS_PORT").unwrap_or_else(|_| "18050".to_string());
+    info!("🔧 Arti SOCKS proxy port: {}", arti_socks_port);
+    
+    // Show SOCKS router configuration
+    let socks_router_port = env::var("APP_SOCKS_ROUTER_PORT").unwrap_or_else(|_| "18049".to_string());
+    let eltord_socks_port = env::var("APP_ELTORD_SOCKS_PORT").unwrap_or_else(|_| "9150".to_string());
+    info!("🔧 SOCKS Router configuration:");
+    info!("   Listen port: {}", socks_router_port);
+    info!("   Arti SOCKS port: {}", arti_socks_port);
+    info!("   eltord SOCKS port: {}", eltord_socks_port);
+
     // Clean up any processes using our ports
     info!("🧹 Starting port cleanup...");
     if let Err(e) = eltor_backend::ports::cleanup_ports_startup().await {
@@ -109,6 +121,15 @@ async fn main() {
     if let Some(node) = lightning_node {
         state.set_lightning_node(node);
     }
+
+    // Start SOCKS router in background
+    info!("🔀 Starting SOCKS Router...");
+    tokio::spawn(async {
+        if let Err(e) = eltor_backend::start_socks_router().await {
+            info!("⚠️ SOCKS Router failed: {}", e);
+        }
+    });
+    info!("✅ SOCKS Router started in background");
 
     // Initialize shared EltorManager
     let state_arc = std::sync::Arc::new(tokio::sync::RwLock::new(state.clone()));
@@ -215,7 +236,8 @@ async fn main() {
     info!("📡 Running on {}", display_address);
     info!("🌐 Frontend served at {}", local_url);
     info!("🔗 Health check: {}/health", local_url);
-    info!("📋 API endpoints:");
+    info!("� SOCKS Router: {}:{}", bind_address, socks_router_port);
+    info!("�📋 API endpoints:");
     info!("   POST /api/eltord/activate/:mode");
     info!("   POST /api/eltord/deactivate/:mode");
     info!("   GET  /api/eltord/status");
@@ -248,6 +270,14 @@ async fn main() {
             .expect("Failed to install CTRL+C signal handler");
         
         info!("🛑 Received shutdown signal (CTRL+C), cleaning up...");
+        
+        // Stop SOCKS router
+        if let Err(e) = eltor_backend::stop_socks_router().await {
+            info!("⚠️ Failed to stop SOCKS router: {}", e);
+        }
+        
+        // Stop Arti process
+        eltor_backend::cleanup_arti().await;
         
         // Cleanup all eltord processes
         eltor_backend::cleanup_all_eltord_processes().await;
