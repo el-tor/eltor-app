@@ -556,10 +556,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let app_clone = app.clone();
     
     // Try to load tray icon from resources, with fallback
+    // On Linux, use white icon for better visibility on dark panels
+    #[cfg(target_os = "linux")]
+    let icon_name = "tray-icon-white.png";
+    #[cfg(not(target_os = "linux"))]
+    let icon_name = "tray-icon.png";
+    
     let tray_icon = match app.path().resource_dir() {
         Ok(resource_dir) => {
             // Icons are in Resources/icons/ directory
-            let icon_path = resource_dir.join("icons").join("tray-icon.png");
+            let icon_path = resource_dir.join("icons").join(icon_name);
             info!("🖼️  Attempting to load tray icon from: {:?}", icon_path);
             
             match tauri::image::Image::from_path(&icon_path) {
@@ -572,16 +578,26 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     info!("   Trying local path fallback...");
                     
                     // Fallback to local path (development mode)
-                    match tauri::image::Image::from_path("icons/tray-icon.png") {
+                    let fallback_path = format!("icons/{}", icon_name);
+                    match tauri::image::Image::from_path(&fallback_path) {
                         Ok(img) => {
                             info!("✅ Tray icon loaded from local path");
                             img
                         }
                         Err(e) => {
                             info!("⚠️  Failed to load tray icon from local path: {}", e);
-                            info!("   Using default icon");
-                            // Create a simple default icon (empty/placeholder)
-                            return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                            info!("   Trying default tray-icon.png as final fallback...");
+                            // Final fallback to standard icon
+                            match tauri::image::Image::from_path("icons/tray-icon.png") {
+                                Ok(img) => {
+                                    info!("✅ Tray icon loaded from fallback");
+                                    img
+                                }
+                                Err(e) => {
+                                    info!("⚠️  Failed to load any tray icon: {}", e);
+                                    return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                                }
+                            }
                         }
                     }
                 }
@@ -591,14 +607,24 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             info!("⚠️  Could not get resource directory: {}", e);
             info!("   Trying local path...");
             
-            match tauri::image::Image::from_path("icons/tray-icon.png") {
+            let fallback_path = format!("icons/{}", icon_name);
+            match tauri::image::Image::from_path(&fallback_path) {
                 Ok(img) => {
                     info!("✅ Tray icon loaded from local path");
                     img
                 }
                 Err(e) => {
                     info!("⚠️  Failed to load tray icon: {}", e);
-                    return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                    // Final fallback
+                    match tauri::image::Image::from_path("icons/tray-icon.png") {
+                        Ok(img) => {
+                            info!("✅ Tray icon loaded from fallback");
+                            img
+                        }
+                        Err(e) => {
+                            return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                        }
+                    }
                 }
             }
         }

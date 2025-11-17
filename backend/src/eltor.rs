@@ -1245,29 +1245,26 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 .arg("-k");
         }
         
-        cmd.current_dir(&path_config.bin_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .pre_exec(|| {
-                // Create new session - completely detach from parent
-                unsafe {
+        unsafe {
+            cmd.current_dir(&path_config.bin_dir)
+                .pre_exec(|| {
+                    // Create new session - completely detach from parent
                     libc::setsid();
-                }
-                
-                // Close all file descriptors except stdin/out/err
-                // This prevents inheriting any open sockets or files
-                let max_fd = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
-                if max_fd > 0 {
-                    for fd in 3..max_fd {
-                        unsafe { libc::close(fd as i32); }
+                    
+                    // Close all file descriptors except stdin/out/err
+                    // This prevents inheriting any open sockets or files
+                    let max_fd = libc::sysconf(libc::_SC_OPEN_MAX);
+                    if max_fd > 0 {
+                        for fd in 3..max_fd {
+                            libc::close(fd as i32);
+                        }
                     }
-                }
-                
-                Ok(())
-            });
+                    
+                    Ok(())
+                });
+        }
         
-        match unsafe { cmd.spawn() } {
+        match cmd.spawn() {
             Ok(child) => {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
