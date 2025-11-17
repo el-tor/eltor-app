@@ -1190,7 +1190,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                             warn!("⚠️ SOCKS Router failed to start: {}", e);
                             info!("   This is non-critical - eltord will still function without the SOCKS router");
                         } else {
-                            info!("✅ SOCKS Router started successfully on port 18049");
+                            let router_port = std::env::var("APP_ELTOR_SOCKS_ROUTER_PORT")
+                                .unwrap_or_else(|_| "18048".to_string());
+                            info!("✅ SOCKS Router started successfully on port {}", router_port);
                         }
                     });
                 });
@@ -1289,7 +1291,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                             warn!("⚠️ SOCKS Router failed to start: {}", e);
                             info!("   This is non-critical - eltord will still function without the SOCKS router");
                         } else {
-                            info!("✅ SOCKS Router started successfully on port 18049");
+                            let router_port = std::env::var("APP_ELTOR_SOCKS_ROUTER_PORT")
+                                .unwrap_or_else(|_| "18048".to_string());
+                            info!("✅ SOCKS Router started successfully on port {}", router_port);
                         }
                     });
                 });
@@ -1363,7 +1367,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                             warn!("⚠️ SOCKS Router failed to start: {}", e);
                             info!("   This is non-critical - eltord will still function without the SOCKS router");
                         } else {
-                            info!("✅ SOCKS Router started successfully on port 18049");
+                            let router_port = std::env::var("APP_ELTOR_SOCKS_ROUTER_PORT")
+                                .unwrap_or_else(|_| "18048".to_string());
+                            info!("✅ SOCKS Router started successfully on port {}", router_port);
                         }
                     });
                 });

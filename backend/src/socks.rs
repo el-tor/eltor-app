@@ -38,16 +38,20 @@ enum AddressType {
 #[derive(Clone, Debug)]
 pub struct SocksRouterConfig {
     pub listen_port: u16,
+    pub listen_addr: Option<IpAddr>,
     pub arti_socks_port: u16,
-    pub eltord_socks_port: u16,
+    pub eltord_client_socks_port: u16,
+    pub eltord_relay_socks_port: u16,
 }
 
 impl Default for SocksRouterConfig {
     fn default() -> Self {
         Self {
-            listen_port: 18049,
+            listen_port: 18048,
+            listen_addr: None, // Defaults to 127.0.0.1 if None
             arti_socks_port: 18050,
-            eltord_socks_port: 18058, // Updated to match eltord's actual SOCKS port
+            eltord_client_socks_port: 18058, // Client mode SOCKS port
+            eltord_relay_socks_port: 18057, // Relay mode SOCKS port
         }
     }
 }
@@ -86,19 +90,34 @@ impl std::fmt::Display for TargetAddress {
 /// Environment variable configuration support
 impl SocksRouterConfig {
     pub fn from_env() -> Self {
+        // Helper function to parse address and port from "IP:PORT" or just "PORT" format
+        fn parse_addr_port(env_var: &str) -> (Option<IpAddr>, Option<u16>) {
+            if let Ok(s) = std::env::var(env_var) {
+                if let Some((ip_str, port_str)) = s.split_once(':') {
+                    // Parse both IP and port
+                    let ip = ip_str.parse::<IpAddr>().ok();
+                    let port = port_str.parse::<u16>().ok();
+                    (ip, port)
+                } else {
+                    // Just a port number
+                    (None, s.parse::<u16>().ok())
+                }
+            } else {
+                (None, None)
+            }
+        }
+        
+        let (router_ip, router_port) = parse_addr_port("APP_ELTOR_SOCKS_ROUTER_PORT");
+        let (_, arti_port) = parse_addr_port("APP_ARTI_SOCKS_PORT");
+        let (_, eltord_client_port) = parse_addr_port("APP_ELTOR_TOR_SOCKS_PORT");
+        let (_, eltord_relay_port) = parse_addr_port("APP_ELTOR_TOR_RELAY_SOCKS_PORT");
+        
         Self {
-            listen_port: std::env::var("APP_SOCKS_ROUTER_PORT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(18049),
-            arti_socks_port: std::env::var("APP_ARTI_SOCKS_PORT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(18050),
-            eltord_socks_port: std::env::var("APP_ELTORD_SOCKS_PORT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(18058),
+            listen_port: router_port.unwrap_or(18048),
+            listen_addr: router_ip,
+            arti_socks_port: arti_port.unwrap_or(18050),
+            eltord_client_socks_port: eltord_client_port.unwrap_or(18058),
+            eltord_relay_socks_port: eltord_relay_port.unwrap_or(18057),
         }
     }
 }
@@ -119,13 +138,16 @@ impl SocksRouter {
     
     /// Start the SOCKS router server
     pub async fn start(&mut self) -> Result<(), String> {
-        let bind_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), self.config.listen_port);
+        // Use provided IP address or default to 127.0.0.1 (localhost)
+        let ip = self.config.listen_addr.unwrap_or(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        let bind_addr = SocketAddr::new(ip, self.config.listen_port);
         
         match TcpListener::bind(bind_addr).await {
             Ok(listener) => {
                 info!("🔀 SOCKS Router started on {}", bind_addr);
                 info!("   .onion domains -> Arti SOCKS (port {})", self.config.arti_socks_port);
-                info!("   Other domains -> eltord SOCKS (port {})", self.config.eltord_socks_port);
+                info!("   Other domains -> eltord client SOCKS (port {}) or relay SOCKS (port {})", 
+                    self.config.eltord_client_socks_port, self.config.eltord_relay_socks_port);
                 
                 self.listener = Some(listener);
                 Ok(())
@@ -209,8 +231,17 @@ async fn handle_socks_connection(
         debug!("🧅 Routing .onion domain to Arti (port {}) for {}", config.arti_socks_port, client_addr);
         handle_via_proxy(client_stream, &buffer[..n], config.arti_socks_port).await
     } else {
-        debug!("🌐 Routing regular domain to eltord (port {}) for {}", config.eltord_socks_port, client_addr);
-        handle_via_proxy(client_stream, &buffer[..n], config.eltord_socks_port).await
+        // Check which eltord port is available (client or relay)
+        // Try to connect to client port first
+        let eltord_port = if tokio::net::TcpStream::connect(format!("127.0.0.1:{}", config.eltord_client_socks_port)).await.is_ok() {
+            debug!("🌐 Using eltord client port {} for {}", config.eltord_client_socks_port, client_addr);
+            config.eltord_client_socks_port
+        } else {
+            debug!("🌐 Using eltord relay port {} for {}", config.eltord_relay_socks_port, client_addr);
+            config.eltord_relay_socks_port
+        };
+        
+        handle_via_proxy(client_stream, &buffer[..n], eltord_port).await
     }
 }
 

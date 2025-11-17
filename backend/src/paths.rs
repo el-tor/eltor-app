@@ -373,7 +373,17 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
         "$APP_ELTOR_TOR_SOCKS_PORT",
         &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "0.0.0.0:18058".to_string()),
     );
-    
+
+    content = content.replace(
+        "$APP_ELTOR_SOCKS_ROUTER_PORT",
+        &env::var("APP_ELTOR_SOCKS_ROUTER_PORT").unwrap_or_else(|_| "0.0.0.0:18048".to_string()),
+    );
+
+    content = content.replace(
+        "$APP_ARTI_SOCKS_PORT",
+        &env::var("APP_ARTI_SOCKS_PORT").unwrap_or_else(|_| "18050".to_string()),
+    );
+
     content = content.replace(
         "$APP_ELTOR_TOR_CONTROL_PORT",
         &env::var("APP_ELTOR_TOR_CONTROL_PORT").unwrap_or_else(|_| "9992".to_string()),

@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::env;
 use crate::paths::PathConfig;
 use crate::torrc_parser::{get_torrc_config, parse_port_from_config, get_torrc_txt};
+use crate::socks::SocksRouterConfig;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DebugInfo {
@@ -21,6 +22,8 @@ pub struct DebugInfo {
     pub architecture: String,
     pub torrc_file: String,
     pub torrc_relay_file: String,
+    pub socks_router_port: Option<String>,
+    pub arti_socks_port: Option<String>,
 }
 
 impl DebugInfo {
@@ -85,6 +88,15 @@ impl DebugInfo {
         let torrc_relay_file = get_torrc_txt(&torrc_relay_path).await
             .unwrap_or_else(|_| "Failed to read torrc relay file".to_string());
         
+        // Get SOCKS router configuration (same way the actual router reads it)
+        let socks_config = SocksRouterConfig::from_env();
+        let socks_router_port = if let Some(ip) = socks_config.listen_addr {
+            Some(format!("{}:{}", ip, socks_config.listen_port))
+        } else {
+            Some(format!("127.0.0.1:{}", socks_config.listen_port))
+        };
+        let arti_socks_port = Some(socks_config.arti_socks_port.to_string());
+        
         Ok(DebugInfo {
             torrc_path: torrc_path.to_string_lossy().to_string(),
             torrc_relay_path: torrc_relay_path.to_string_lossy().to_string(),
@@ -102,6 +114,8 @@ impl DebugInfo {
             architecture,
             torrc_file,
             torrc_relay_file,
+            socks_router_port,
+            arti_socks_port,
         })
     }
     
@@ -137,6 +151,8 @@ impl DebugInfo {
             - Frontend Port: {}\n\
             - Torrc SocksPort: {}\n\
             - Torrc Relay SocksPort: {}\n\
+            - SOCKS Router Port: {}\n\
+            - Arti SOCKS Port: {}\n\
             - Torrc File Content: {}\n\
             - Torrc Relay File Content: {}",
 
@@ -154,6 +170,8 @@ impl DebugInfo {
             self.frontend_port,
             self.torrc_socks_port.map_or("not found".to_string(), |p| p.to_string()),
             self.torrc_relay_socks_port.map_or("not found".to_string(), |p| p.to_string()),
+            self.socks_router_port.as_ref().map_or("not set".to_string(), |p| p.to_string()),
+            self.arti_socks_port.as_ref().map_or("not set".to_string(), |p| p.to_string()),
             self.torrc_file.clone(),
             self.torrc_relay_file.clone()
         )
