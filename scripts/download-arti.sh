@@ -96,8 +96,8 @@ download_and_build_arti() {
     echo "🔨 Building Arti (this may take several minutes)..."
     cd "$TEMP_DIR/arti"
     
-    # Build Arti
-    cargo build -p arti --locked --release
+    # Build Arti with http-connect feature for HTTP proxy support
+    cargo build -p arti --locked --release --features http-connect
     
     # Copy the binary to our target directory
     if [ "$PLATFORM" = "windows-x86_64" ]; then

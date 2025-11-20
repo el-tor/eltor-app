@@ -86,6 +86,18 @@ pub async fn start_arti_with_eltord(mode: &str, path_config: &PathConfig) -> Res
         .stderr(Stdio::null())
         .stdin(Stdio::null());
 
+    // On Unix, create a new session so Arti can be properly killed as a process group
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+    }
+
     info!("🚀 Starting Arti with SOCKS port {}", socks_port);
     info!("   Binary: {:?}", arti_binary);
     info!("   Working dir: {:?}", path_config.bin_dir);
@@ -185,7 +197,25 @@ fn is_process_running(pid: u32) -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+        // Check if process exists AND is not a zombie
+        let proc_path = format!("/proc/{}/stat", pid);
+        if let Ok(stat) = std::fs::read_to_string(&proc_path) {
+            // Parse the stat file to get the process state
+            // Format: pid (comm) state ...
+            // State is the character after the last ')'
+            if let Some(state_start) = stat.rfind(')') {
+                if let Some(state_char) = stat.chars().nth(state_start + 2) {
+                    // Z = Zombie process, X = Dead process
+                    // Return false for zombies since they're not actually running
+                    return state_char != 'Z' && state_char != 'X';
+                }
+            }
+            // If we can read the file but can't parse it, assume running
+            true
+        } else {
+            // Process doesn't exist
+            false
+        }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]

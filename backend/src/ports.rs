@@ -186,29 +186,156 @@ pub fn get_process_info(pid: u32) -> Result<String, String> {
 
 /// Kill a process by PID (cross-platform)
 pub fn kill_process(pid: u32) -> Result<(), String> {
-    let system = System::new_all();
-    
-    if let Some(process) = system.process(Pid::from_u32(pid)) {
-        // Try graceful kill first (SIGTERM on Unix, TerminateProcess on Windows)
-        if !process.kill() {
-            return Err(format!("Failed to kill process {}", pid));
-        }
+    #[cfg(unix)]
+    {
+        use std::io::ErrorKind;
         
-        // Wait a moment and verify
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        // On Unix, we need to kill both the process AND its process group
+        // This handles processes created with setsid() that become session leaders
         
-        // Refresh and check if still running
-        let system = System::new_all();
-        if system.process(Pid::from_u32(pid)).is_some() {
-            // Force kill if still running (SIGKILL on Unix)
-            if let Some(process) = system.process(Pid::from_u32(pid)) {
-                process.kill();
+        // Step 1: Try to kill the process group first (negative PID)
+        // This kills all children if the process is a session leader
+        let pgid = -(pid as i32);
+        
+        log::info!("🔪 Attempting to kill process {} and its process group", pid);
+        
+        // Try graceful kill on process group first (SIGTERM)
+        let pg_killed = unsafe {
+            if libc::kill(pgid, libc::SIGTERM) != -1 {
+                log::info!("   Sent SIGTERM to process group {}", pid);
+                true
+            } else {
+                let err = std::io::Error::last_os_error();
+                if err.kind() == ErrorKind::PermissionDenied || err.raw_os_error() == Some(libc::ESRCH) {
+                    log::info!("   No process group found for {}, will try individual process", pid);
+                    false
+                } else {
+                    log::warn!("   Failed to kill process group {}: {}", pid, err);
+                    false
+                }
+            }
+        };
+        
+        // Step 2: Also kill the main process individually (some processes might not be in their own group)
+        unsafe {
+            if libc::kill(pid as i32, libc::SIGTERM) == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.kind() != ErrorKind::NotFound {
+                    log::warn!("   Failed to send SIGTERM to process {}: {}", pid, err);
+                }
+            } else {
+                log::info!("   Sent SIGTERM to process {}", pid);
             }
         }
         
+        // Wait a moment for graceful shutdown
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        
+        // Step 3: Check if process is still running (not a zombie), force kill if necessary
+        #[cfg(target_os = "linux")]
+        let still_running = {
+            // On Linux, check /proc/{pid}/stat to see if it's not a zombie
+            let proc_stat = format!("/proc/{}/stat", pid);
+            if let Ok(stat) = std::fs::read_to_string(&proc_stat) {
+                if let Some(state_start) = stat.rfind(')') {
+                    if let Some(state_char) = stat.chars().nth(state_start + 2) {
+                        // Not a zombie or dead process
+                        state_char != 'Z' && state_char != 'X'
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false // Process doesn't exist
+            }
+        };
+        
+        #[cfg(not(target_os = "linux"))]
+        let still_running = unsafe { libc::kill(pid as i32, 0) == 0 };
+        
+        if still_running {
+            // Process still exists and is not a zombie, force kill
+            log::warn!("⚠️ Process {} did not exit gracefully, sending SIGKILL", pid);
+            
+            unsafe {
+                // Kill process group with SIGKILL
+                if pg_killed {
+                    if libc::kill(pgid, libc::SIGKILL) == -1 {
+                        let err = std::io::Error::last_os_error();
+                        if err.kind() != ErrorKind::NotFound {
+                            log::warn!("   Failed to SIGKILL process group {}: {}", pid, err);
+                        }
+                    } else {
+                        log::info!("   Sent SIGKILL to process group {}", pid);
+                    }
+                }
+                
+                // Kill individual process with SIGKILL
+                if libc::kill(pid as i32, libc::SIGKILL) == -1 {
+                    let err = std::io::Error::last_os_error();
+                    if err.kind() != ErrorKind::NotFound {
+                        return Err(format!("Failed to SIGKILL process {}: {}", pid, err));
+                    }
+                } else {
+                    log::info!("   Sent SIGKILL to process {}", pid);
+                }
+            }
+            
+            // Wait a bit more for the kill to take effect
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        } else {
+            log::info!("✅ Process {} terminated gracefully", pid);
+        }
+        
+        // Step 4: Try to reap zombie processes by calling waitpid with WNOHANG
+        // This helps clean up any zombie processes that might be left behind
+        #[cfg(target_os = "linux")]
+        unsafe {
+            let mut status: libc::c_int = 0;
+            // Use WNOHANG to avoid blocking if the process is not a child
+            // Use __WALL to wait for all children regardless of type
+            let result = libc::waitpid(pid as i32, &mut status, libc::WNOHANG | libc::__WALL);
+            if result > 0 {
+                log::info!("🧹 Reaped zombie process {}", pid);
+            } else if result == 0 {
+                // Process still exists but hasn't terminated yet - this is fine
+                log::debug!("Process {} still running or already reaped", pid);
+            }
+            // If result is -1, it means we can't wait for this process (not our child)
+            // which is fine - the init process will eventually reap it
+        }
+        
         Ok(())
-    } else {
-        Ok(()) // Process already dead
+    }
+    
+    #[cfg(not(unix))]
+    {
+        let system = System::new_all();
+        
+        if let Some(process) = system.process(Pid::from_u32(pid)) {
+            // Try graceful kill first (TerminateProcess on Windows)
+            if !process.kill() {
+                return Err(format!("Failed to kill process {}", pid));
+            }
+            
+            // Wait a moment and verify
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            
+            // Refresh and check if still running
+            let system = System::new_all();
+            if system.process(Pid::from_u32(pid)).is_some() {
+                // Force kill if still running
+                if let Some(process) = system.process(Pid::from_u32(pid)) {
+                    process.kill();
+                }
+            }
+            
+            Ok(())
+        } else {
+            Ok(()) // Process already dead
+        }
     }
 }
 

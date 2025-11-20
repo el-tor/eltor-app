@@ -822,7 +822,25 @@ fn is_process_running(pid: u32) -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+        // Check if process exists AND is not a zombie
+        let proc_path = format!("/proc/{}/stat", pid);
+        if let Ok(stat) = std::fs::read_to_string(&proc_path) {
+            // Parse the stat file to get the process state
+            // Format: pid (comm) state ...
+            // State is the character after the last ')'
+            if let Some(state_start) = stat.rfind(')') {
+                if let Some(state_char) = stat.chars().nth(state_start + 2) {
+                    // Z = Zombie process, X = Dead process
+                    // Return false for zombies since they're not actually running
+                    return state_char != 'Z' && state_char != 'X';
+                }
+            }
+            // If we can read the file but can't parse it, assume running
+            true
+        } else {
+            // Process doesn't exist
+            false
+        }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -1267,7 +1285,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
         }
         
         match cmd.spawn() {
-            Ok(child) => {
+            Ok(mut child) => {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
                 log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
@@ -1306,9 +1324,19 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                     // eprintln!("✅ [activate_eltord_process] Wrote PID {} to {:?}", pid, pid_file);
                 }
                 
-                // Process is now 100% isolated - we don't even wait on it
-                // It will be reaped by init when it exits
-                std::mem::forget(child); // Don't wait, don't reap, just let it run
+                // Spawn a background task to reap the child process when it exits
+                // This prevents zombie processes while still allowing it to run independently
+                std::thread::spawn(move || {
+                    // Wait for the child process to exit (non-blocking for the main app)
+                    match child.wait() {
+                        Ok(status) => {
+                            log::info!("🧹 Eltord process exited with status: {}", status);
+                        }
+                        Err(e) => {
+                            log::warn!("⚠️ Error waiting for eltord process: {}", e);
+                        }
+                    }
+                });
                 
                 // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
                 log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
