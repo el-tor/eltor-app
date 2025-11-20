@@ -179,7 +179,7 @@ WORKDIR /home/user/code/eltor-app
 
 # Expose ports (now using environment variables)
 # Note: Frontend is now served by the backend, so only backend port is needed
-EXPOSE 5174 9740 18058 18068 18057 18067 9996 9997 7781 18048 18049
+EXPOSE 5174 9740 18058 18068 18057 18067 9996 9997 7781 18048 18049 18050
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

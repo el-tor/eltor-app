@@ -17,6 +17,7 @@ services:
       - '0.0.0.0:18057:18057' # Tor Relay SOCKS proxy - explicitly bind to all interfaces
       - '0.0.0.0:18048:18048' # Tor SOCKS router i.e use this to point your socks5 config to in your browser
       - '0.0.0.0:18049:18049' # Tor SOCKS router 2 
+      - '0.0.0.0:18050:18050' # Arti SOCKS proxy to normal Tor network
       - '0.0.0.0:9996:9996' # Tor relay OR port
       - '0.0.0.0:18068:18068' # Tor SOCKS proxy - explicitly bind to all interfaces
 
