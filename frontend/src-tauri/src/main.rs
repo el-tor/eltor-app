@@ -948,12 +948,29 @@ async fn update_relay_payment_rate(
 ) -> Result<serde_json::Value, String> {
     info!("💰 update_relay_payment_rate called with rate: {} sats/min", rateSatsPerMin);
 
+    // Validate rateSatsPerMin is finite and non-negative
+    if !rateSatsPerMin.is_finite() {
+        return Err("Invalid payment rate: must be a finite number (not NaN or infinity)".to_string());
+    }
+    
+    if rateSatsPerMin < 0.0 {
+        return Err("Invalid payment rate: must be greater than or equal to 0".to_string());
+    }
+
     let path_config = create_tauri_path_config(Some(&app_handle))?;
     path_config.ensure_torrc_files()?;
     let torrc_relay_path = path_config.get_torrc_relay_path();
 
     // Convert sats/min to msats/min (1 sat = 1000 msats)
-    let rate_msats = (rateSatsPerMin * 1000.0) as u64;
+    let rate_msats_f64 = rateSatsPerMin * 1000.0;
+    
+    // Check that the result doesn't exceed u64::MAX and is not NaN/inf
+    if !rate_msats_f64.is_finite() || rate_msats_f64 > u64::MAX as f64 {
+        return Err(format!("Invalid payment rate: {} sats/min results in overflow when converted to msats", rateSatsPerMin));
+    }
+    
+    // Safe cast after validation
+    let rate_msats = rate_msats_f64 as u64;
 
     // Update PaymentRateMsats in torrc.relay
     torrc_parser::update_torrc_config_line(

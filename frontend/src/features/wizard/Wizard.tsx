@@ -92,12 +92,9 @@ export function Wizard({ close }: { close: () => void }) {
                     <Checkbox
                       label="Yes, I want to run a relay"
                       mt="lg"
+                      checked={relayEnabled}
                       onChange={(event) => {
-                        if (event.currentTarget.checked) {
-                          dispatch(setRelayEnabled(true))
-                        } else {
-                          dispatch(setRelayEnabled(false))
-                        }
+                        dispatch(setRelayEnabled(event.currentTarget.checked))
                       }}
                     />
                   </Group>
@@ -165,7 +162,8 @@ export function Wizard({ close }: { close: () => void }) {
                       style={{ marginTop: 2 }}
                     />
                     <Text style={{ flex: 1 }}>
-                      After that you will be all set to use El Tor by clicking "Activate" on the Home page!
+                      After that you will be all set to use El Tor by clicking
+                      "Activate" on the Home page!
                     </Text>
                   </Group>
                 </Box>

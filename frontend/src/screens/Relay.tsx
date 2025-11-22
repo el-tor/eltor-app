@@ -63,7 +63,7 @@ export const Relay = () => {
     setRate(value)
     try {
       const numValue = typeof value === 'string' ? parseFloat(value) : value
-      if (!isNaN(numValue) && numValue > 0) {
+      if (!isNaN(numValue) && numValue >= 0) {
         await apiService.updateRelayPaymentRate(numValue)
         console.log(`Payment rate updated to ${numValue} sat(s)/min`)
       }
@@ -90,7 +90,10 @@ export const Relay = () => {
           setLocalIp('X.X.X.X')
         }
         // Set initial payment rate from backend (convert msats to sats)
-        if (debugInfo.payment_rate_msats) {
+        if (
+          debugInfo.payment_rate_msats !== undefined &&
+          debugInfo.payment_rate_msats !== null
+        ) {
           setRate(debugInfo.payment_rate_msats / 1000)
         }
         if (debugInfo.torrc_relay_or_port) {
@@ -189,8 +192,8 @@ export const Relay = () => {
           <b>2. Get Paid</b>
         </Text>
         <Text color="dimmed" size="md">
-          Make sure to set your rate in sats per minute. You will get paid out to this 
-          BOLT12 offer.
+          Make sure to set your rate in sats per minute. You will get paid out
+          to this BOLT12 offer.
         </Text>
       </Group>
       <Box ml="32">
@@ -199,7 +202,7 @@ export const Relay = () => {
           <Text>sat(s) / min</Text>
         </Group>
         <CopyableTextBox
-          text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'} 
+          text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'}
           limitChars={80}
         />
       </Box>
@@ -209,7 +212,8 @@ export const Relay = () => {
           <b>3. OS Firewall</b>
         </Text>
         <Text color="dimmed" size="md">
-          Make sure to open the onion router port on your OS firewall (OrPort in torrc config)  Detected public IP: {publicIp}
+          Make sure to open the onion router port on your OS firewall (OrPort in
+          torrc config) Detected public IP: {publicIp}
         </Text>
       </Group>
       <Box ml="32">
@@ -254,8 +258,11 @@ export const Relay = () => {
           <a href="https://nyx.torproject.org/" target="_blank">
             {' '}
             nyx
-          </a>. Use it to help troubleshoot your Relay, check bandwidth usage, run commands, and view circuits. To login, use the command below
-          with the default password `password1234_` or look in your `torrc.relay` file or env var `APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD`
+          </a>
+          . Use it to help troubleshoot your Relay, check bandwidth usage, run
+          commands, and view circuits. To login, use the command below with the
+          default password `password1234_` or look in your `torrc.relay` file or
+          env var `APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD`
         </Text>
         <CopyableTextBox text={`nyx -i 127.0.0.1:${controlPort}`} />
       </Box>
