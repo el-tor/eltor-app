@@ -2,7 +2,7 @@
 
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{env};
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
@@ -941,6 +941,38 @@ async fn stop_phoenix_daemon(
 }
 
 #[command]
+async fn update_relay_payment_rate(
+    app_handle: AppHandle,
+    #[allow(non_snake_case)]
+    rateSatsPerMin: f64,
+) -> Result<serde_json::Value, String> {
+    info!("💰 update_relay_payment_rate called with rate: {} sats/min", rateSatsPerMin);
+
+    let path_config = create_tauri_path_config(Some(&app_handle))?;
+    path_config.ensure_torrc_files()?;
+    let torrc_relay_path = path_config.get_torrc_relay_path();
+
+    // Convert sats/min to msats/min (1 sat = 1000 msats)
+    let rate_msats = (rateSatsPerMin * 1000.0) as u64;
+
+    // Update PaymentRateMsats in torrc.relay
+    torrc_parser::update_torrc_config_line(
+        &torrc_relay_path,
+        "PaymentRateMsats",
+        &rate_msats.to_string(),
+    )
+    .await
+    .map_err(|e| format!("Failed to update payment rate: {}", e))?;
+
+    info!("✅ Payment rate updated to {} msats/min ({} sats/min)", rate_msats, rateSatsPerMin);
+
+    Ok(serde_json::json!({
+        "message": format!("Payment rate updated to {} msats/min ({} sats/min)", rate_msats, rateSatsPerMin),
+        "rate_msats": rate_msats
+    }))
+}
+
+#[command]
 async fn detect_phoenix_config(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
@@ -1259,7 +1291,8 @@ fn main() {
             get_debug_info,
             start_phoenix_daemon,
             stop_phoenix_daemon,
-            detect_phoenix_config
+            detect_phoenix_config,
+            update_relay_payment_rate
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

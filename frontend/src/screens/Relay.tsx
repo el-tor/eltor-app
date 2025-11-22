@@ -10,6 +10,7 @@ import {
   Box,
   Checkbox,
   Modal,
+  NumberInput,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { Circle } from '../components/Circle'
@@ -25,6 +26,7 @@ import {
   setRelayEnabled,
   setClientEnabled,
 } from '../globalStore'
+import { apiService } from '../services/apiService'
 
 export const Relay = () => {
   const { global, wallet } = useSelector((state) => state)
@@ -49,8 +51,23 @@ export const Relay = () => {
     clientEnabled,
   } = useSelector((state) => state.global)
   const dispatch = useDispatch()
+  const [localIp, setLocalIp] = useState<string>('X.X.X.X')
+  const [rate, setRate] = useState<string | number>(1)
 
   const preRef = useRef<HTMLPreElement>(null)
+
+  const handleRateChange = async (value: string | number) => {
+    setRate(value)
+    try {
+      const numValue = typeof value === 'string' ? parseFloat(value) : value
+      if (!isNaN(numValue) && numValue > 0) {
+        await apiService.updateRelayPaymentRate(numValue)
+        console.log(`Payment rate updated to ${numValue} sats/min`)
+      }
+    } catch (error) {
+      console.error('Failed to update payment rate:', error)
+    }
+  }
   // const [logs, setLogs] = useState<LogEntry[]>([])
 
   useEffect(() => {
@@ -58,6 +75,28 @@ export const Relay = () => {
       preRef.current.scrollTop = preRef.current.scrollHeight
     }
   }, [logsRelay])
+
+  // Fetch local IP and payment rate from debug endpoint
+  useEffect(() => {
+    const fetchDebugInfo = async () => {
+      try {
+        const debugInfo = await apiService.getDebugInfo()
+        if (debugInfo.local_ip) {
+          setLocalIp(debugInfo.local_ip)
+        } else {
+          setLocalIp('X.X.X.X')
+        }
+        // Set initial payment rate from backend (convert msats to sats)
+        if (debugInfo.payment_rate_msats) {
+          setRate(debugInfo.payment_rate_msats / 1000)
+        }
+      } catch (error) {
+        console.error('Failed to fetch debug info:', error)
+        setLocalIp('X.X.X.X')
+      }
+    }
+    fetchDebugInfo()
+  }, [])
 
   // Add debug effect to log frontend state
   useEffect(() => {
@@ -114,8 +153,14 @@ export const Relay = () => {
       />
 
       <Text>
-        <b>2. Get Paid</b> - You will get paid out to this wallet offer
+        <b>2. Get Paid</b> - Make sure to set your rate. You will get paid out
+        to this wallets BOLT12 offer.
       </Text>
+      <Group>
+        <NumberInput w="120" value={rate} onChange={handleRateChange} />
+        <Text>sats/min</Text>
+      </Group>
+
       <CopyableTextBox
         text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'}
         limitChars={80}
@@ -144,7 +189,7 @@ export const Relay = () => {
         with your local Umbrel IP address.
       </Text>
       {/* TODO read ports and IP from config */}
-      <CopyableTextBox text="upnpc -a X.X.X.X 9996 9996 TCP" />
+      <CopyableTextBox text={`upnpc -a ${localIp} 9996 9996 TCP`} />
       <Text>
         <b>5. Monitor</b> your relay with{' '}
         <a href="https://nyx.torproject.org/" target="_blank">

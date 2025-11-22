@@ -24,6 +24,8 @@ pub struct DebugInfo {
     pub torrc_relay_file: String,
     pub socks_router_port: Option<String>,
     pub arti_socks_port: Option<String>,
+    pub local_ip: Option<String>,
+    pub payment_rate_msats: Option<u64>,
 }
 
 impl DebugInfo {
@@ -97,6 +99,18 @@ impl DebugInfo {
         };
         let arti_socks_port = Some(socks_config.arti_socks_port.to_string());
         
+        // Get local IP address
+        let local_ip = match local_ip_address::local_ip() {
+            Ok(ip) => Some(ip.to_string()),
+            Err(_) => None,
+        };
+        
+        // Get payment rate from torrc.relay
+        let payment_rate_msats = get_torrc_config(&torrc_relay_path, "PaymentRateMsats")
+            .await
+            .first()
+            .and_then(|rate| rate.parse::<u64>().ok());
+        
         Ok(DebugInfo {
             torrc_path: torrc_path.to_string_lossy().to_string(),
             torrc_relay_path: torrc_relay_path.to_string_lossy().to_string(),
@@ -116,6 +130,8 @@ impl DebugInfo {
             torrc_relay_file,
             socks_router_port,
             arti_socks_port,
+            local_ip,
+            payment_rate_msats,
         })
     }
     
@@ -138,6 +154,7 @@ impl DebugInfo {
             Platform: {} ({})\n\
             Current Directory: {}\n\
             Executable: {}\n\
+            Local IP: {}\n\
             \n\
             Paths:\n\
             - Torrc File: {}\n\
@@ -161,6 +178,7 @@ impl DebugInfo {
             self.architecture,
             self.current_dir,
             self.executable_path.as_deref().unwrap_or("unknown"),
+            self.local_ip.as_deref().unwrap_or("unavailable"),
             self.torrc_path,
             self.torrc_relay_path,
             self.bin_dir,
