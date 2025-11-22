@@ -65,7 +65,7 @@ const initialState: GlobalState = {
   relays: [],
   myIp: '166.205.90.66',
   relayEnabled: false,
-  clientEnabled: true,
+  clientEnabled: false,
 }
 
 // 2. Slice and Reducers

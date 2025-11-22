@@ -15,6 +15,9 @@ services:
       - '0.0.0.0:9740:9740' # Lightning node - explicitly bind to all interfaces
       - '0.0.0.0:18058:18058' # Tor SOCKS proxy - explicitly bind to all interfaces
       - '0.0.0.0:18057:18057' # Tor Relay SOCKS proxy - explicitly bind to all interfaces
+      - '0.0.0.0:18048:18048' # Tor SOCKS router i.e use this to point your socks5 config to in your browser
+      - '0.0.0.0:18049:18049' # Tor SOCKS router 2 
+      - '0.0.0.0:18050:18050' # Arti SOCKS proxy to normal Tor network
       - '0.0.0.0:9996:9996' # Tor relay OR port
       - '0.0.0.0:18068:18068' # Tor SOCKS proxy - explicitly bind to all interfaces
 
@@ -44,7 +47,9 @@ services:
       - APP_ELTOR_TOR_ADDITIONAL_DIR_AUTHORITY=${APP_ELTOR_TOR_ADDITIONAL_DIR_AUTHORITY}
       - APP_ELTOR_TOR_NICKNAME=${APP_ELTOR_TOR_NICKNAME}
       - APP_ELTOR_TOR_DATA_DIRECTORY="/home/user/.eltor"
-      - APP_ELTOR_TOR_SOCKS_PORT=${APP_ELTOR_TOR_SOCKS_PORT}
+      - APP_ELTOR_TOR_SOCKS_PORT=${APP_ELTOR_TOR_SOCKS_PORT:-0.0.0.0:18058}
+      - APP_ELTOR_SOCKS_ROUTER_PORT=${APP_ELTOR_SOCKS_ROUTER_PORT:-0.0.0.0:18048}
+      - APP_ARTI_SOCKS_PORT=${APP_ARTI_SOCKS_PORT:-0.0.0.0:18050}
       - APP_ELTOR_TOR_CONTROL_PORT=${APP_ELTOR_TOR_CONTROL_PORT}
       - APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD=${APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD}
       - APP_ELTOR_TOR_CLIENT_ADDRESS=${APP_ELTOR_TOR_CLIENT_ADDRESS}

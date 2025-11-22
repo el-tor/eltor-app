@@ -12,13 +12,13 @@ import {
   Notification,
   Progress,
   Tooltip,
-  Anchor
+  Anchor,
 } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
-import { clearLogsClient } from '../globalStore'
+import { clearLogsClient, setClientEnabled } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
 import { logStreamService } from '../services/logStreamService'
 // @ts-ignore
@@ -29,7 +29,12 @@ import { useEltord } from '../hooks/useEltord'
 import { useBootstrapping } from '../hooks/useBootstrapping'
 import { apiService } from '../services/apiService'
 import { useDisclosure } from '@mantine/hooks'
-import { IconChevronDown, IconPlug, IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react'
+import {
+  IconChevronDown,
+  IconPlug,
+  IconPlayerPlay,
+  IconPlayerPause,
+} from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
 import { SocksProxyHelp } from '../components/SocksProxyHelp'
@@ -59,11 +64,11 @@ export const Connect = () => {
   } = useSelector((state) => state.global)
   const mode =
     relayEnabled && clientEnabled ? 'both' : relayEnabled ? 'relay' : 'client'
-  const socksPort =
-    mode === 'client'
-      ? debugInfo?.torrc_socks_port
-      : debugInfo?.torrc_relay_socks_port
-  const [showSocksModal, setShowSocksModal] = useState(clientActive || relayActive)
+  // Extract just the port number from "IP:PORT" format
+  const socksPort = debugInfo?.socks_router_port?.split(':').pop()
+  const [showSocksModal, setShowSocksModal] = useState(
+    clientActive || relayActive,
+  )
   const {
     isRunning,
     loading: isLoadingActivate,
@@ -203,7 +208,7 @@ export const Connect = () => {
                 // Only resume logs if they're not already paused by user preference
                 // Check current pause state before making changes
                 const shouldEnableLogging = !logStreamService.isPaused('client')
-                
+
                 // If logs are not paused, ensure they're playing for bootstrapping progress
                 if (shouldEnableLogging) {
                   logStreamService.resume('client')
@@ -212,6 +217,14 @@ export const Connect = () => {
 
                 // Start bootstrapping UI immediately at 1%
                 startBootstrapping()
+
+                // if client or relay not set then set the client
+                if (!clientEnabled && !relayEnabled) {
+                  console.log(
+                    '⚙️ No mode selected, defaulting to client mode activation',
+                  )
+                  dispatch(setClientEnabled(true))
+                }
 
                 // Activate with logging based on whether logs were paused or not
                 await activate(shouldEnableLogging)
@@ -315,7 +328,7 @@ export const Connect = () => {
           </Stack>
         </Box>
 
-        {showSocksModal && (
+        {showSocksModal && (relayEnabled || clientEnabled) && (
           <Center className="bootstrap-notification">
             <Box
               className="glass-effect"
@@ -327,8 +340,7 @@ export const Connect = () => {
                 w="500px"
                 title={
                   <Group gap="xs" wrap="nowrap">
-                    <Text>Connected! SOCKS Proxy Ready</Text>
-                    
+                    <Text>Connected</Text>
                   </Group>
                 }
                 icon={<IconPlug />}
@@ -345,18 +357,32 @@ export const Connect = () => {
                 }}
               >
                 <>
-                  <Text mb="xs" mt="xs" size="sm">
-                    Open a browser and configure it to use a SOCKS5 proxy. Or configure a system-wide SOCKS5 proxy:
-                      <SocksProxyHelp
-                        hostname={window.location.hostname}
-                        port={socksPort}
+                  {clientEnabled && (
+                    <>
+                      <Text mb="xs" mt="xs" size="sm">
+                        Open a browser and configure it to use a SOCKS5 proxy.
+                        Or configure a system-wide SOCKS5 proxy:
+                        <SocksProxyHelp
+                          hostname={window.location.hostname}
+                          port={socksPort}
+                        />
+                      </Text>
+                      <CopyableTextBox
+                        text={`${window.location.hostname}:${socksPort}`}
+                        h="44px"
                       />
-                  </Text>
-                  <CopyableTextBox
-                    text={`${window.location.hostname}:${socksPort}`}
-                    h="44px"
-                  />
-                  <Text mb="xs" mt="xs" size="xs">*Note: It could take up to 30 seconds for the connection to be stable</Text>
+                      <Text mb="xs" mt="xs" size="xs">
+                        *Note: It could take up to 30 seconds for the connection
+                        to be stable
+                      </Text>
+                    </>
+                  )}
+                  {relayEnabled && (
+                    <Text mb="xs" mt="xs" size="sm" fw={500} >
+                      Your relay is active. You will start getting paid if
+                      somebody routes through your Tor Relay!
+                    </Text>
+                  )}
                 </>
               </Notification>
             </Box>
@@ -413,12 +439,16 @@ export const Connect = () => {
               }}
               variant={logsPlaying ? 'filled' : 'default'}
             >
-              {logsPlaying ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
+              {logsPlaying ? (
+                <IconPlayerPause size={14} />
+              ) : (
+                <IconPlayerPlay size={14} />
+              )}
             </Button>
           </Tooltip>
           <Button
             size="xs"
-            variant='default'
+            variant="default"
             style={{ position: 'absolute', bottom: 4, right: 4, height: 24 }}
             onClick={() => dispatch(clearLogsClient())}
           >

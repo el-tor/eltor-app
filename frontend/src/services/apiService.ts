@@ -453,6 +453,25 @@ class ApiService {
       return await response.json()
     }
   }
+
+  // Update relay payment rate
+  async updateRelayPaymentRate(rateSatsPerMin: number): Promise<{message: string, rate_msats: number}> {
+    if (isTauri()) {
+      await loadTauriAPIs()
+      return await tauriInvoke('update_relay_payment_rate', { rateSatsPerMin })
+    } else {
+      const response = await fetch(`${getApiBaseUrl()}/api/eltord/relay/payment-rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rate_sats_per_min: rateSatsPerMin }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error || 'Failed to update payment rate')
+      }
+      return await response.json()
+    }
+  }
 }
 
 export const apiService = new ApiService()

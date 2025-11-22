@@ -5,8 +5,7 @@ use tokio::sync::RwLock;
 
 use crate::paths::{is_tauri_context, PathConfig};
 use crate::state::{AppState, LogEntry};
-use crate::torrc_parser;
-use std::process::Stdio; 
+use crate::torrc_parser; 
 
 /// Get the Tor control password from environment variables
 ///
@@ -61,13 +60,21 @@ impl EltorProcessHandle {
     async fn stop(&mut self) -> Result<(), String> {
         info!("🛑 Stopping {} process with {} Tor daemon(s)", self.mode, self.tor_pids.len());
 
-        // Step 1: Abort the Tokio task
+        // Step 1: Stop Arti if this is the last eltord process stopping
+        info!("🛑 Stopping Arti process...");
+        if let Err(e) = crate::arti::stop_arti().await {
+            warn!("⚠️ Failed to stop Arti: {}", e);
+        } else {
+            info!("✅ Arti stopped successfully");
+        }
+
+        // Step 2: Abort the Tokio task
         self.abort_handle.abort();
 
-        // Step 2: Wait a moment for graceful shutdown
+        // Step 3: Wait a moment for graceful shutdown
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
-        // Step 3: Force kill all tracked Tor daemon PIDs
+        // Step 4: Force kill all tracked Tor daemon PIDs
         for pid in &self.tor_pids {
             info!("🔪 Killing Tor daemon PID: {}", pid);
             if let Err(e) = kill_process_by_pid(*pid).await {
@@ -371,12 +378,16 @@ impl EltorManager {
     async fn start_eltor_process(&self, mode: EltorMode) -> Result<EltorProcessHandle, String> {
         let torrc_file = mode.get_torrc_file().to_string();
         let torrc_path = self.path_config.get_torrc_path(Some(&torrc_file));
-        let control_port = mode.get_control_port(&self.path_config);
+        let _control_port = mode.get_control_port(&self.path_config);
 
-        // info!(
-        //     "🚀 Starting eltor {} as Tokio task with torrc: {:?}, control port: {}",
-        //     mode, torrc_path, control_port
-        // );
+        // Start Arti alongside eltord
+        info!("🚀 Starting Arti for eltord mode: {}", mode);
+        if let Err(e) = crate::arti::start_arti_with_eltord(mode.to_string(), &self.path_config).await {
+            warn!("⚠️ Failed to start Arti: {}", e);
+            warn!("   Continuing with eltord startup...");
+        } else {
+            info!("✅ Arti started successfully for mode: {}", mode);
+        }
 
         // Clean up any residual state first
         info!("🧹 Pre-start cleanup for {} mode", mode);
@@ -664,6 +675,32 @@ async fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// Helper function to start Arti and SOCKS router after eltord spawns
+fn start_arti_and_socks_router(mode: String, path_config: PathConfig) {
+    log::info!("🚀 Starting Arti for eltord mode: {}", mode);
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            if let Err(e) = crate::arti::start_arti_with_eltord(&mode, &path_config).await {
+                warn!("⚠️ Failed to start Arti: {}", e);
+            } else {
+                info!("✅ Arti started successfully for mode: {}", mode);
+            }
+            
+            // Start SOCKS router after Arti is ready
+            info!("🔀 Starting SOCKS Router...");
+            if let Err(e) = crate::socks::start_socks_router().await {
+                warn!("⚠️ SOCKS Router failed to start: {}", e);
+                info!("   This is non-critical - eltord will still function without the SOCKS router");
+            } else {
+                let router_port = std::env::var("APP_ELTOR_SOCKS_ROUTER_PORT")
+                    .unwrap_or_else(|_| "18048".to_string());
+                info!("✅ SOCKS Router started successfully on port {}", router_port);
+            }
+        });
+    });
+}
+
 /// Check if eltord is running by reading PID file and verifying process exists
 pub async fn is_eltord_running(mode: EltorMode, path_config: &PathConfig) -> bool {
     // eprintln!("🔍 [is_eltord_running] Checking mode={:?}, is_tauri={}", mode, path_config.app_data_dir.is_some());
@@ -682,7 +719,7 @@ pub async fn is_eltord_running(mode: EltorMode, path_config: &PathConfig) -> boo
                 return false;
             }
         },
-        Err(e) => {
+        Err(_e) => {
             // eprintln!("❌ [is_eltord_running] No PID file at {:?}: {}", pid_file, e);
             return false;
         }
@@ -702,7 +739,7 @@ pub async fn is_eltord_running(mode: EltorMode, path_config: &PathConfig) -> boo
                 // eprintln!("🔍 [is_eltord_running] Process {} exists: {}", pid, is_running);
                 is_running
             },
-            Err(e) => {
+            Err(_e) => {
                 // eprintln!("❌ [is_eltord_running] Failed to check process {}: {}", pid, e);
                 false
             }
@@ -811,7 +848,25 @@ fn is_process_running(pid: u32) -> bool {
 
     #[cfg(target_os = "linux")]
     {
-        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+        // Check if process exists AND is not a zombie
+        let proc_path = format!("/proc/{}/stat", pid);
+        if let Ok(stat) = std::fs::read_to_string(&proc_path) {
+            // Parse the stat file to get the process state
+            // Format: pid (comm) state ...
+            // State is the character after the last ')'
+            if let Some(state_start) = stat.rfind(')') {
+                if let Some(state_char) = stat.chars().nth(state_start + 2) {
+                    // Z = Zombie process, X = Dead process
+                    // Return false for zombies since they're not actually running
+                    return state_char != 'Z' && state_char != 'X';
+                }
+            }
+            // If we can read the file but can't parse it, assume running
+            true
+        } else {
+            // Process doesn't exist
+            false
+        }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -857,7 +912,7 @@ pub async fn deactivate_eltord_process(mode: String) -> Result<String, String> {
                 return Err(format!("Invalid PID in file {:?}", pid_file));
             }
         },
-        Err(e) => {
+        Err(_e) => {
             // eprintln!("❌ [deactivate_eltord_process] No PID file found at {:?}: {}", pid_file, e);
             return Err(format!("No PID file found at {:?} - process may not be running", pid_file));
         }
@@ -897,6 +952,23 @@ pub async fn deactivate_eltord_process(mode: String) -> Result<String, String> {
                 
                 log::info!("✅ Eltord {} stopped gracefully (PID: {})", mode_enum, pid);
                 // eprintln!("✅ [deactivate_eltord_process] Successfully deactivated {} (PID: {})", mode_enum, pid);
+                
+                // Stop SOCKS router after successful eltord deactivation
+                log::info!("🔀 Stopping SOCKS Router...");
+                if let Err(e) = crate::socks::stop_socks_router().await {
+                    log::warn!("⚠️ Failed to stop SOCKS Router: {}", e);
+                } else {
+                    log::info!("✅ SOCKS Router stopped successfully");
+                }
+                
+                // Stop Arti after successful eltord deactivation
+                log::info!("🛑 Stopping Arti...");
+                if let Err(e) = crate::arti::stop_arti().await {
+                    log::warn!("⚠️ Failed to stop Arti: {}", e);
+                } else {
+                    log::info!("✅ Arti stopped successfully");
+                }
+                
                 return Ok(format!("Eltord {} deactivated gracefully", mode_enum));
             }
         }
@@ -926,6 +998,23 @@ pub async fn deactivate_eltord_process(mode: String) -> Result<String, String> {
 
     log::info!("✅ Eltord {} stopped (force killed, PID: {})", mode_enum, pid);
     // eprintln!("✅ [deactivate_eltord_process] Successfully deactivated {} (PID: {})", mode_enum, pid);
+    
+    // Stop SOCKS router after successful eltord deactivation
+    log::info!("🔀 Stopping SOCKS Router...");
+    if let Err(e) = crate::socks::stop_socks_router().await {
+        log::warn!("⚠️ Failed to stop SOCKS Router: {}", e);
+    } else {
+        log::info!("✅ SOCKS Router stopped successfully");
+    }
+    
+    // Stop Arti after successful eltord deactivation
+    log::info!("🛑 Stopping Arti...");
+    if let Err(e) = crate::arti::stop_arti().await {
+        log::warn!("⚠️ Failed to stop Arti: {}", e);
+    } else {
+        log::info!("✅ Arti stopped successfully");
+    }
+    
     Ok(format!("Eltord {} deactivated (force killed)", mode_enum))
 }
 
@@ -961,6 +1050,10 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
             return;
         }
     };
+
+    // Create strings early to avoid lifetime issues  
+    let mode_str_for_arti = mode.to_string(); // Use the original mode string instead
+    let mode_str_for_logging = mode.to_string();
 
     // Get path config based on context (Tauri vs web)
     let path_config = if is_tauri_context() {
@@ -1055,6 +1148,11 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
     // Clean up old data files before activation
     cleanup_old_data_files(&mode_enum, &path_config);
 
+    // Start Arti before starting eltord (synchronously to avoid lifetime issues)
+    info!("🚀 Starting Arti for eltord mode: {}", mode_str_for_logging);
+    // Note: We'll start Arti in a simple, blocking way here since it's fast
+    // The actual work will be done by the spawned eltord process
+    
     log::info!("🚀 Spawning eltord {} with torrc: {:?}", mode_enum, torrc_path);
     log::info!("   Torrc path string: {}", torrc_path_str);
     log::info!("   Log path: {:?}", eltord_log_path);
@@ -1117,6 +1215,32 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
                 log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
                 
+                // Start Arti after eltord successfully starts
+                log::info!("🚀 Starting Arti for eltord mode: {}", mode_str_for_logging);
+                let mode_for_arti = mode_str_for_arti.clone();
+                let path_for_arti = path_config.clone();
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if let Err(e) = crate::arti::start_arti_with_eltord(&mode_for_arti, &path_for_arti).await {
+                            warn!("⚠️ Failed to start Arti: {}", e);
+                        } else {
+                            info!("✅ Arti started successfully for mode: {}", mode_for_arti);
+                        }
+                        
+                        // Start SOCKS router after Arti is ready
+                        info!("🔀 Starting SOCKS Router...");
+                        if let Err(e) = crate::socks::start_socks_router().await {
+                            warn!("⚠️ SOCKS Router failed to start: {}", e);
+                            info!("   This is non-critical - eltord will still function without the SOCKS router");
+                        } else {
+                            let router_port = std::env::var("APP_ELTOR_SOCKS_ROUTER_PORT")
+                                .unwrap_or_else(|_| "18048".to_string());
+                            info!("✅ SOCKS Router started successfully on port {}", router_port);
+                        }
+                    });
+                });
+                
                 // Write PID to file synchronously
                 if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
                     // eprintln!("⚠️ [activate_eltord_process] Failed to write PID file {:?}: {}", pid_file, e);
@@ -1167,45 +1291,52 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 .arg("-k");
         }
         
-        cmd.current_dir(&path_config.bin_dir)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .pre_exec(|| {
-                // Create new session - completely detach from parent
-                unsafe {
+        unsafe {
+            cmd.current_dir(&path_config.bin_dir)
+                .pre_exec(|| {
+                    // Create new session - completely detach from parent
                     libc::setsid();
-                }
-                
-                // Close all file descriptors except stdin/out/err
-                // This prevents inheriting any open sockets or files
-                let max_fd = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
-                if max_fd > 0 {
-                    for fd in 3..max_fd {
-                        unsafe { libc::close(fd as i32); }
+                    
+                    // Close all file descriptors except stdin/out/err
+                    // This prevents inheriting any open sockets or files
+                    let max_fd = libc::sysconf(libc::_SC_OPEN_MAX);
+                    if max_fd > 0 {
+                        for fd in 3..max_fd {
+                            libc::close(fd as i32);
+                        }
                     }
-                }
-                
-                Ok(())
-            });
+                    
+                    Ok(())
+                });
+        }
         
-        match unsafe { cmd.spawn() } {
-            Ok(child) => {
+        match cmd.spawn() {
+            Ok(mut child) => {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
                 log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
                 
+                // Start Arti and SOCKS router after eltord successfully starts
+                start_arti_and_socks_router(mode_str_for_arti.clone(), path_config.clone());
+                
                 // Write PID to file synchronously
                 if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
-                    // eprintln!("⚠️ [activate_eltord_process] Failed to write PID file {:?}: {}", pid_file, e);
                     log::warn!("⚠️ Failed to write PID file {:?}: {}", pid_file, e);
-                } else {
-                    // eprintln!("✅ [activate_eltord_process] Wrote PID {} to {:?}", pid, pid_file);
                 }
                 
-                // Process is now 100% isolated - we don't even wait on it
-                // It will be reaped by init when it exits
-                std::mem::forget(child); // Don't wait, don't reap, just let it run
+                // Spawn a background task to reap the child process when it exits
+                // This prevents zombie processes while still allowing it to run independently
+                std::thread::spawn(move || {
+                    // Wait for the child process to exit (non-blocking for the main app)
+                    match child.wait() {
+                        Ok(status) => {
+                            log::info!("🧹 Eltord process exited with status: {}", status);
+                        }
+                        Err(e) => {
+                            log::warn!("⚠️ Error waiting for eltord process: {}", e);
+                        }
+                    }
+                });
                 
                 // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
                 log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
@@ -1244,6 +1375,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
                 log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
+                
+                // Start Arti and SOCKS router after eltord successfully starts
+                start_arti_and_socks_router(mode_str_for_arti.clone(), path_config.clone());
                 
                 // Write PID to file synchronously
                 if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {

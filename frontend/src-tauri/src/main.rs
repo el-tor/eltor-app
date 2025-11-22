@@ -2,7 +2,7 @@
 
 use eltor_backend::eltor::EltorMode;
 use eltor_backend::lightning::ListTransactionsParams;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{env};
 use std::sync::Arc;
 use tauri::menu::{Menu, MenuItem};
@@ -556,10 +556,16 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     let app_clone = app.clone();
     
     // Try to load tray icon from resources, with fallback
+    // On Linux, use white icon for better visibility on dark panels
+    #[cfg(target_os = "linux")]
+    let icon_name = "tray-icon-white.png";
+    #[cfg(not(target_os = "linux"))]
+    let icon_name = "tray-icon.png";
+    
     let tray_icon = match app.path().resource_dir() {
         Ok(resource_dir) => {
             // Icons are in Resources/icons/ directory
-            let icon_path = resource_dir.join("icons").join("tray-icon.png");
+            let icon_path = resource_dir.join("icons").join(icon_name);
             info!("🖼️  Attempting to load tray icon from: {:?}", icon_path);
             
             match tauri::image::Image::from_path(&icon_path) {
@@ -572,16 +578,26 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
                     info!("   Trying local path fallback...");
                     
                     // Fallback to local path (development mode)
-                    match tauri::image::Image::from_path("icons/tray-icon.png") {
+                    let fallback_path = format!("icons/{}", icon_name);
+                    match tauri::image::Image::from_path(&fallback_path) {
                         Ok(img) => {
                             info!("✅ Tray icon loaded from local path");
                             img
                         }
                         Err(e) => {
                             info!("⚠️  Failed to load tray icon from local path: {}", e);
-                            info!("   Using default icon");
-                            // Create a simple default icon (empty/placeholder)
-                            return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                            info!("   Trying default tray-icon.png as final fallback...");
+                            // Final fallback to standard icon
+                            match tauri::image::Image::from_path("icons/tray-icon.png") {
+                                Ok(img) => {
+                                    info!("✅ Tray icon loaded from fallback");
+                                    img
+                                }
+                                Err(e) => {
+                                    info!("⚠️  Failed to load any tray icon: {}", e);
+                                    return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                                }
+                            }
                         }
                     }
                 }
@@ -591,14 +607,24 @@ fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
             info!("⚠️  Could not get resource directory: {}", e);
             info!("   Trying local path...");
             
-            match tauri::image::Image::from_path("icons/tray-icon.png") {
+            let fallback_path = format!("icons/{}", icon_name);
+            match tauri::image::Image::from_path(&fallback_path) {
                 Ok(img) => {
                     info!("✅ Tray icon loaded from local path");
                     img
                 }
                 Err(e) => {
                     info!("⚠️  Failed to load tray icon: {}", e);
-                    return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                    // Final fallback
+                    match tauri::image::Image::from_path("icons/tray-icon.png") {
+                        Ok(img) => {
+                            info!("✅ Tray icon loaded from fallback");
+                            img
+                        }
+                        Err(e) => {
+                            return Err(tauri::Error::AssetNotFound(format!("Tray icon not found: {}", e)));
+                        }
+                    }
                 }
             }
         }
@@ -912,6 +938,55 @@ async fn stop_phoenix_daemon(
             }
         }
     }
+}
+
+#[command]
+async fn update_relay_payment_rate(
+    app_handle: AppHandle,
+    #[allow(non_snake_case)]
+    rateSatsPerMin: f64,
+) -> Result<serde_json::Value, String> {
+    info!("💰 update_relay_payment_rate called with rate: {} sats/min", rateSatsPerMin);
+
+    // Validate rateSatsPerMin is finite and non-negative
+    if !rateSatsPerMin.is_finite() {
+        return Err("Invalid payment rate: must be a finite number (not NaN or infinity)".to_string());
+    }
+    
+    if rateSatsPerMin < 0.0 {
+        return Err("Invalid payment rate: must be greater than or equal to 0".to_string());
+    }
+
+    let path_config = create_tauri_path_config(Some(&app_handle))?;
+    path_config.ensure_torrc_files()?;
+    let torrc_relay_path = path_config.get_torrc_relay_path();
+
+    // Convert sats/min to msats/min (1 sat = 1000 msats)
+    let rate_msats_f64 = rateSatsPerMin * 1000.0;
+    
+    // Check that the result doesn't exceed u64::MAX and is not NaN/inf
+    if !rate_msats_f64.is_finite() || rate_msats_f64 > u64::MAX as f64 {
+        return Err(format!("Invalid payment rate: {} sats/min results in overflow when converted to msats", rateSatsPerMin));
+    }
+    
+    // Safe cast after validation
+    let rate_msats = rate_msats_f64 as u64;
+
+    // Update PaymentRateMsats in torrc.relay
+    torrc_parser::update_torrc_config_line(
+        &torrc_relay_path,
+        "PaymentRateMsats",
+        &rate_msats.to_string(),
+    )
+    .await
+    .map_err(|e| format!("Failed to update payment rate: {}", e))?;
+
+    info!("✅ Payment rate updated to {} msats/min ({} sats/min)", rate_msats, rateSatsPerMin);
+
+    Ok(serde_json::json!({
+        "message": format!("Payment rate updated to {} msats/min ({} sats/min)", rate_msats, rateSatsPerMin),
+        "rate_msats": rate_msats
+    }))
 }
 
 #[command]
@@ -1233,7 +1308,8 @@ fn main() {
             get_debug_info,
             start_phoenix_daemon,
             stop_phoenix_daemon,
-            detect_phoenix_config
+            detect_phoenix_config,
+            update_relay_payment_rate
         ])
         .run(generate_context!())
         .expect("error while running tauri application");

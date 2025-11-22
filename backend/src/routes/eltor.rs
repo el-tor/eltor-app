@@ -11,10 +11,22 @@ use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use std::io::SeekFrom;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::eltor::activate_eltord_process;
 use crate::state::{AppState, EltordStatusResponse, MessageResponse};
+use crate::torrc_parser::update_torrc_config_line;
+
+#[derive(Deserialize)]
+pub struct PaymentRateRequest {
+    pub rate_sats_per_min: f64,
+}
+
+#[derive(Serialize)]
+pub struct PaymentRateResponse {
+    pub message: String,
+    pub rate_msats: u64,
+}
 
 #[derive(Deserialize)]
 pub struct ActivateParams {
@@ -222,6 +234,51 @@ pub async fn get_eltord_logs(
     ResponseJson(LogsResponse { logs })
 }
 
+#[axum::debug_handler(state = AppState)]
+pub async fn update_payment_rate(
+    AxumState(state): AxumState<AppState>,
+    ResponseJson(request): ResponseJson<PaymentRateRequest>,
+) -> Result<ResponseJson<PaymentRateResponse>, (axum::http::StatusCode, String)> {
+    let torrc_relay_path = state.path_config.get_torrc_relay_path();
+    
+    // Validate rate_sats_per_min is finite and non-negative
+    if !request.rate_sats_per_min.is_finite() {
+        return Err((axum::http::StatusCode::BAD_REQUEST, 
+            "Invalid payment rate: must be a finite number (not NaN or infinity)".to_string()));
+    }
+    
+    if request.rate_sats_per_min < 0.0 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, 
+            "Invalid payment rate: must be greater than or equal to 0".to_string()));
+    }
+    
+    // Convert sats/min to msats/min (1 sat = 1000 msats)
+    let rate_msats_f64 = request.rate_sats_per_min * 1000.0;
+    
+    // Check that the result doesn't exceed u64::MAX and is not NaN/inf
+    if !rate_msats_f64.is_finite() || rate_msats_f64 > u64::MAX as f64 {
+        return Err((axum::http::StatusCode::BAD_REQUEST, 
+            format!("Invalid payment rate: {} sats/min results in overflow when converted to msats", request.rate_sats_per_min)));
+    }
+    
+    // Safe cast after validation
+    let rate_msats = rate_msats_f64 as u64;
+    
+    // Update PaymentRateMsats in torrc.relay
+    update_torrc_config_line(
+        &torrc_relay_path,
+        "PaymentRateMsats",
+        &rate_msats.to_string(),
+    )
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    
+    Ok(ResponseJson(PaymentRateResponse {
+        message: format!("Payment rate updated to {} msats/min ({} sats/min)", rate_msats, request.rate_sats_per_min),
+        rate_msats,
+    }))
+}
+
 // Create eltord routes
 pub fn create_routes() -> Router<AppState> {
     Router::new()
@@ -234,4 +291,5 @@ pub fn create_routes() -> Router<AppState> {
         .route("/api/eltord/logs", get(stream_logs))
         .route("/api/eltord/logs/:mode", get(get_eltord_logs))           // GET recent logs
         .route("/api/eltord/logs/stream/:mode", get(stream_eltord_logs)) // SSE stream
+        .route("/api/eltord/relay/payment-rate", post(update_payment_rate))
 }

@@ -81,3 +81,4 @@ payments_received.json*
 # Downloaded eltord binary (platform-specific, should be downloaded per platform)
 backend/bin/eltord
 backend/bin/eltord.exe
+backend/bin/arti

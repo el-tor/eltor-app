@@ -281,6 +281,7 @@ async fn upsert_lightning_config(
     ).await {
         Ok(_) => {
             // Also update torrc.relay with the same config
+            info!("🔍 Updating torrc.relay at path: {:?}", torrc_relay_path);
             if let Err(e) = modify_payment_lightning_config(
                 &torrc_relay_path,
                 Operation::Upsert,
@@ -291,7 +292,7 @@ async fn upsert_lightning_config(
             ).await {
                 info!("⚠️  Failed to update PaymentLightningNodeConfig in torrc.relay: {}", e);
             } else {
-                info!("✅ Updated PaymentLightningNodeConfig in torrc.relay");
+                info!("✅ Updated PaymentLightningNodeConfig in torrc.relay at {:?}", torrc_relay_path);
             }
             
             // If this is being set as default, reload the lightning node in app state
@@ -320,6 +321,7 @@ async fn upsert_lightning_config(
                             match new_node.get_offer().await {
                                 Ok(offer_response) => {
                                     // Update PaymentBolt12Offer in torrc.relay
+                                    info!("🔍 Updating PaymentBolt12Offer in torrc.relay at path: {:?}", torrc_relay_path);
                                     if let Err(e) = crate::torrc_parser::update_torrc_config_line(
                                         &torrc_relay_path,
                                         "PaymentBolt12Offer",
@@ -327,7 +329,7 @@ async fn upsert_lightning_config(
                                     ).await {
                                         info!("⚠️  Failed to update PaymentBolt12Offer in torrc.relay: {}", e);
                                     } else {
-                                        info!("✅ Updated PaymentBolt12Offer in torrc.relay: {}", &offer_response.payment_request);
+                                        info!("✅ Updated PaymentBolt12Offer in torrc.relay at {:?}: {}", torrc_relay_path, &offer_response.payment_request);
                                     }
                                 }
                                 Err(e) => {

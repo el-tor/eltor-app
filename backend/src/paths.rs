@@ -141,8 +141,18 @@ pub fn detect_paths() -> Result<(PathBuf, PathBuf, Option<PathBuf>), String> {
     if let Ok(exe_path) = env::current_exe() {
         info!("   Current exe: {:?}", exe_path);
     }
+
+    // Check for Tauri-specific environment variable first (set by Tauri main.rs)
+    if let Ok(tauri_bin_dir) = env::var("ELTOR_TAURI_BIN_DIR") {
+        info!("   Using ELTOR_TAURI_BIN_DIR from Tauri: {}", tauri_bin_dir);
+        let bin_dir = PathBuf::from(tauri_bin_dir);
+        let app_data_dir = get_app_data_dir()?;
+        info!("   Tauri bin_dir: {:?}", bin_dir);
+        info!("   Tauri app_data_dir: {:?}", app_data_dir);
+        return Ok((bin_dir, app_data_dir.clone(), Some(app_data_dir)));
+    }
     
-    // Check environment variable override first
+    // Then check environment variable override
     if let Ok(override_path) = env::var("ELTOR_BIN_DIR") {
         info!("   Using ELTOR_BIN_DIR override: {}", override_path);
         let bin_dir = PathBuf::from(override_path);
@@ -373,7 +383,17 @@ fn substitute_torrc_variables(mut content: String) -> Result<String, String> {
         "$APP_ELTOR_TOR_SOCKS_PORT",
         &env::var("APP_ELTOR_TOR_SOCKS_PORT").unwrap_or_else(|_| "0.0.0.0:18058".to_string()),
     );
-    
+
+    content = content.replace(
+        "$APP_ELTOR_SOCKS_ROUTER_PORT",
+        &env::var("APP_ELTOR_SOCKS_ROUTER_PORT").unwrap_or_else(|_| "0.0.0.0:18048".to_string()),
+    );
+
+    content = content.replace(
+        "$APP_ARTI_SOCKS_PORT",
+        &env::var("APP_ARTI_SOCKS_PORT").unwrap_or_else(|_| "18050".to_string()),
+    );
+
     content = content.replace(
         "$APP_ELTOR_TOR_CONTROL_PORT",
         &env::var("APP_ELTOR_TOR_CONTROL_PORT").unwrap_or_else(|_| "9992".to_string()),
