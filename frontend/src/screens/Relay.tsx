@@ -53,6 +53,9 @@ export const Relay = () => {
   const dispatch = useDispatch()
   const [localIp, setLocalIp] = useState<string>('X.X.X.X')
   const [rate, setRate] = useState<string | number>(1)
+  const [orPort, setOrPort] = useState<number>(9996)
+  const [controlPort, setControlPort] = useState<number>(7781)
+  const [publicIp, setPublicIp] = useState<string>('X.X.X.X')
 
   const preRef = useRef<HTMLPreElement>(null)
 
@@ -62,7 +65,7 @@ export const Relay = () => {
       const numValue = typeof value === 'string' ? parseFloat(value) : value
       if (!isNaN(numValue) && numValue > 0) {
         await apiService.updateRelayPaymentRate(numValue)
-        console.log(`Payment rate updated to ${numValue} sats/min`)
+        console.log(`Payment rate updated to ${numValue} sat(s)/min`)
       }
     } catch (error) {
       console.error('Failed to update payment rate:', error)
@@ -89,6 +92,15 @@ export const Relay = () => {
         // Set initial payment rate from backend (convert msats to sats)
         if (debugInfo.payment_rate_msats) {
           setRate(debugInfo.payment_rate_msats / 1000)
+        }
+        if (debugInfo.torrc_relay_or_port) {
+          setOrPort(debugInfo.torrc_relay_or_port)
+        }
+        if (debugInfo.torrc_relay_control_port) {
+          setControlPort(debugInfo.torrc_relay_control_port)
+        }
+        if (debugInfo.public_ip) {
+          setPublicIp(debugInfo.public_ip)
         }
       } catch (error) {
         console.error('Failed to fetch debug info:', error)
@@ -123,85 +135,132 @@ export const Relay = () => {
           <Circle color={isRelayRunning ? 'lightgreen' : '#FF6347'} />
         </Group>
       </Group>
-      <Text>
-        <b>1. Run a Relay</b> - and get paid for sharing your bandwidth
-      </Text>
-
-      <Checkbox
-        label="Enable Relay"
-        checked={relayEnabled}
-        onChange={(event) => {
-          if (event.currentTarget.checked) {
-            dispatch(setRelayEnabled(true))
-          } else {
-            dispatch(setRelayEnabled(false))
-          }
-          setModalOpened(true)
-        }}
-      />
-      <Checkbox
-        label="Enable Client - You can disable this if you only want to run a relay and not use the El Tor network yourself"
-        checked={clientEnabled}
-        onChange={(event) => {
-          if (event.currentTarget.checked) {
-            dispatch(setClientEnabled(true))
-          } else {
-            dispatch(setClientEnabled(false))
-          }
-          setModalOpened(true)
-        }}
-      />
-
-      <Text>
-        <b>2. Get Paid</b> - Make sure to set your rate. You will get paid out
-        to this wallets BOLT12 offer.
-      </Text>
+      <Group ml="auto" mt="-20">
+        <Text color="dimmed" size="xs" mr="28">
+          Activate on Home page
+        </Text>
+      </Group>
+      <Text size="lg">Instructions on how to run a relay:</Text>
       <Group>
-        <NumberInput w="120" value={rate} onChange={handleRateChange} />
-        <Text>sats/min</Text>
+        <Text size="lg">
+          <b>1. Run a Relay</b>
+        </Text>
+        <Text color="dimmed" size="md">
+          and get paid for sharing your bandwidth
+        </Text>
+      </Group>
+      <Group ml="32">
+        <Checkbox
+          size="md"
+          label="Enable Relay"
+          checked={relayEnabled}
+          onChange={(event) => {
+            if (event.currentTarget.checked) {
+              dispatch(setRelayEnabled(true))
+            } else {
+              dispatch(setRelayEnabled(false))
+            }
+            setModalOpened(true)
+          }}
+        />
+        <Group>
+          <Checkbox
+            size="md"
+            label="Enable Client"
+            checked={clientEnabled}
+            onChange={(event) => {
+              if (event.currentTarget.checked) {
+                dispatch(setClientEnabled(true))
+              } else {
+                dispatch(setClientEnabled(false))
+              }
+              setModalOpened(true)
+            }}
+          />
+          <Text color="dimmed">
+            - You can disable this if you only want to run a relay and not use
+            the El Tor network yourself
+          </Text>
+        </Group>
       </Group>
 
-      <CopyableTextBox
-        text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'}
-        limitChars={80}
-      />
-      <Text>
-        <b>3. OS Firewall</b> - Make sure to open this onion router port on your
-        OS firewall
-      </Text>
-      {/* TODO read ports and IP from config */}
-      <CopyableTextBox text="ufw allow 9996" />
-      <Text>
-        <b>4. Router Port Forward (NAT)</b> - Make sure to port forward the
-        ORPort on your router if behind NAT. See your router's documentation for
-        specific instructions on how to set up port forwarding or visit{' '}
-        <a
-          href="https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router"
-          target="_blank"
-        >
-          https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router
-        </a>{' '}
-        Or if your router supports UPnP, you can use
-        <a href="https://miniupnp.tuxfamily.org/" target="_blank">
-          {' '}
-          miniupnp
-        </a>{' '}
-        with your local Umbrel IP address.
-      </Text>
-      {/* TODO read ports and IP from config */}
-      <CopyableTextBox text={`upnpc -a ${localIp} 9996 9996 TCP`} />
-      <Text>
-        <b>5. Monitor</b> your relay with{' '}
-        <a href="https://nyx.torproject.org/" target="_blank">
-          {' '}
-          nyx
-        </a>
-        : <br />
-        (you might need to change the control port 7781 based on your torrc
-        config)
-      </Text>
-      <CopyableTextBox text="nyx -i 127.0.0.1:7781" />
+      <Group mt="md">
+        <Text size="lg">
+          <b>2. Get Paid</b>
+        </Text>
+        <Text color="dimmed" size="md">
+          Make sure to set your rate in sats per minute. You will get paid out to this 
+          BOLT12 offer.
+        </Text>
+      </Group>
+      <Box ml="32">
+        <Group mb="md">
+          <NumberInput w="120" value={rate} onChange={handleRateChange} />
+          <Text>sat(s) / min</Text>
+        </Group>
+        <CopyableTextBox
+          text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'} 
+          limitChars={80}
+        />
+      </Box>
+
+      <Group mt="md">
+        <Text size="lg">
+          <b>3. OS Firewall</b>
+        </Text>
+        <Text color="dimmed" size="md">
+          Make sure to open the onion router port on your OS firewall (OrPort in torrc config)  Detected public IP: {publicIp}
+        </Text>
+      </Group>
+      <Box ml="32">
+        <CopyableTextBox text={`ufw allow ${orPort}`} />
+      </Box>
+
+      <Group mt="md">
+        <Text size="lg">
+          <b>4. Router Port Forward (NAT)</b>
+        </Text>
+      </Group>
+
+      <Box ml="32">
+        <Text color="dimmed" size="md" mb="md">
+          Make sure to port forward the OrPort on your router if behind NAT. See
+          your router's documentation for specific instructions on how to set up
+          port forwarding or visit{' '}
+          <a
+            href="https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router"
+            target="_blank"
+          >
+            https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router
+          </a>{' '}
+          Or if your router supports UPnP, you can use
+          <a href="https://miniupnp.tuxfamily.org/" target="_blank">
+            {' '}
+            miniupnp
+          </a>{' '}
+          with your local LAN IP address.
+        </Text>
+        <CopyableTextBox text={`upnpc -a ${localIp} ${orPort} ${orPort} TCP`} />
+      </Box>
+
+      <Group mt="md">
+        <Text size="lg">
+          <b>5. Monitor (Optional)</b>
+        </Text>
+      </Group>
+      <Box ml="32">
+        <Text mb="md" color="dimmed" size="md">
+          Monitor your relay with{' '}
+          <a href="https://nyx.torproject.org/" target="_blank">
+            {' '}
+            nyx
+          </a>. Use it to help troubleshoot your Relay, check bandwidth usage, run commands, and view circuits. To login, use the command below
+          with the default password `password1234_` or look in your `torrc.relay` file or env var `APP_ELTOR_TOR_RELAY_CONTROL_PASSWORD`
+        </Text>
+        <CopyableTextBox text={`nyx -i 127.0.0.1:${controlPort}`} />
+      </Box>
       <Text mb="xl"></Text>
+
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}

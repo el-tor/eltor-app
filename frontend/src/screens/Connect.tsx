@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Circle } from '../components/Circle'
 import LogViewer from '../components/LogViewer'
-import { clearLogsClient } from '../globalStore'
+import { clearLogsClient, setClientEnabled } from '../globalStore'
 import { useDispatch, useSelector } from '../hooks'
 import { logStreamService } from '../services/logStreamService'
 // @ts-ignore
@@ -217,6 +217,14 @@ export const Connect = () => {
 
                 // Start bootstrapping UI immediately at 1%
                 startBootstrapping()
+
+                // if client or relay not set then set the client
+                if (!clientEnabled && !relayEnabled) {
+                  console.log(
+                    '⚙️ No mode selected, defaulting to client mode activation',
+                  )
+                  dispatch(setClientEnabled(true))
+                }
 
                 // Activate with logging based on whether logs were paused or not
                 await activate(shouldEnableLogging)
