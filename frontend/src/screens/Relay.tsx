@@ -116,9 +116,9 @@ export const Relay = () => {
       <Text>
         <b>2. Get Paid</b> - You will get paid out to this wallet offer
       </Text>
-      <CopyableTextBox 
-        text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'} 
-        limitChars={80} 
+      <CopyableTextBox
+        text={wallet.bolt12Offer || 'Loading relay BOLT12 offer...'}
+        limitChars={80}
       />
       <Text>
         <b>3. OS Firewall</b> - Make sure to open this onion router port on your
@@ -128,12 +128,20 @@ export const Relay = () => {
       <CopyableTextBox text="ufw allow 9996" />
       <Text>
         <b>4. Router Port Forward (NAT)</b> - Make sure to port forward the
-        ORPort on your router if behind NAT. Or if your router supports UPnP,
-        you can use
+        ORPort on your router if behind NAT. See your router's documentation for
+        specific instructions on how to set up port forwarding or visit{' '}
+        <a
+          href="https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router"
+          target="_blank"
+        >
+          https://www.wikihow.com/Set-Up-Port-Forwarding-on-a-Router
+        </a>{' '}
+        Or if your router supports UPnP, you can use
         <a href="https://miniupnp.tuxfamily.org/" target="_blank">
           {' '}
           miniupnp
-        </a>
+        </a>{' '}
+        with your local Umbrel IP address.
       </Text>
       {/* TODO read ports and IP from config */}
       <CopyableTextBox text="upnpc -a X.X.X.X 9996 9996 TCP" />
