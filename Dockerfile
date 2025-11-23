@@ -1,7 +1,7 @@
 # =============================================================================
 # Stage 1: Build Dependencies
 # =============================================================================
-FROM rustlang/rust:nightly-slim AS builder
+FROM rust:1.91.1-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -93,7 +93,7 @@ RUN ARCH=$(uname -m) && \
 # =============================================================================
 # Stage 4: Final Runtime Image
 # =============================================================================
-FROM rustlang/rust:nightly-slim AS runtime
+FROM rust:1.91.1-slim AS runtime
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y \

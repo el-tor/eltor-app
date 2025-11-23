@@ -23,6 +23,7 @@
     "dmg:debug": "tauri build --bundles dmg --debug",
     "dmg": "tauri build --bundles dmg",
     "deb": "pnpm tauri build --target x86_64-unknown-linux-gnu --bundles deb",
+    "deb:arm": "pnpm tauri build --target aarch64-unknown-linux-gnu --bundles deb",
     "win": "pnpm tauri build --target x86_64-pc-windows-msvc --bundles windows"
 
   },

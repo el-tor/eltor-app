@@ -119,6 +119,11 @@ jobs:
           chmod +x scripts/download-eltord.sh
           scripts/download-eltord.sh latest linux-arm64
 
+      - name: Download arti binary for ARM64
+        run: |
+          chmod +x scripts/download-arti.sh
+          scripts/download-arti.sh latest linux-arm64
+
       - name: Build eltor-app ARM64
         run: |
           cd frontend
@@ -189,6 +194,11 @@ jobs:
         run: |
           chmod +x scripts/download-eltord.sh
           scripts/download-eltord.sh latest linux-x86_64
+      
+      - name: Download arti binary for x86_64
+        run: |
+          chmod +x scripts/download-arti.sh
+          scripts/download-arti.sh latest linux-x86_64
 
       - name: Build eltor-app x86_64
         run: |

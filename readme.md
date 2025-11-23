@@ -96,7 +96,7 @@ cargo run               # Start HTTP server. Alternative command ./run.sh
 
 # Docker
 npm run docker # to run locally
-# package - remember to increment the version in package.json and cargo.toml
+# package - remember to increment the version in package.json and backend/cargo.toml and frontend/src-tauri/cargo.yaml
 npm run docker:build:arm
 npm run docker:build:amd
 npm run docker:push
@@ -197,7 +197,7 @@ to locally build arm64 based images. This allows you to build locally on a Mac M
 ```sh
 npm run actions:build:linux:arm
 # or
-ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm -P self-hosted=skip --bind
+ACT=true act workflow_dispatch --secret-file .secrets -j build-linux-arm64 -P self-hosted=skip --bind
 ```
 
 
