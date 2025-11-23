@@ -97,7 +97,12 @@ download_and_build_arti() {
     cd "$TEMP_DIR/arti"
     
     # Build Arti with http-connect feature for HTTP proxy support
-    cargo build -p arti --locked --release --features http-connect
+    # Add static-sqlite for Windows to avoid runtime dependencies
+    if [ "$PLATFORM" = "windows-x86_64" ]; then
+        cargo build -p arti --locked --release --features http-connect,static-sqlite
+    else
+        cargo build -p arti --locked --release --features http-connect
+    fi
     
     # Copy the binary to our target directory
     if [ "$PLATFORM" = "windows-x86_64" ]; then

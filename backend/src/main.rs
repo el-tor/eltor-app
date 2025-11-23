@@ -40,7 +40,7 @@ async fn main() {
     });
 
     // Create app state with PathConfig
-    let mut state = eltor_backend::create_app_state(use_phoenixd_embedded, path_config.clone());
+    let state = eltor_backend::create_app_state(use_phoenixd_embedded, path_config.clone());
 
     // Set up custom logger to capture ALL logs (including from eltor library) BEFORE anything else
     // if let Err(e) = setup_broadcast_logger(state.clone()) {
@@ -131,13 +131,7 @@ async fn main() {
     });
     info!("✅ SOCKS Router started in background");
 
-    // Initialize shared EltorManager
-    let state_arc = std::sync::Arc::new(tokio::sync::RwLock::new(state.clone()));
-    let eltor_manager = eltor_backend::eltor::EltorManager::new(
-        state_arc,
-        path_config.clone(),
-    );
-    state.set_eltor_manager(eltor_manager);
+    // EltorManager removed - now using PID-based process management
 
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {

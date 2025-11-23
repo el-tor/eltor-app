@@ -7,7 +7,6 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 ### Prerequisites
 - **Node.js** 20+ with pnpm
 - **Rust** 1.70+
-- **eltord** project at `~/code/eltord/`
 - setup [env vars](#environment-setup)
 - tauri https://v2.tauri.app/start/prerequisites/
 - `./scripts/download-eltord.sh`
@@ -15,6 +14,7 @@ A modern VPN-like desktop and web app for connecting to the El Tor network - a p
 
 ### 🌐 Web Mode
 ```bash
+npm i
 npm run web
 # Frontend runs on `http://localhost:5173` (with vite proxy to backend at /api)
 # Backend API on `http://localhost:5174`

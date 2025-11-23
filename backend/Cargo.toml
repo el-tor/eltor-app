@@ -25,7 +25,7 @@ lni = { git = "https://github.com/lightning-node-interface/lni.git", rev="0f36a4
 # lni = { path = "../../lni/crates/lni" }
 uuid = { version = "1.0", features = ["v4"] }
 ip2location = "0.5"
-eltor = { git = "https://github.com/el-tor/eltord.git", rev = "42bf7fd8ef5f4ad89cd9239a96b026d05ffca1a5" }
+# eltor = { git = "https://github.com/el-tor/eltord.git", rev = "42bf7fd8ef5f4ad89cd9239a96b026d05ffca1a5" }
 # eltor = { path = "../../eltord" }
 env_logger = "0.11"
 log = "0.4"

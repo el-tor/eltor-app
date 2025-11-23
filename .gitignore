@@ -82,5 +82,6 @@ payments_received.json*
 backend/bin/eltord
 backend/bin/eltord.exe
 backend/bin/arti
+backend/bin/arti.exe
 
 .release/

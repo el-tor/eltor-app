@@ -24,7 +24,7 @@ pub mod debug_info;
 pub use arti::{start_arti_with_eltord, stop_arti, is_arti_running, get_arti_status, cleanup_arti};
 pub use eltor::{
     EltorActivateParams, EltorDeactivateParams,
-    EltorManager, EltorStatus, cleanup_all_eltord_processes,
+    EltorStatus, cleanup_all_eltord_processes,
 };
 pub use socks::{start_socks_router, stop_socks_router, is_socks_router_running, SocksRouterConfig};
 pub use lightning::{LightningNode, ListTransactionsResponse, WalletBalanceResponse};
@@ -175,16 +175,13 @@ pub fn setup_broadcast_logger(_state: AppState) -> Result<(), String> {
     Ok(())
 }
 
-/// Initialize app state with EltorManager - for Tauri usage
-pub async fn initialize_app_state(state: Arc<RwLock<AppState>>) -> Result<(), String> {
-    let mut app_state = state.write().await;
-    let path_config = PathConfig::new().map_err(|e| format!("Failed to create PathConfig: {}", e))?;
-    let manager = eltor::EltorManager::new(state.clone(), path_config);
-    app_state.set_eltor_manager(manager);
+/// Initialize app state - for Tauri usage
+pub async fn initialize_app_state(_state: Arc<RwLock<AppState>>) -> Result<(), String> {
+    // No longer needs to initialize EltorManager - using PID-based process management
     Ok(())
 }
 
-/// Initialize app state with EltorManager using a custom PathConfig - for Tauri with resource directory
+/// Initialize app state using a custom PathConfig - for Tauri with resource directory
 pub async fn initialize_app_state_with_path_config(
     state: Arc<RwLock<AppState>>, 
     path_config: PathConfig
@@ -194,8 +191,6 @@ pub async fn initialize_app_state_with_path_config(
     // Update the path_config in AppState
     app_state.path_config = Arc::new(path_config.clone());
     
-    let manager = eltor::EltorManager::new(state.clone(), path_config);
-    app_state.set_eltor_manager(manager);
     Ok(())
 }
 
@@ -212,7 +207,6 @@ pub async fn initialize_phoenixd(state: Arc<RwLock<AppState>>) -> Result<(), Str
             wallet_state: app_state.wallet_state.clone(),
             lightning_node: app_state.lightning_node.clone(),
             torrc_file_name: app_state.torrc_file_name.clone(),
-            eltor_manager: app_state.eltor_manager.clone(),
             path_config: app_state.path_config.clone(),
             client_log_cancel: app_state.client_log_cancel.clone(),
             relay_log_cancel: app_state.relay_log_cancel.clone(),
@@ -236,17 +230,9 @@ pub fn activate_eltord(mode: String, enable_logging: bool) -> Result<String, Str
     Ok("activation started".to_string())
 }
 
-/// Deactivate eltord - requires manager in AppState
-pub async fn deactivate_eltord(state: Arc<RwLock<AppState>>, mode: EltorMode) -> Result<String, String> {
-    let app_state = state.read().await;
-    let manager = match &app_state.eltor_manager {
-        Some(manager) => manager.clone(),
-        None => return Err("EltorManager not initialized in AppState".to_string()),
-    };
-    drop(app_state); // Release the read lock
-    
-    let params = EltorDeactivateParams { mode };
-    manager.deactivate(params).await
+/// Deactivate eltord - uses PID-based process management
+pub async fn deactivate_eltord(_state: Arc<RwLock<AppState>>, mode: EltorMode) -> Result<String, String> {
+    eltor::deactivate_eltord_process(mode.to_string().to_string()).await
 }
 
 /// Get eltord status - uses PID files instead of manager
@@ -439,7 +425,7 @@ pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String
     info!("🛑 Stopping Arti...");
     crate::arti::cleanup_arti().await;
 
-    // Step 3: Stop managed eltord processes (from EltorManager)
+    // Step 3: Stop eltord processes using PID-based management
     match deactivate_eltord(state.clone(), EltorMode::Relay).await {
         Ok(msg) => info!("✅ Relay: {}", msg),
         Err(e) => {

@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 use crate::lightning::LightningNode;
-use crate::eltor::EltorManager;
 use crate::paths::PathConfig;
 
 // Log entry structure
@@ -44,7 +43,6 @@ pub struct AppState {
     pub wallet_state: WalletState,
     pub lightning_node: Arc<Mutex<Option<LightningNode>>>,
     pub torrc_file_name: String,
-    pub eltor_manager: Option<Arc<EltorManager>>,
     pub path_config: Arc<PathConfig>,
     pub client_log_cancel: Arc<Mutex<Option<CancellationToken>>>,
     pub relay_log_cancel: Arc<Mutex<Option<CancellationToken>>>,
@@ -61,7 +59,6 @@ impl AppState {
             wallet_state: WalletState::new(use_phoenixd_embedded),
             lightning_node: Arc::new(Mutex::new(None)),
             torrc_file_name: "torrc".to_string(),
-            eltor_manager: None,
             path_config: Arc::new(path_config),
             client_log_cancel: Arc::new(Mutex::new(None)),
             relay_log_cancel: Arc::new(Mutex::new(None)),
@@ -71,10 +68,6 @@ impl AppState {
     pub fn set_lightning_node(&self, node: LightningNode) {
         let mut lightning_node_guard = self.lightning_node.lock().unwrap();
         *lightning_node_guard = Some(node);
-    }
-
-    pub fn set_eltor_manager(&mut self, manager: EltorManager) {
-        self.eltor_manager = Some(Arc::new(manager));
     }
 
     pub fn add_log(&self, entry: LogEntry) {
