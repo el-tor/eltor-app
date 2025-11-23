@@ -21,9 +21,14 @@
     "icon": "tauri icon src/assets/eltor-logo-1024.svg",
     
     "dmg:debug": "tauri build --bundles dmg --debug",
-    "dmg": "tauri build --bundles dmg",
+    "dmg": "tauri build --bundles dmg --target universal-apple-darwin",
+    "dmg:arm": "tauri build --bundles dmg --target aarch64-apple-darwin",
+    "dmg:intel": "tauri build --bundles dmg --target x86_64-apple-darwin",
+    
     "deb": "pnpm tauri build --target x86_64-unknown-linux-gnu --bundles deb",
     "deb:arm": "pnpm tauri build --target aarch64-unknown-linux-gnu --bundles deb",
+    "deb:armv7": "pnpm tauri build --target armv7-unknown-linux-gnueabihf --bundles deb",
+
     "win": "pnpm tauri build --target x86_64-pc-windows-msvc --bundles windows"
 
   },

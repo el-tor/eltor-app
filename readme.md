@@ -155,11 +155,17 @@ sudo apt purge eltor
 
 #### Mac
 ```sh
-# run on a mac arm or x86_64
+# run on a mac arm (M)
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-apple-darwin
 cd frontend 
 pnpm i
 pnpm run dmg
-# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.1.0_aarch64.dmg
+# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.0.18_universal.dmg
+# to compile just arm
+pnpm run dmg:arm
+# to compile just intel x86
+pnpm run dmg:intel
 ```
 
 ### Windows
