@@ -83,5 +83,6 @@ backend/bin/eltord
 backend/bin/eltord.exe
 backend/bin/arti
 backend/bin/arti.exe
+backend/bin/*.jar
 
 .release/
