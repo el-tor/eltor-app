@@ -97,6 +97,7 @@ cargo run               # Start HTTP server. Alternative command ./run.sh
 # Docker
 npm run docker # to run locally
 # package - remember to increment the version in package.json and backend/cargo.toml and frontend/src-tauri/cargo.yaml
+cd frontend && pnpm build:web && ../
 npm run docker:build:arm
 npm run docker:build:amd
 npm run docker:push
@@ -130,7 +131,7 @@ ACCEPT_INVALID_CERTS=true
 
 
 
-## 📦 Release (CI)
+## 📦 Release El Tor VPN
 
 Outputs platform-specific installers:
 - **Linux**: `.deb`
@@ -168,12 +169,35 @@ pnpm run dmg:arm
 pnpm run dmg:intel
 ```
 
-### Windows
+### Windows (not working yet)
 ```sh
 cd frontend 
 pnpm i
 pnpm run win
 ```
+
+Github Release:
+================
+1. create a folder in .release/0.0.18
+2. add each dmg/deb to the folder
+3. create a release
+```
+# 1. Create and push a tag
+git tag v0.0.18
+git push origin v0.0.18
+
+# 2. Create a GitHub release via CLI (if you have gh installed)
+gh release create v0.0.18 \
+  --title "Release v0.0.18" \
+  --notes "Release notes here" \
+  --latest \
+  .release/0.0.18/*
+
+# Or create annotated tag with message
+git push origin v0.0.18
+gh release edit v0.0.18 --latest
+```
+4. Make sure update the `eltor-website` project the latest version to point downloads to
 
 ### Github Actions
 TODO: this does not fully work yet
