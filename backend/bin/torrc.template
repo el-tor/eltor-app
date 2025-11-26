@@ -24,8 +24,6 @@ TestingMinExitFlagThreshold 0
 UseDefaultFallbackDirs 0
 AssumeReachable 1
 
-# Nickname - configurable via environment
-Nickname $APP_ELTOR_TOR_NICKNAME
 
 # Logging configuration - configurable via environment
 Log notice file $APP_ELTOR_TOR_DATA_DIRECTORY/client/notice.log
@@ -60,7 +58,7 @@ ControlPort $APP_ELTOR_TOR_CONTROL_PORT
 HashedControlPassword $APP_ELTOR_TOR_HASHED_CONTROL_PASSWORD
 
 # Address - configurable via environment
-Address $APP_ELTOR_TOR_CLIENT_ADDRESS
+# Address $APP_ELTOR_TOR_CLIENT_ADDRESS
 
 # Payment configuration - configurable via environment
 PaymentCircuitMaxFee $APP_ELTOR_TOR_PAYMENT_CIRCUIT_MAX_FEE

@@ -95,9 +95,9 @@ cargo build --release   # Build release target
 cargo run               # Start HTTP server. Alternative command ./run.sh
 
 # Docker
+cd frontend && pnpm build:web && ../
 npm run docker # to run locally
 # package - remember to increment the version in package.json and backend/cargo.toml and frontend/src-tauri/cargo.yaml
-cd frontend && pnpm build:web && ../
 npm run docker:build:arm
 npm run docker:build:amd
 npm run docker:push
@@ -162,7 +162,7 @@ rustup target add aarch64-apple-darwin
 cd frontend 
 pnpm i
 pnpm run dmg
-# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.0.18_universal.dmg
+# this outputs to ./frontend/src-tauri/target/release/bundle/dmg/eltor_0.0.19_universal.dmg
 # to compile just arm
 pnpm run dmg:arm
 # to compile just intel x86
@@ -178,24 +178,24 @@ pnpm run win
 
 Github Release:
 ================
-1. create a folder in .release/0.0.18
+1. create a folder in .release/0.0.19
 2. add each dmg/deb to the folder
 3. create a release
 ```
 # 1. Create and push a tag
-git tag v0.0.18
-git push origin v0.0.18
+git tag v0.0.19
+git push origin v0.0.19
 
 # 2. Create a GitHub release via CLI (if you have gh installed)
-gh release create v0.0.18 \
-  --title "Release v0.0.18" \
+gh release create v0.0.19 \
+  --title "Release v0.0.19" \
   --notes "Release notes here" \
   --latest \
-  .release/0.0.18/*
+  .release/0.0.19/*
 
 # Or create annotated tag with message
-git push origin v0.0.18
-gh release edit v0.0.18 --latest
+git push origin v0.0.19
+gh release edit v0.0.19 --latest
 ```
 4. Make sure update the `eltor-website` project the latest version to point downloads to
 
