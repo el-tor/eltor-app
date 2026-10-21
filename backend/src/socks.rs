@@ -189,30 +189,22 @@ async fn handle_socks_connection(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     debug!("🔌 New SOCKS5 connection from {}", client_addr);
     
-    // Step 1: SOCKS5 greeting
-    let mut buffer = vec![0u8; 1024];
-    let n = client_stream.read(&mut buffer).await?;
-    
-    debug!("📥 Received {} bytes for greeting from {}", n, client_addr);
-    
-    if n < 2 || buffer[0] != 0x05 {
-        warn!("❌ Invalid SOCKS5 greeting from {}: {:?}", client_addr, &buffer[..n.min(10)]);
+    // TCP reads are not message boundaries: read the complete greeting.
+    let mut greeting = [0u8; 2];
+    client_stream.read_exact(&mut greeting).await?;
+    if greeting[0] != 0x05 || greeting[1] == 0 {
         return Err("Invalid SOCKS5 greeting".into());
     }
-
-    debug!("✅ Valid SOCKS5 greeting from {}, sending auth method", client_addr);
-    // Send method selection (no auth)
+    let mut methods = vec![0; greeting[1] as usize];
+    client_stream.read_exact(&mut methods).await?;
+    if !methods.contains(&0x00) {
+        client_stream.write_all(&[0x05, 0xff]).await?;
+        return Err("No supported SOCKS5 authentication method".into());
+    }
     client_stream.write_all(&[0x05, 0x00]).await?;
 
-    // Step 2: Read SOCKS5 request
-    let n = client_stream.read(&mut buffer).await?;
-    
-    debug!("📥 Received {} bytes for request from {}", n, client_addr);
-    
-    if n < 10 || buffer[0] != 0x05 {
-        warn!("❌ Invalid SOCKS5 request from {}: {:?}", client_addr, &buffer[..n.min(20)]);
-        return Err("Invalid SOCKS5 request".into());
-    }
+    let buffer = read_socks_message(&mut client_stream).await?;
+    let n = buffer.len();
 
     if buffer[1] != SocksCommand::Connect as u8 {
         warn!("❌ Unsupported SOCKS command from {}: {}", client_addr, buffer[1]);
@@ -287,15 +279,10 @@ async fn handle_via_proxy(
     debug!("📤 Forwarding SOCKS request to proxy: {} bytes", request_data.len());
     upstream_stream.write_all(request_data).await?;
 
-    // Read upstream response
-    debug!("📥 Reading proxy response");
-    let mut buffer = vec![0u8; 1024];
-    let resp_n = upstream_stream.read(&mut buffer).await?;
-    debug!("📥 Proxy response: {} bytes, status: {}", resp_n, if resp_n > 1 { buffer[1] } else { 255 });
-    
-    // Forward response to client
-    debug!("📤 Forwarding proxy response to client");
-    client_stream.write_all(&buffer[..resp_n]).await?;
+    // Read exactly one complete reply, preserving any following tunnel data.
+    let buffer = read_socks_message(&mut upstream_stream).await?;
+    let resp_n = buffer.len();
+    client_stream.write_all(&buffer).await?;
 
     // Check if the proxy connection was successful
     if resp_n >= 2 && buffer[1] != 0x00 {
@@ -305,21 +292,35 @@ async fn handle_via_proxy(
 
     debug!("✅ SOCKS tunnel established via proxy port {}", proxy_port);
 
-    // Bidirectional copy
-    let (mut client_read, mut client_write) = client_stream.into_split();
-    let (mut upstream_read, mut upstream_write) = upstream_stream.into_split();
-
-    let client_to_upstream = tokio::spawn(async move {
-        tokio::io::copy(&mut client_read, &mut upstream_write).await
-    });
-
-    let upstream_to_client = tokio::spawn(async move {
-        tokio::io::copy(&mut upstream_read, &mut client_write).await
-    });
-
-    let _ = tokio::try_join!(client_to_upstream, upstream_to_client);
+    // Propagate half-closes and surface transfer errors without detached tasks.
+    tokio::io::copy_bidirectional(&mut client_stream, &mut upstream_stream).await?;
     debug!("🔌 SOCKS connection closed");
     Ok(())
+}
+
+/// Read a SOCKS5 request/reply without assuming a single TCP read contains it.
+async fn read_socks_message(stream: &mut TcpStream) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut header = [0u8; 4];
+    stream.read_exact(&mut header).await?;
+    if header[0] != 5 || header[2] != 0 {
+        return Err("Invalid SOCKS5 header".into());
+    }
+    let mut message = header.to_vec();
+    let address_len = match header[3] {
+        1 => 4,
+        4 => 16,
+        3 => {
+            let len = stream.read_u8().await?;
+            if len == 0 { return Err("Empty SOCKS5 hostname".into()); }
+            message.push(len);
+            len as usize
+        }
+        _ => return Err("Unsupported SOCKS5 address type".into()),
+    };
+    let start = message.len();
+    message.resize(start + address_len + 2, 0);
+    stream.read_exact(&mut message[start..]).await?;
+    Ok(message)
 }
 
 /// Parse target address from SOCKS5 request
@@ -391,4 +392,80 @@ pub fn is_socks_router_running() -> bool {
     // For now, we'll assume it's not running since we don't track global state
     // This could be enhanced with proper state tracking if needed
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn pair() -> (TcpStream, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (server, _) = listener.accept().await.unwrap();
+        (client, server)
+    }
+
+    #[tokio::test]
+    async fn reads_fragmented_ipv4_and_preserves_following_data() {
+        let (mut client, mut server) = pair().await;
+        let writer = tokio::spawn(async move {
+            for byte in [5, 1, 0, 1, 127, 0, 0, 1, 0, 80] {
+                client.write_all(&[byte]).await.unwrap();
+                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+            }
+            client.write_all(b"GET").await.unwrap();
+        });
+        assert_eq!(read_socks_message(&mut server).await.unwrap(), [5,1,0,1,127,0,0,1,0,80]);
+        let mut data = [0; 3];
+        server.read_exact(&mut data).await.unwrap();
+        assert_eq!(&data, b"GET");
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn accepts_short_domain_and_ipv6_frames() {
+        for frame in [vec![5,1,0,3,1,b'x',0,80],
+                      [vec![5,1,0,4], vec![0;16], vec![0,80]].concat()] {
+            let (mut client, mut server) = pair().await;
+            client.write_all(&frame).await.unwrap();
+            assert_eq!(read_socks_message(&mut server).await.unwrap(), frame);
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_truncated_frames() {
+        let (mut client, mut server) = pair().await;
+        client.write_all(&[5,1,0,3,10,b'x']).await.unwrap();
+        client.shutdown().await.unwrap();
+        assert!(read_socks_message(&mut server).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn fragmented_greeting_consumes_methods_before_request() {
+        let (mut client, server) = pair().await;
+        let task = tokio::spawn(handle_socks_connection(server,
+            "127.0.0.1:1".parse().unwrap(), SocksRouterConfig::default()));
+        client.write_all(&[5]).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        client.write_all(&[1]).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        client.write_all(&[0]).await.unwrap();
+        let mut reply = [0;2];
+        client.read_exact(&mut reply).await.unwrap();
+        assert_eq!(reply, [5,0]);
+        drop(client);
+        assert!(task.await.unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_unoffered_no_auth_method() {
+        let (mut client, server) = pair().await;
+        let task = tokio::spawn(handle_socks_connection(server,
+            "127.0.0.1:1".parse().unwrap(), SocksRouterConfig::default()));
+        client.write_all(&[5,1,2]).await.unwrap();
+        let mut reply = [0;2];
+        client.read_exact(&mut reply).await.unwrap();
+        assert_eq!(reply, [5,255]);
+        assert!(task.await.unwrap().is_err());
+    }
 }

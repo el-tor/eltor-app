@@ -66,9 +66,7 @@ export const Connect = () => {
     relayEnabled && clientEnabled ? 'both' : relayEnabled ? 'relay' : 'client'
   // Extract just the port number from "IP:PORT" format
   const socksPort = debugInfo?.socks_router_port?.split(':').pop()
-  const [showSocksModal, setShowSocksModal] = useState(
-    clientActive || relayActive,
-  )
+  const [showSocksModal, setShowSocksModal] = useState(false)
   const {
     isRunning,
     loading: isLoadingActivate,
@@ -201,7 +199,8 @@ export const Connect = () => {
           <Group gap="xs">
             <Button
               onClick={async () => {
-                // Reset any previous state
+                // Reset any previous state, including the last process generation.
+                dispatch(clearLogsClient())
                 resetBootstrapping()
                 setShowSocksModal(false)
 
@@ -228,7 +227,6 @@ export const Connect = () => {
 
                 // Activate with logging based on whether logs were paused or not
                 await activate(shouldEnableLogging)
-                setTimeout(() => setShowSocksModal(true), 3000)
 
                 // Don't show SOCKS modal immediately - wait for bootstrapping to complete
                 // The useBootstrapping hook will show it after 100%
