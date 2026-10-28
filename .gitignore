@@ -2,6 +2,7 @@
 target/
 **/*.rs.bk
 Cargo.lock
+!frontend/src-tauri/Cargo.lock
 
 # Node.js
 node_modules/

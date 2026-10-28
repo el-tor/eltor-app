@@ -149,6 +149,8 @@ async fn get_wallet_transactions(
                 from: 0,
                 limit: 1000,
                 search: None,
+                created_after: None,
+                created_before: None,
             };
 
             match node.list_transactions(params).await {
