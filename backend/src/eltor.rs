@@ -7,6 +7,16 @@ use crate::paths::{is_tauri_context, PathConfig};
 use crate::state::{AppState, LogEntry};
 use crate::torrc_parser; 
 
+#[cfg(all(unix, not(target_os = "macos")))]
+fn detach_child_session() -> std::io::Result<()> {
+    // Command owns an exec-status pipe above fd 2. Closing arbitrary fds in
+    // pre_exec destroys that pipe and aborts the child if exec fails.
+    if unsafe { libc::setsid() } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
 /// Get the Tor control password from environment variables
 ///
 /// This function looks for different environment variables based on the mode:
@@ -1293,21 +1303,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
         
         unsafe {
             cmd.current_dir(&path_config.bin_dir)
-                .pre_exec(|| {
-                    // Create new session - completely detach from parent
-                    libc::setsid();
-                    
-                    // Close all file descriptors except stdin/out/err
-                    // This prevents inheriting any open sockets or files
-                    let max_fd = libc::sysconf(libc::_SC_OPEN_MAX);
-                    if max_fd > 0 {
-                        for fd in 3..max_fd {
-                            libc::close(fd as i32);
-                        }
-                    }
-                    
-                    Ok(())
-                });
+                .pre_exec(detach_child_session);
         }
         
         match cmd.spawn() {
@@ -1392,5 +1388,17 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 log::error!("❌ Failed to spawn eltord {}: {}", mode_enum, e);
             }
         }
+    }
+}
+
+#[cfg(all(test, unix, not(target_os = "macos")))]
+mod launch_stability_tests {
+    #[test]
+    fn missing_executable_returns_an_error_without_aborting() {
+        use std::os::unix::process::CommandExt;
+        let mut command=std::process::Command::new("/nonexistent/eltor-test-executable");
+        unsafe { command.pre_exec(super::detach_child_session); }
+        let error=command.spawn().unwrap_err();
+        assert_eq!(error.kind(),std::io::ErrorKind::NotFound);
     }
 }

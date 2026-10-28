@@ -27,4 +27,6 @@ eltor-backend = { path = "../../backend" }
 dotenv = "0.15.0"
 rand = { version = "0.9.1", features = ["std"] }
 
+[profile.dev.package.libtor-sys]
+opt-level = 2
 

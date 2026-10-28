@@ -274,10 +274,12 @@ pub async fn get_log_receiver(state: Arc<RwLock<AppState>>) -> broadcast::Receiv
 pub async fn get_eltord_logs(state: Arc<RwLock<AppState>>, mode: String) -> Result<Vec<String>, String> {
     let app_state = state.read().await;
     
+    let data_dir = app_state.path_config.app_data_dir.clone()
+        .unwrap_or_else(|| app_state.path_config.bin_dir.join("data"));
     let log_file = if mode == "relay" {
-        app_state.path_config.bin_dir.join("data").join("eltor-relay.log")
+        data_dir.join("eltor-relay.log")
     } else {
-        app_state.path_config.bin_dir.join("data").join("eltor.log")
+        data_dir.join("eltor.log")
     };
     
     match tokio::fs::read_to_string(&log_file).await {
@@ -393,6 +395,25 @@ pub async fn stream_eltord_logs_internal(
                 result = reader.read_line(&mut line) => {
                     match result {
                         Ok(0) => {
+                            // Activation replaces the log file. Reopen the new
+                            // file instead of tailing the unlinked old inode.
+                            if let (Ok(old), Ok(new)) = (reader.get_ref().metadata().await,
+                                                        tokio::fs::metadata(&log_file).await) {
+                                #[cfg(unix)]
+                                let replaced = {
+                                    use std::os::unix::fs::MetadataExt;
+                                    old.ino() != new.ino() || old.dev() != new.dev()
+                                };
+                                #[cfg(not(unix))]
+                                let replaced = old.created().ok() != new.created().ok();
+                                let position = reader.stream_position().await.unwrap_or(0);
+                                if replaced || new.len() < position {
+                                    if let Ok(file) = File::open(&log_file).await {
+                                        reader = BufReader::new(file);
+                                        continue;
+                                    }
+                                }
+                            }
                             // No data, sleep a bit
                             select! {
                                 _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}

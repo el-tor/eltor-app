@@ -31,14 +31,14 @@ export const useBootstrapping = ({
   const [isBootstrapping, setIsBootstrapping] = useState(false)
 
   useEffect(() => {
-    if (!logs || logs.length === 0) return
+    if (!isBootstrapping || !logs || logs.length === 0) return
 
-    // Get the most recent log
-    const latestLog = logs[logs.length - 1]
-    const message = latestLog?.message || ''
-
-    // Look for "Bootstrapping X%" pattern (case-insensitive)
-    const bootstrapMatch = message.match(/Bootstrapping\s+(\d+)%/i)
+    // React can batch several log events. Inspect the latest progress entry,
+    // not just the last line, which may already be a wallet/status message.
+    const bootstrapMatch = [...logs].reverse().map(log =>
+      log.message.match(/Bootstrapping\s+(\d+)%/i) ||
+      log.message.match(/Tor ready:\s+(100)% bootstrap/i)
+    ).find(Boolean)
 
     if (bootstrapMatch) {
       const newProgress = parseInt(bootstrapMatch[1], 10)
@@ -46,20 +46,12 @@ export const useBootstrapping = ({
 
       setProgress(newProgress)
 
-      // Show bootstrapping when we first detect it (and not yet complete)
-      if (!isBootstrapping && newProgress < 100) {
-        setIsBootstrapping(true)
-      }
-
       // When we reach 100%, trigger callback
       if (newProgress === 100) {
         console.log('✅ Bootstrapping complete!')
         
-        // Brief delay to show 100% before transitioning
-        setTimeout(() => {
-          setIsBootstrapping(false)
-          onComplete?.()
-        }, 500)
+        setIsBootstrapping(false)
+        onComplete?.()
       }
     }
   }, [logs, isBootstrapping, onComplete])

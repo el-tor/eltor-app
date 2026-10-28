@@ -62,7 +62,11 @@ impl TauriState {
             .unwrap()
         });
         
-        let backend_state = eltor_backend::create_app_state(true, path_config); // Enable embedded phoenixd for Tauri
+        let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
+            .ok()
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(true);
+        let backend_state = eltor_backend::create_app_state(use_phoenixd_embedded, path_config);
 
         // Set up the broadcast logger to capture ALL logs (including from eltor library)
         // if let Err(e) = setup_broadcast_logger(backend_state.clone()) {

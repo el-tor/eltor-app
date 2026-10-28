@@ -76,7 +76,7 @@ pub async fn start_arti_with_eltord(mode: &str, path_config: &PathConfig) -> Res
     }
 
     // Start Arti process
-    let socks_config = format!("proxy.socks_port={}", socks_port);
+    let socks_config = format!("proxy.socks_listen=127.0.0.1:{}", socks_port);
     let mut cmd = StdCommand::new(&arti_binary);
     cmd.arg("proxy")
         .arg("-o")
