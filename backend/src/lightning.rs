@@ -196,7 +196,7 @@ impl LightningNode {
         request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, String> {
         let params = CreateInvoiceParams {
-            invoice_type: InvoiceType::Bolt11,
+            invoice_type: Some(InvoiceType::Bolt11),
             amount_msats: request.amount_sats.map(|sats| sats as i64 * 1000),
             description: request.description,
             expiry: request.expiry_seconds.map(|s| s as i64),

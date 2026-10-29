@@ -259,6 +259,8 @@ async fn get_wallet_transactions(
     
     if let Some(lightning_node) = lightning_node {
         let params = ListTransactionsParams {
+            created_after: None,
+            created_before: None,
             payment_hash: None, // Get all transactions
             from: 0,
             limit: 1000,
