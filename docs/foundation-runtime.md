@@ -65,6 +65,17 @@ or delete an unvalidated directory, unrelated artifact or preexisting temporary.
 A failed update may retain the last valid observation only until its already-saved
 deadline; it never refreshes that deadline.
 
+Export uses one process-local writer thread with one replaceable pending record
+and at most one in-flight write. Financial status publication only queues the
+phase and original absolute deadline; the worker releases the queue lock before
+serialization or filesystem work. Superseded pending observations are discarded,
+including those from a previous in-process controller generation. One serial
+writer preserves publication order; an already in-flight older observation can
+remain visible until replaced, and ACTIVE still expires at its original deadline.
+This is bounded last-observation reporting, not instantaneous daemon-state
+authority. Filesystem stalls and errors never block financial publication or
+grant fresh lease time, and no update creates another thread or file name.
+
 Privacy/timing: only an ephemeral local launch generation, process PID, phase and
 original deadline cross this private channel. It contains no circuit, payment,
 relay, account or path data and changes no network wire record. Writes occur on
