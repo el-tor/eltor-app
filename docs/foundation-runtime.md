@@ -84,6 +84,14 @@ There are no extra control/wallet queries, payment permissions or refreshed
 financial timers. This observation is separate from settlement and transport
 acceptance; a financial-core run predating the bridge cannot validate its UI.
 
+The frontend status interval publishes every backend running-state observation
+to Redux. It must not compare against the values captured when the interval was
+created: after an unexpected child exit, that stale closure can otherwise retain
+an active flag. Redux is the single running-state source for the hook. Validate
+this with the owned daemon exiting while the desktop remains open, as well as
+the ordinary Deactivate action. This changes display synchronization only; it
+does not issue a build, payment or recovery command.
+
 For the managed in-process entry point, aborting the outer application task cancels its owned controller tasks;
 dropping their join handles alone would detach them. A private generation owner
 clears the display observation on cancellation and rejects delayed publications
