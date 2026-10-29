@@ -795,7 +795,9 @@ pub async fn get_eltord_status_from_pid_files(path_config: &PathConfig) -> Eltor
         running: client_running || relay_running,
         client_running,
         relay_running,
-        foundation_client_status: observed_foundation_status(client_running),
+        foundation_client_status: crate::foundation_bridge::observed(
+            client_running, &get_pid_file_path(&EltorMode::Client, path_config),
+        ),
         recent_logs: vec![], // No logs tracking in this simple approach
     }
 }
@@ -927,6 +929,7 @@ pub async fn deactivate_eltord_process(mode: String) -> Result<String, String> {
     
     let pid_file = get_pid_file_path(&mode_enum, &path_config);
     log::info!("🛑 [deactivate_eltord_process] Looking for PID file: {:?} (Tauri: {})", pid_file, path_config.app_data_dir.is_some());
+    crate::foundation_bridge::forget(&pid_file);
 
     // Read PID from file
     let pid = match std::fs::read_to_string(&pid_file) {
@@ -1236,6 +1239,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
             // On macOS, prefer posix_spawn over fork (avoid multi-thread fork issues)
             // This is critical for Tauri apps which have multiple threads running
         
+        let status_bridge = crate::foundation_bridge::prepare(matches!(mode_enum, EltorMode::Client | EltorMode::Both), &pid_file, &mut cmd);
         match cmd.spawn()
         {
             Ok(child) => {
@@ -1278,9 +1282,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                     log::info!("✅ Wrote PID {} to {:?}", pid, pid_file);
                 }
                 
-                // Process is now 100% isolated - we don't even wait on it
-                // It will be reaped by init when it exits
-                std::mem::forget(child); // Don't wait, don't reap, just let it run
+                // Remains isolated; retain its actual handle for observation
+                // ownership and reap it without changing the launch model.
+                crate::foundation_bridge::spawned(pid_file.clone(), child, status_bridge);
                 
                 // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
                 log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
@@ -1324,8 +1328,9 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 .pre_exec(detach_child_session);
         }
         
+        let status_bridge = crate::foundation_bridge::prepare(matches!(mode_enum, EltorMode::Client | EltorMode::Both), &pid_file, &mut cmd);
         match cmd.spawn() {
-            Ok(mut child) => {
+            Ok(child) => {
                 let pid = child.id();
                 log::info!("✅ Eltord {} spawned with PID: {} - process is now independent", mode_enum, pid);
                 log::info!("⏳ Tor will bootstrap in background (10-15 seconds typical)");
@@ -1340,17 +1345,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 
                 // Spawn a background task to reap the child process when it exits
                 // This prevents zombie processes while still allowing it to run independently
-                std::thread::spawn(move || {
-                    // Wait for the child process to exit (non-blocking for the main app)
-                    match child.wait() {
-                        Ok(status) => {
-                            log::info!("🧹 Eltord process exited with status: {}", status);
-                        }
-                        Err(e) => {
-                            log::warn!("⚠️ Error waiting for eltord process: {}", e);
-                        }
-                    }
-                });
+                crate::foundation_bridge::spawned(pid_file.clone(), child, status_bridge);
                 
                 // eprintln!("✅ [activate_eltord_process] Successfully activated {} (PID: {})", mode_enum, pid);
                 log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
@@ -1383,6 +1378,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
             .stderr(Stdio::null())
             .stdin(Stdio::null());
         
+        let status_bridge = crate::foundation_bridge::prepare(matches!(mode_enum, EltorMode::Client | EltorMode::Both), &pid_file, &mut cmd);
         match cmd.spawn()
         {
             Ok(child) => {
@@ -1397,8 +1393,7 @@ pub fn activate_eltord_process(mode: String, enable_logging: bool) {
                 if let Err(e) = std::fs::write(&pid_file, pid.to_string()) {
                     log::warn!("⚠️ Failed to write PID file {:?}: {}", pid_file, e);
                 }
-                
-                std::mem::forget(child);
+                crate::foundation_bridge::spawned(pid_file.clone(), child, status_bridge);
                 
                 log::info!("🎯 Activation complete - eltord is running independently (PID: {})", pid);
             }

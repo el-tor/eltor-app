@@ -8,6 +8,7 @@ use chrono::Utc;
 
 pub mod arti;
 pub mod eltor;
+mod foundation_bridge;
 pub mod ip;
 pub mod lightning;
 pub mod paths;
