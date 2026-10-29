@@ -158,6 +158,7 @@ async fn get_eltord_status_invoke(
         "running": status.running,
         "client_running": status.client_running,
         "relay_running": status.relay_running,
+        "foundation_client_status": status.foundation_client_status,
         "recent_logs": [] // No logs in status response, use streaming for logs
     }))
 }
