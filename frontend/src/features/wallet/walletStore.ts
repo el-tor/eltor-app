@@ -28,6 +28,7 @@ export {
   deleteLightningConfig,
   clearLightningConfigError,
   refreshWallet,
+  selectNeedsWalletSetup,
 }
 
 // 1. State
@@ -48,6 +49,7 @@ interface WalletState {
   // Lightning configuration state
   lightningConfigs: Array<LightningConfigResponse>
   lightningConfigsLoading: boolean
+  lightningConfigsLoaded: boolean
   lightningConfigsError: string | null
   defaultLightningConfig: LightningConfigResponse | null
 }
@@ -73,9 +75,21 @@ const initialState: WalletState = {
   // Lightning configuration initial state
   lightningConfigs: [],
   lightningConfigsLoading: false,
+  lightningConfigsLoaded: false,
   lightningConfigsError: null,
   defaultLightningConfig: null,
 } // satisfies WalletState as WalletState
+
+// Configuration identifies the selected provider even while its node is stopped.
+// Availability and balances are represented independently by walletReady.
+const configuredProvider = (config: LightningConfigResponse | null): WalletProviderType => {
+  const provider = config?.node_type
+  return provider === 'phoenixd' || provider === 'cln' || provider === 'lnd' || provider === 'strike'
+    ? provider : 'none'
+}
+
+const selectNeedsWalletSetup = (state: { wallet: WalletState }) =>
+  state.wallet.lightningConfigsLoaded && !state.wallet.defaultLightningConfig
 
 // 2. Slice and Reducers
 const walletStore = createSlice({
@@ -103,9 +117,10 @@ const walletStore = createSlice({
         if (state.refreshRequestId !== action.meta.requestId) return
         const snapshot = action.payload
         state.lightningConfigs = snapshot.configs
+        state.lightningConfigsLoaded = true
         state.defaultLightningConfig = snapshot.configs.find(config => config.is_default) || null
         state.walletReady = !!snapshot.info
-        state.defaultWallet = (snapshot.info?.node_type as WalletProviderType) || 'none'
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         state.send = Math.round((snapshot.info?.send_balance_msat || 0) / 1000)
         state.receive = Math.round((snapshot.info?.receive_balance_msat || 0) / 1000)
         state.transactions = snapshot.transactions
@@ -120,7 +135,7 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.error = action.error
         state.walletReady = false
-        state.defaultWallet = 'none'
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         state.send = 0
         state.receive = 0
         state.transactions = []
@@ -170,7 +185,8 @@ const walletStore = createSlice({
         state.error = null
       })
       .addCase(fetchNodeInfo.fulfilled, (state, action) => {
-        state.defaultWallet = action.payload.node_type || 'none'
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
+        state.walletReady = true
         state.send = Math.round(action.payload.send_balance_msat / 1000)
         state.receive = Math.round(action.payload.receive_balance_msat / 1000)
         state.requestState = 'fulfilled'
@@ -181,8 +197,9 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.loading = false
         state.error = action.error
-        // If fetchNodeInfo fails (e.g., no default wallet), reset wallet data
-        state.defaultWallet = 'none'
+        // A stopped node does not remove its selected configuration.
+        state.walletReady = false
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         state.send = 0
         state.receive = 0
       })
@@ -194,12 +211,15 @@ const walletStore = createSlice({
       })
       .addCase(fetchLightningConfigs.fulfilled, (state, action) => {
         state.lightningConfigs = action.payload
+        state.lightningConfigsLoaded = true
         state.defaultLightningConfig = action.payload.find((config: LightningConfigResponse) => config.is_default) || null
         state.lightningConfigsLoading = false
         state.lightningConfigsError = null
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         
         // If there's no default config, reset wallet data to prevent showing stale data
         if (!state.defaultLightningConfig) {
+          state.walletReady = false
           state.defaultWallet = 'none'
           state.send = 0
           state.receive = 0

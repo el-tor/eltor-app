@@ -37,6 +37,7 @@ import {
 } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
+import { selectNeedsWalletSetup } from '../features/wallet/walletStore'
 import { SocksProxyHelp } from '../components/SocksProxyHelp'
 
 export const Connect = () => {
@@ -47,8 +48,8 @@ export const Connect = () => {
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
   const { defaultWallet } = useSelector((state) => state.wallet)
-  const [openedWizard, { open: openWizard, close: closeWizard }] =
-    useDisclosure(false)
+  const needsWalletSetup = useSelector(selectNeedsWalletSetup)
+  const [wizardDismissed, setWizardDismissed] = useState(false)
   const [logsPlaying, setLogsPlaying] = useState(false)
 
   const {
@@ -125,7 +126,7 @@ export const Connect = () => {
   return (
     <Stack>
       <Group w="100%">
-        {defaultWallet === 'none' && <Wizard close={closeWizard} />}
+        {needsWalletSetup && !wizardDismissed && <Wizard close={() => setWizardDismissed(true)} />}
 
         <Group>
           {/* {isTauri() && (

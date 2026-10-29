@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { configureStore } from '@reduxjs/toolkit'
-import { refreshWallet, walletReducer } from '../src/features/wallet/walletStore'
+import { refreshWallet, walletReducer, selectNeedsWalletSetup } from '../src/features/wallet/walletStore'
 import { walletApiService } from '../src/services/walletApiService'
 
 test('startup not ready then ready reloads balance and transactions without navigation; stale failure cannot undo ready', async () => {
@@ -18,6 +18,7 @@ test('startup not ready then ready reloads balance and transactions without navi
   const store = configureStore({reducer:{wallet:walletReducer}})
   await store.dispatch(refreshWallet())
   assert.equal(store.getState().wallet.walletReady,false)
+  assert.equal(store.getState().wallet.defaultWallet,'phoenixd')
   ready = true // start/ready event triggers the same snapshot used at app boot.
   await store.dispatch(refreshWallet())
   assert.equal(store.getState().wallet.walletReady,true)
@@ -36,4 +37,29 @@ test('startup not ready then ready reloads balance and transactions without navi
   assert.equal(store.getState().wallet.send,99)
   assert.equal(store.getState().wallet.walletReady,true)
   assert.equal(store.getState().wallet.transactions.length,1)
+})
+
+
+test('stopped configured wallet preserves provider without funds or onboarding; config failure does not erase selection', async () => {
+  const config = {node_type:'phoenixd',url:'http://127.0.0.1:9740',password:'synthetic',password_type:'password' as const,is_default:true}
+  walletApiService.listLightningConfigs = async () => [config]
+  walletApiService.getNodeInfo = async () => { throw new Error('stopped') }
+  walletApiService.getTransactions = async () => { throw new Error('must not fetch unavailable wallet') }
+  walletApiService.getBolt12Offer = async () => { throw new Error('must not fetch unavailable wallet') }
+  const store = configureStore({reducer:{wallet:walletReducer}})
+  assert.equal(selectNeedsWalletSetup(store.getState()),false) // discovery still pending
+  await store.dispatch(refreshWallet())
+  assert.equal(store.getState().wallet.defaultWallet,'phoenixd')
+  assert.equal(store.getState().wallet.walletReady,false)
+  assert.equal(store.getState().wallet.send,0)
+  assert.deepEqual(store.getState().wallet.transactions,[])
+  assert.equal(selectNeedsWalletSetup(store.getState()),false)
+  walletApiService.listLightningConfigs = async () => { throw new Error('temporarily unavailable') }
+  await store.dispatch(refreshWallet())
+  assert.equal(store.getState().wallet.defaultWallet,'phoenixd')
+  assert.equal(selectNeedsWalletSetup(store.getState()),false)
+  walletApiService.listLightningConfigs = async () => []
+  await store.dispatch(refreshWallet())
+  assert.equal(store.getState().wallet.defaultWallet,'none')
+  assert.equal(selectNeedsWalletSetup(store.getState()),true)
 })
