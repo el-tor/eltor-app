@@ -37,3 +37,12 @@ The provider tile distinguishes selection from readiness: the selected provider
 is green only after a successful node-info response, and amber while unavailable.
 Unavailable data is labeled explicitly instead of presenting a zero balance or
 an empty transaction list as if it were a successful wallet response.
+
+
+Local verification on 2026-10-29: with the explicit wallet-startup opt-in and the
+existing selected Phoenix configuration, launch created the loopback listener,
+authenticated read-only node/balance/history calls succeeded, and the actual
+Wallet screen showed a nonzero balance and populated transaction rows on its
+first visit without Refresh or a navigation round trip. No payment was sent and
+no wallet configuration or credentials were replaced. This is wallet UI/lifecycle
+evidence, separate from the zero-priced foundation transport fixture.
