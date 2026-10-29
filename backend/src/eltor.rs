@@ -420,10 +420,7 @@ impl EltorManager {
                 "-k".to_string(),
             ];
 
-            info!(
-                "🚀 Task starting eltor library {} with args: {:?}",
-                mode_str, args
-            );
+            info!("🚀 Task starting eltor library in {} mode", mode_str);
 
             // Set working directory to app data directory to ensure eltor library can write files
             if let Some(data_dir) = app_data_dir.as_ref() {
