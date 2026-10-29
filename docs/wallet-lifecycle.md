@@ -8,7 +8,9 @@ auto-start. The standalone web backend retains its existing `false` default.
 Missing credentials require explicit manual setup. A remote/default CLN or LND
 wallet, nondefault Phoenix entry, or remote Phoenix endpoint does not start a
 local wallet. Startup never changes the selected wallet or its configuration.
-The local free-testnet launcher continues to supply `false`.
+The local free-testnet launcher defaults to `false`; an explicit
+`APP_ELTOR_USE_PHOENIXD_EMBEDDED=true` can be supplied for a separate wallet
+lifecycle verification. That opt-in does not enable wallet payments.
 
 Boot, manual Start, status and Stop share one AppState/process owner. Concurrent
 Start/Stop operations serialize, exited children are reaped, and readiness requires
@@ -29,3 +31,9 @@ From `frontend/`, `pnpm test:wallet` runs a mocked startup-to-ready and stale-re
 regression with no wallet process or network access. `pnpm run build` produces the
 frontend bundle. Backend/Tauri compilation is separate; none of these checks needs
 a funded wallet. The configured free fixture must remain disabled during testing.
+
+
+The provider tile distinguishes selection from readiness: the selected provider
+is green only after a successful node-info response, and amber while unavailable.
+Unavailable data is labeled explicitly instead of presenting a zero balance or
+an empty transaction list as if it were a successful wallet response.

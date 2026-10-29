@@ -162,7 +162,7 @@ export const Wallet = () => {
           </Modal.Root>
           <Group>
             <Center>
-              <WalletPlugins defaultWallet={defaultWallet} onClick={open} />
+              <WalletPlugins defaultWallet={defaultWallet} walletReady={walletReady} onClick={open} />
             </Center>
             <Group ml="auto">
               <Center>
@@ -187,7 +187,7 @@ export const Wallet = () => {
                 <Loader size="sm" />
               ) : (
                 <span style={{ fontFamily: 'monospace' }}>
-                  {send?.toLocaleString()}
+                  {walletReady ? send?.toLocaleString() : 'Unavailable'}
                 </span>
               )}
             </Title>
@@ -199,6 +199,14 @@ export const Wallet = () => {
               style={{ cursor: 'pointer' }}
             />
           </Group>
+
+          {defaultLightningConfig && !walletReady && (
+            <Alert color="orange" title="Wallet unavailable">
+              The selected wallet has not returned its data. Start it or check its
+              connection settings. Balance and transactions will update automatically
+              when it is ready.
+            </Alert>
+          )}
 
           {/* No Default Wallet Alert */}
           {hasNoDefaultWallet && (
@@ -226,7 +234,7 @@ export const Wallet = () => {
           )}
 
           {/* Show balance and transactions only if there's a default wallet */}
-          {!hasNoDefaultWallet && (
+          {!hasNoDefaultWallet && walletReady && (
             <>
               <ChannelBalanceLine send={send ?? 0} receive={receive ?? 0} />
 
