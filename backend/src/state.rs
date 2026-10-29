@@ -110,6 +110,7 @@ pub struct EltordStatusResponse {
     pub running: bool,
     pub client_running: bool,
     pub relay_running: bool,
+    pub foundation_client_status: Option<eltor::FoundationClientStatus>,
     pub pid: Option<u32>,
     pub recent_logs: Vec<LogEntry>,
 }

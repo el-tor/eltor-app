@@ -260,6 +260,7 @@ pub async fn get_eltord_status(state: Arc<RwLock<AppState>>) -> EltordStatusResp
         running: status.running,
         client_running: status.client_running,
         relay_running: status.relay_running,
+        foundation_client_status: status.foundation_client_status,
         pid: None,
         recent_logs: vec![],
     }

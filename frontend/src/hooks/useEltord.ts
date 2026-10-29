@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiService } from '../services/apiService'
+import type { FoundationClientStatus } from '../services/apiService'
 import { isTauri } from '../utils/platform'
 import { useDispatch, useSelector } from '../hooks'
 import { setClientActive, setRelayActive, addLogClient, addLogRelay } from '../globalStore'
@@ -12,6 +13,7 @@ export function useEltord(options: UseEltordOptions) {
   const [isRunning, setIsRunning] = useState(false)
   const [loading, setLoading] = useState(false)
   const [isLoadingDeactivate, setLoadingDeactivate] = useState(false)
+  const [foundationStatus, setFoundationStatus] = useState<FoundationClientStatus | null>(null)
   const dispatch = useDispatch()
   const { clientActive, relayActive } = useSelector((state) => state.global)
 
@@ -25,6 +27,7 @@ export function useEltord(options: UseEltordOptions) {
   const checkStatus = async () => {
     try {
       const status = await apiService.getEltordStatus()
+      setFoundationStatus(status.client_running ? status.foundation_client_status ?? null : null)
       
       // Update Redux state to match backend reality
       if (status.client_running !== clientActive) {
@@ -44,6 +47,7 @@ export function useEltord(options: UseEltordOptions) {
         console.log(`🔄 [useEltord] Synced local isRunning to ${modeRunning} for ${mode}`)
       }
     } catch (error) {
+      setFoundationStatus(previous => previous ? 'recovering' : null)
       console.error('Failed to check eltord status:', error)
     }
   }
@@ -143,6 +147,7 @@ export function useEltord(options: UseEltordOptions) {
             break
           case 'eltord-deactivated':
             setIsRunning(false)
+            if (mode !== 'relay') setFoundationStatus(null)
             // Clear state for this specific mode
             if (mode === 'client') {
               dispatch(setClientActive(false))
@@ -202,6 +207,7 @@ export function useEltord(options: UseEltordOptions) {
 
   return { 
     isRunning: isModeActive, // This specific mode is running
+    foundationStatus,
     isAnyModeRunning, // Any mode is running  
     loading, 
     isLoadingDeactivate,

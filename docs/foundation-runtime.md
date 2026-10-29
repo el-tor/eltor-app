@@ -25,3 +25,27 @@ Wallet lifecycle is independent of foundation settlement evidence. Starting a
 configured Phoenixd and displaying its balance/history verifies the wallet UI;
 it does not establish a paid-network transaction. The isolated foundation test
 account uses a zero-price fixture which refuses payment APIs.
+
+## Client status and cancellation
+
+The local status response distinguishes the Tor process from the configured
+foundation path. Its optional `foundation_client_status` contains only a phase:
+starting, recovering, last-verified active, closed or stopped. The Connect screen
+shows that phase separately. Bootstrap alone shows transport readiness while a
+configured paid path is still being verified. Existing non-foundation clients
+retain their ordinary connection display.
+
+The library's read-only status getter performs no control, wallet or ledger
+queries. Last-verified active requires authenticated ACTIVE observations from
+every pinned hop and expires at the earliest original monotonic round/enforcement
+deadline. Deferred work, accepted payment and a running process cannot extend
+that lease. An expired observation becomes recovering; closure requires durable
+authoritative state. The frontend uses its existing five-second status poll and
+labels the result as a last observation, not a guarantee of future delivery.
+No circuit, scope, payment, wallet or relay identifiers are returned.
+
+Aborting the outer application task also cancels its owned controller tasks;
+dropping their join handles alone would detach them. A private generation owner
+clears the display observation on cancellation and rejects delayed publications
+from an older runtime. Cancellation does not delete financial claims, resolve an
+unknown wallet outcome, refund a payment or authorize a replacement path.

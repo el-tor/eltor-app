@@ -50,7 +50,24 @@ pub struct EltorStatus {
     pub running: bool,
     pub client_running: bool,
     pub relay_running: bool,
+    pub foundation_client_status: Option<eltor::FoundationClientStatus>,
     pub recent_logs: Vec<LogEntry>,
+}
+
+/// Observational only: this cannot query Tor, authorize work or reveal a path.
+fn observed_foundation_status(client_running: bool) -> Option<eltor::FoundationClientStatus> {
+    if !client_running {
+        return None;
+    }
+    match eltor::foundation_client_status() {
+        eltor::FoundationClientStatus::NotConfigured => {
+            // Startup may not have reached the controller yet. Never present
+            // process/bootstrap readiness as verified paid-path activation.
+            env::var_os("ELTOR_FOUNDATION_CLIENT_PLAN")
+                .map(|_| eltor::FoundationClientStatus::Starting)
+        }
+        status => Some(status),
+    }
 }
 
 /// Result type for eltor operations
@@ -643,13 +660,15 @@ impl EltorManager {
         let client_guard = self.client_process.read().await;
         let relay_guard = self.relay_process.read().await;
 
-        let client_running = client_guard.is_some();
-        let relay_running = relay_guard.is_some();
+        let client_running = client_guard.as_ref()
+            .is_some_and(|handle| !handle.task_handle.is_finished());
+        let relay_running = relay_guard.as_ref()
+            .is_some_and(|handle| !handle.task_handle.is_finished());
 
         // If relay_guard contains a "both" mode process, then both client and relay are running
         let both_mode_running = relay_guard
             .as_ref()
-            .map(|handle| handle.mode == EltorMode::Both)
+            .map(|handle| handle.mode == EltorMode::Both && !handle.task_handle.is_finished())
             .unwrap_or(false);
 
         let running = client_running || relay_running;
@@ -664,6 +683,7 @@ impl EltorManager {
             running,
             client_running: client_running || both_mode_running,
             relay_running,
+            foundation_client_status: observed_foundation_status(client_running || both_mode_running),
             recent_logs,
         }
     }
@@ -775,6 +795,7 @@ pub async fn get_eltord_status_from_pid_files(path_config: &PathConfig) -> Eltor
         running: client_running || relay_running,
         client_running,
         relay_running,
+        foundation_client_status: observed_foundation_status(client_running),
         recent_logs: vec![], // No logs tracking in this simple approach
     }
 }

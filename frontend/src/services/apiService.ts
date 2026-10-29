@@ -47,10 +47,19 @@ const getApiBaseUrl = () => {
   return currentUrl
 }
 
+export type FoundationClientStatus =
+  | 'not_configured'
+  | 'starting'
+  | 'recovering'
+  | 'last_verified_active'
+  | 'closed'
+  | 'stopped'
+
 export interface EltordStatus {
   running: boolean
   client_running: boolean
   relay_running: boolean
+  foundation_client_status?: FoundationClientStatus | null
   pid?: number
   recent_logs?: LogEntry[]
 }
