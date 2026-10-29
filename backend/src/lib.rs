@@ -200,29 +200,30 @@ pub async fn initialize_app_state_with_path_config(
 }
 
 /// Initialize phoenixd if embedded mode is enabled - must be called from async context
-pub async fn initialize_phoenixd(state: Arc<RwLock<AppState>>) -> Result<(), String> {
-    let app_state = state.read().await;
-    if app_state.wallet_state.use_phoenixd_embedded {
-        info!("🔥 Initializing embedded phoenixd...");
-        let cloned_state = AppState {
-            client_task: app_state.client_task.clone(),
-            relay_task: app_state.relay_task.clone(),
-            log_sender: app_state.log_sender.clone(),
-            recent_logs: app_state.recent_logs.clone(),
-            wallet_state: app_state.wallet_state.clone(),
-            lightning_node: app_state.lightning_node.clone(),
-            torrc_file_name: app_state.torrc_file_name.clone(),
-            eltor_manager: app_state.eltor_manager.clone(),
-            path_config: app_state.path_config.clone(),
-            client_log_cancel: app_state.client_log_cancel.clone(),
-            relay_log_cancel: app_state.relay_log_cancel.clone(),
-        };
-        drop(app_state);
-        wallet::start_phoenixd(cloned_state).await
-    } else {
-        info!("🔗 Using external phoenixd instance");
-        Ok(())
+pub async fn initialize_phoenixd(state: Arc<RwLock<AppState>>) -> Result<bool, String> {
+    let app_state = state.read().await.clone();
+    if !app_state.wallet_state.use_phoenixd_embedded {
+        return Ok(false);
     }
+    let configs = crate::torrc_parser::get_all_payment_lightning_configs(
+        app_state.path_config.get_torrc_path(None),
+    )
+    .await?;
+    let credentials = routes::phoenix::has_existing_phoenix_credentials();
+    let configured = configs.iter().any(|config| {
+        wallet::phoenix_autostart_allowed(
+            app_state.wallet_state.use_phoenixd_embedded,
+            credentials,
+            &config.node_type,
+            &config.url,
+            config.is_default,
+        )
+    });
+    if !configured {
+        return Ok(false);
+    }
+    routes::phoenix::start_phoenix_with_config(&app_state).await?;
+    Ok(true)
 }
 
 /// Activate eltord - requires manager in AppState
@@ -491,9 +492,9 @@ pub async fn shutdown_cleanup(state: Arc<RwLock<AppState>>) -> Result<(), String
         }
     }
 
-    // Step 6: Clean up all ports (including phoenixd)
+    // Step 6: Wallet shutdown uses only the child we own, never port ownership.
     info!("🧹 Cleaning up all application ports...");
-    match cleanup_ports_with_torrc(&phoenixd_state.torrc_file_name).await {
+    match cleanup_tor_ports_only(&phoenixd_state.torrc_file_name).await {
         Ok(_) => info!("✅ All ports cleaned up successfully"),
         Err(e) => info!("⚠️  Port cleanup warning: {}", e),
     }

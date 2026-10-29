@@ -13,6 +13,7 @@
     "dev:tauri": "tauri dev",
     "dev:android": "tauri dev android",
     "build": "vite build",
+    "test:wallet": "node tests/run-wallet-refresh.mjs",
     "build:web": "vite build",
     "build:tauri": "tauri build",
     "preview": "vite preview",

@@ -7,10 +7,12 @@ import { store, persistor } from './store'
 import { PersistGate } from 'redux-persist/integration/react'
 import { theme } from './theme'
 import { useGlobalLogStream } from './hooks/useGlobalLogStream'
+import { useWalletLifecycle } from './hooks/useWalletLifecycle'
 
 function AppContent() {
   // Initialize global log streaming service
   useGlobalLogStream()
+  useWalletLifecycle()
   
   return <Routes />
 }

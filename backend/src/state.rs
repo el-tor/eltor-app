@@ -23,6 +23,7 @@ pub struct LogEntry {
 pub struct WalletState {
     pub use_phoenixd_embedded: bool,
     pub phoenixd_process: Arc<Mutex<Option<tokio::process::Child>>>,
+    pub phoenixd_lifecycle: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl WalletState {
@@ -30,6 +31,7 @@ impl WalletState {
         Self {
             use_phoenixd_embedded,
             phoenixd_process: Arc::new(Mutex::new(None)),
+            phoenixd_lifecycle: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }

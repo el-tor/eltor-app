@@ -1,5 +1,4 @@
 import { isTauri } from '../utils/platform'
-import config from '../config'
 
 // Tauri imports (only loaded when in Tauri mode)
 let tauriInvoke: any = null
