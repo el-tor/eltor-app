@@ -13,15 +13,17 @@ import { notifications } from '@mantine/notifications'
 import { IconClock } from '@tabler/icons-react'
 import { useSelector, useDispatch } from '../../hooks'
 import { useForm } from '@mantine/form'
-import { upsertLightningConfig, deleteLightningConfig } from './walletStore'
+import { upsertLightningConfig, deleteLightningConfig, refreshWallet } from './walletStore'
 import type { LightningConfigRequest } from '../../services/walletApiService'
 import { walletApiService } from '../../services/walletApiService'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
 
 
 export function WalletConfigModal({ close }: { close: () => void }) {
   const dispatch = useDispatch()
+  const phoenixOperation = useRef(0)
+  useEffect(() => () => { phoenixOperation.current += 1 }, [])
   const [deleteConfirmOpened, setDeleteConfirmOpened] = useState(false)
   const [phoenixLoading, setPhoenixLoading] = useState(false)
   const [phoenixRunning, setPhoenixRunning] = useState(false)
@@ -101,6 +103,8 @@ export function WalletConfigModal({ close }: { close: () => void }) {
 
   // Check Phoenix status when modal opens (only for phoenixd)
   useEffect(() => {
+    phoenixOperation.current += 1
+    let cancelled = false
     const checkPhoenixStatus = async () => {
       if (clickedWallet !== 'phoenixd') {
         setStatusCheckLoading(false)
@@ -110,7 +114,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
       try {
         // Try to detect Phoenix config - this also tells us if it's running
         const configResponse = await walletApiService.detectPhoenixConfig()
-        
+        if (cancelled) return
         if (configResponse.success) {
           const isRunning = configResponse.is_running ?? false
           setPhoenixRunning(isRunning)
@@ -133,13 +137,15 @@ export function WalletConfigModal({ close }: { close: () => void }) {
       } catch (error) {
         // If detection fails, Phoenix is probably not running
         console.log('Phoenix not detected (likely not running):', error)
-        setPhoenixRunning(false)
+        if (!cancelled) setPhoenixRunning(false)
       } finally {
-        setStatusCheckLoading(false)
+        if (!cancelled) setStatusCheckLoading(false)
       }
     }
 
+    setStatusCheckLoading(true)
     checkPhoenixStatus()
+    return () => { cancelled = true }
   }, [clickedWallet])
 
   const handleSave = async () => {
@@ -221,97 +227,39 @@ export function WalletConfigModal({ close }: { close: () => void }) {
   }
 
   const handlePhoenixStart = async () => {
+    const operation = ++phoenixOperation.current
     setPhoenixLoading(true)
     try {
       const response = await walletApiService.startPhoenixDaemon()
-      
-      if (response.success) {
-        setPhoenixRunning(true)
-        
-        // Auto-populate form fields with Phoenix config if available
-        if (response.url && response.password) {
-          form.setFieldValue('url', response.url)
-          form.setFieldValue('password', response.password)
-          form.setFieldValue('setAsDefault', true) // Default to making it the default wallet
-          form.setFieldValue('is_embedded', true) // Mark as embedded Phoenix instance
-          
-          notifications.show({
-            title: 'Phoenix Started',
-            message: `${response.message}. Form fields have been auto-populated with the Phoenix configuration.`,
-            color: 'green',
-            autoClose: 6000,
-          })
-        } else {
-          notifications.show({
-            title: 'Phoenix Started',
-            message: `${response.message}. Please configure the URL and password manually.`,
-            color: 'yellow',
-          })
-        }
-      } else {
-        notifications.show({
-          title: 'Phoenix Start Failed',
-          message: response.message,
-          color: 'red',
-        })
+      await dispatch(refreshWallet())
+      if (operation !== phoenixOperation.current) return
+      if (!response.success) throw new Error(response.message)
+      setPhoenixRunning(response.is_running ?? true)
+      if (response.url && response.password) {
+        form.setFieldValue('url', response.url)
+        form.setFieldValue('password', response.password)
+        form.setFieldValue('is_embedded', true)
       }
-    } catch (error) {
-      console.error('Failed to start Phoenix daemon:', error)
-      
-      // Check if error is about Phoenix already running
-      const errorMessage = String(error)
-      if (errorMessage.includes('already running') || errorMessage.includes('port 9740')) {
-        try {
-          // Attempt to detect existing Phoenix configuration
-          console.log('Attempting to detect existing Phoenix configuration...')
-          const configResponse = await walletApiService.detectPhoenixConfig()
-          
-          if (configResponse.success && configResponse.url && configResponse.password) {
-            // Auto-populate form with detected config
-            form.setFieldValue('url', configResponse.url)
-            form.setFieldValue('password', configResponse.password)
-            form.setFieldValue('setAsDefault', true)
-            form.setFieldValue('is_embedded', true) // Mark as embedded since it's running locally
-            
-            notifications.show({
-              title: 'Phoenix Already Running',
-              message: 'Phoenix is already running. Auto-detected configuration and populated the form fields.',
-              color: 'blue',
-              autoClose: 8000,
-            })
-          } else {
-            notifications.show({
-              title: 'Phoenix Already Running',
-              message: 'Phoenix appears to be running but configuration could not be auto-detected. Please enter the URL and password manually.',
-              color: 'yellow',
-            })
-          }
-        } catch (detectError) {
-          console.error('Failed to detect Phoenix config:', detectError)
-          notifications.show({
-            title: 'Phoenix Already Running',
-            message: 'Phoenix appears to be running but configuration could not be auto-detected. Please enter the URL and password manually.',
-            color: 'yellow',
-          })
-        }
-      } else {
-        // Other error types
-        notifications.show({
-          title: 'Phoenix Start Failed',
-          message: `Failed to start Phoenix daemon: ${error}`,
-          color: 'red',
-        })
-      }
+      notifications.show({title:'Phoenix Ready',message:existingConfig ? 'Wallet status, balance and transactions refreshed.' : 'Wallet ready. Save the configuration to select it as your wallet.',color:'green'})
+    } catch {
+      // A slow process remains owned and stoppable even if readiness timed out.
+      try {
+        const status = await walletApiService.detectPhoenixConfig()
+        if (operation === phoenixOperation.current) setPhoenixRunning(status.is_running ?? false)
+      } catch { /* No existing process/configuration was detected. */ }
+      if (operation === phoenixOperation.current) notifications.show({title:'Phoenix Not Ready',message:'Phoenix has not reached readiness. Check its status and retry.',color:'orange'})
     } finally {
-      setPhoenixLoading(false)
+      if (operation === phoenixOperation.current) setPhoenixLoading(false)
     }
   }
 
   const handlePhoenixStop = async () => {
+    const operation = ++phoenixOperation.current
     setPhoenixLoading(true)
     try {
       const response = await walletApiService.stopPhoenixDaemon()
-      
+      await dispatch(refreshWallet())
+      if (operation !== phoenixOperation.current) return
       if (response.success) {
         setPhoenixRunning(false)
         notifications.show({
@@ -334,7 +282,7 @@ export function WalletConfigModal({ close }: { close: () => void }) {
         color: 'red',
       })
     } finally {
-      setPhoenixLoading(false)
+      if (operation === phoenixOperation.current) setPhoenixLoading(false)
     }
   }
 

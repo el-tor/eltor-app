@@ -18,10 +18,12 @@ export const WalletBox = ({
   logo,
   onClick,
   isDefault,
+  ready,
 }: {
   logo: string;
   onClick: () => void;
   isDefault?: boolean;
+  ready?: boolean;
 }) => {
   return (
     <Box
@@ -31,6 +33,7 @@ export const WalletBox = ({
       p="sm"
       className={styles.box}
       onClick={onClick}
+      title={isDefault ? (ready ? "Selected wallet: connected" : "Selected wallet: unavailable") : undefined}
       bg="white"
       style={{
         display: "flex",
@@ -43,7 +46,7 @@ export const WalletBox = ({
       {isDefault && (
         <>
           <Circle
-            color="lightgreen"
+            color={ready ? "lightgreen" : "orange"}
             styles={{
               position: "absolute",
               top: 6,

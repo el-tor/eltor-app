@@ -11,7 +11,7 @@ import {
 } from './../walletStore'
 
 // export const WalletPlugins = ({ setShowWallet, showWallet }) => {
-export const WalletPlugins = ({ defaultWallet, onClick }: { defaultWallet: string, onClick: () => void }) => {
+export const WalletPlugins = ({ defaultWallet, walletReady, onClick }: { defaultWallet: string, walletReady: boolean, onClick: () => void }) => {
   const dispatch = useDispatch()
   return (
     <Group gap="0">
@@ -21,6 +21,7 @@ export const WalletPlugins = ({ defaultWallet, onClick }: { defaultWallet: strin
           dispatch(setClickedWallet('phoenixd') )
           onClick()
         }}
+        ready={walletReady}
         isDefault={defaultWallet === 'phoenixd'}
       />
       <WalletBox
@@ -29,6 +30,7 @@ export const WalletPlugins = ({ defaultWallet, onClick }: { defaultWallet: strin
           dispatch(setClickedWallet('cln'))
           onClick()
         }}
+        ready={walletReady}
         isDefault={defaultWallet === 'cln'}
       />
       <WalletBox
@@ -37,6 +39,7 @@ export const WalletPlugins = ({ defaultWallet, onClick }: { defaultWallet: strin
           dispatch(setClickedWallet('lnd'))
           onClick()
         }}
+        ready={walletReady}
         isDefault={defaultWallet === 'lnd'}
       />
       <WalletBox
@@ -45,6 +48,7 @@ export const WalletPlugins = ({ defaultWallet, onClick }: { defaultWallet: strin
           dispatch(setClickedWallet('strike'))
           onClick()
         }}
+        ready={walletReady}
         isDefault={defaultWallet === 'strike'}
       />
     </Group>

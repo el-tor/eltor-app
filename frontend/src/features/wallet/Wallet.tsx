@@ -16,9 +16,7 @@ import { useDispatch, useSelector } from '../../hooks'
 import { useEffect, useState } from 'react'
 import {
   setDefaultWallet,
-  getBolt12Offer,
-  fetchNodeInfo,
-  fetchLightningConfigs,
+  refreshWallet,
 } from './walletStore'
 import { ChannelBalanceLine } from '../../components/ChannelBalanceLine'
 import { WalletPlugins } from './WalletPlugins/WalletPlugins'
@@ -75,13 +73,13 @@ export const Wallet = () => {
     requestState,
     error,
     loading,
+    walletReady,
     lightningConfigs,
     defaultLightningConfig,
   } = useSelector((state) => state.wallet)
   const dispatch = useDispatch()
   const [showWallet, setShowWallet] = useState(true)
   const [opened, { open, close }] = useDisclosure(false)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Check if there's no default wallet configured
   const hasNoDefaultWallet = !defaultLightningConfig && lightningConfigs.length > 0
@@ -108,21 +106,6 @@ export const Wallet = () => {
     return `${start}${middle}${end}`
   }
 
-  // Load configs first (fast), then load other data
-  useEffect(() => {
-    // First, load lightning configs (should be fast since it's just reading torrc)
-    dispatch(fetchLightningConfigs()).then(() => {
-      setIsInitialLoad(false)
-    })
-
-    // Then load other data lazily with a slight delay to let UI render
-    const timer = setTimeout(() => {
-      dispatch(fetchNodeInfo(''))
-      dispatch(getBolt12Offer(''))
-    }, 100) // Small delay to ensure page renders first
-
-    return () => clearTimeout(timer)
-  }, [])
 
   return (
     <Box>
@@ -179,7 +162,7 @@ export const Wallet = () => {
           </Modal.Root>
           <Group>
             <Center>
-              <WalletPlugins defaultWallet={defaultWallet} onClick={open} />
+              <WalletPlugins defaultWallet={defaultWallet} walletReady={walletReady} onClick={open} />
             </Center>
             <Group ml="auto">
               <Center>
@@ -200,22 +183,30 @@ export const Wallet = () => {
           <Group mt="xl">
             <Title order={4}>
               Balance:{' '}
-              {loading && isInitialLoad ? (
+              {loading && !walletReady ? (
                 <Loader size="sm" />
               ) : (
                 <span style={{ fontFamily: 'monospace' }}>
-                  {send?.toLocaleString()}
+                  {walletReady ? send?.toLocaleString() : 'Unavailable'}
                 </span>
               )}
             </Title>
             <IconRefresh
               stroke={1.5}
               onClick={() => {
-                dispatch(fetchNodeInfo(''))
+                dispatch(refreshWallet())
               }}
               style={{ cursor: 'pointer' }}
             />
           </Group>
+
+          {defaultLightningConfig && !walletReady && (
+            <Alert color="orange" title="Wallet unavailable">
+              The selected wallet has not returned its data. Start it or check its
+              connection settings. Balance and transactions will update automatically
+              when it is ready.
+            </Alert>
+          )}
 
           {/* No Default Wallet Alert */}
           {hasNoDefaultWallet && (
@@ -243,7 +234,7 @@ export const Wallet = () => {
           )}
 
           {/* Show balance and transactions only if there's a default wallet */}
-          {!hasNoDefaultWallet && (
+          {!hasNoDefaultWallet && walletReady && (
             <>
               <ChannelBalanceLine send={send ?? 0} receive={receive ?? 0} />
 

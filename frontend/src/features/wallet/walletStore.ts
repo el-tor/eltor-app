@@ -27,6 +27,8 @@ export {
   upsertLightningConfig,
   deleteLightningConfig,
   clearLightningConfigError,
+  refreshWallet,
+  selectNeedsWalletSetup,
 }
 
 // 1. State
@@ -41,10 +43,13 @@ interface WalletState {
   channelInfo: FetchChannelInfoResponseType
   bolt12Offer: string
   transactions: Array<TransactionResponse>
+  walletReady: boolean
+  refreshRequestId?: string
   
   // Lightning configuration state
   lightningConfigs: Array<LightningConfigResponse>
   lightningConfigsLoading: boolean
+  lightningConfigsLoaded: boolean
   lightningConfigsError: string | null
   defaultLightningConfig: LightningConfigResponse | null
 }
@@ -65,13 +70,26 @@ const initialState: WalletState = {
   },
   bolt12Offer: '',
   transactions: [],
+  walletReady: false,
   
   // Lightning configuration initial state
   lightningConfigs: [],
   lightningConfigsLoading: false,
+  lightningConfigsLoaded: false,
   lightningConfigsError: null,
   defaultLightningConfig: null,
 } // satisfies WalletState as WalletState
+
+// Configuration identifies the selected provider even while its node is stopped.
+// Availability and balances are represented independently by walletReady.
+const configuredProvider = (config: LightningConfigResponse | null): WalletProviderType => {
+  const provider = config?.node_type
+  return provider === 'phoenixd' || provider === 'cln' || provider === 'lnd' || provider === 'strike'
+    ? provider : 'none'
+}
+
+const selectNeedsWalletSetup = (state: { wallet: WalletState }) =>
+  state.wallet.lightningConfigsLoaded && !state.wallet.defaultLightningConfig
 
 // 2. Slice and Reducers
 const walletStore = createSlice({
@@ -90,6 +108,39 @@ const walletStore = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(refreshWallet.pending, (state, action) => {
+        state.refreshRequestId = action.meta.requestId
+        state.loading = true
+        state.requestState = 'pending'
+      })
+      .addCase(refreshWallet.fulfilled, (state, action) => {
+        if (state.refreshRequestId !== action.meta.requestId) return
+        const snapshot = action.payload
+        state.lightningConfigs = snapshot.configs
+        state.lightningConfigsLoaded = true
+        state.defaultLightningConfig = snapshot.configs.find(config => config.is_default) || null
+        state.walletReady = !!snapshot.info
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
+        state.send = Math.round((snapshot.info?.send_balance_msat || 0) / 1000)
+        state.receive = Math.round((snapshot.info?.receive_balance_msat || 0) / 1000)
+        state.transactions = snapshot.transactions
+        state.bolt12Offer = snapshot.offer
+        state.loading = false
+        state.requestState = 'fulfilled'
+        state.error = null
+      })
+      .addCase(refreshWallet.rejected, (state, action) => {
+        if (state.refreshRequestId !== action.meta.requestId) return
+        state.loading = false
+        state.requestState = 'rejected'
+        state.error = action.error
+        state.walletReady = false
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
+        state.send = 0
+        state.receive = 0
+        state.transactions = []
+        state.bolt12Offer = ''
+      })
       .addCase(getBolt12Offer.pending, (state) => {
         state.requestState = 'pending'
         state.loading = true
@@ -134,7 +185,8 @@ const walletStore = createSlice({
         state.error = null
       })
       .addCase(fetchNodeInfo.fulfilled, (state, action) => {
-        state.defaultWallet = action.payload.node_type || 'none'
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
+        state.walletReady = true
         state.send = Math.round(action.payload.send_balance_msat / 1000)
         state.receive = Math.round(action.payload.receive_balance_msat / 1000)
         state.requestState = 'fulfilled'
@@ -145,8 +197,9 @@ const walletStore = createSlice({
         state.requestState = 'rejected'
         state.loading = false
         state.error = action.error
-        // If fetchNodeInfo fails (e.g., no default wallet), reset wallet data
-        state.defaultWallet = 'none'
+        // A stopped node does not remove its selected configuration.
+        state.walletReady = false
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         state.send = 0
         state.receive = 0
       })
@@ -158,12 +211,15 @@ const walletStore = createSlice({
       })
       .addCase(fetchLightningConfigs.fulfilled, (state, action) => {
         state.lightningConfigs = action.payload
+        state.lightningConfigsLoaded = true
         state.defaultLightningConfig = action.payload.find((config: LightningConfigResponse) => config.is_default) || null
         state.lightningConfigsLoading = false
         state.lightningConfigsError = null
+        state.defaultWallet = configuredProvider(state.defaultLightningConfig)
         
         // If there's no default config, reset wallet data to prevent showing stale data
         if (!state.defaultLightningConfig) {
+          state.walletReady = false
           state.defaultWallet = 'none'
           state.send = 0
           state.receive = 0
@@ -270,14 +326,7 @@ const upsertLightningConfig = createAsyncThunk<
 >('wallet/upsertLightningConfig', async (config, { rejectWithValue, dispatch }) => {
   try {
     const result = await walletApiService.upsertLightningConfig(config)
-    // Refresh the configs list after successful upsert
-    dispatch(fetchLightningConfigs())
-    
-    // Always refresh wallet data after config changes
-    dispatch(fetchNodeInfo('wallet'))
-    dispatch(fetchTransactions('wallet'))
-    dispatch(getBolt12Offer('wallet'))
-    
+    await dispatch(refreshWallet())
     return result
   } catch (error) {
     return rejectWithValue(error)
@@ -291,16 +340,31 @@ const deleteLightningConfig = createAsyncThunk<
 >('wallet/deleteLightningConfig', async (config, { rejectWithValue, dispatch }) => {
   try {
     const result = await walletApiService.deleteLightningConfig(config)
-    // Refresh the configs list after successful deletion
-    dispatch(fetchLightningConfigs())
-    
-    // Always refresh wallet data after deletion since default might change or disappear
-    dispatch(fetchNodeInfo('wallet'))
-    dispatch(fetchTransactions('wallet'))
-    dispatch(getBolt12Offer('wallet'))
-    
+    await dispatch(refreshWallet())
     return result
   } catch (error) {
     return rejectWithValue(error)
   }
 })
+
+// One snapshot owns status, balances and transactions. Late startup failures
+// cannot erase a newer ready response after Start or a configuration change.
+const refreshWallet = createAsyncThunk(
+  'wallet/refresh',
+  async () => {
+    const configs = await walletApiService.listLightningConfigs()
+    const empty = { configs, info: null as NodeInfoResponse | null, transactions: [] as TransactionResponse[], offer: '' }
+    if (!configs.some(config => config.is_default)) return empty
+    let info: NodeInfoResponse
+    try { info = await walletApiService.getNodeInfo() }
+    catch { return empty } // Starting/stopped: the lifecycle poll will retry.
+    const [transactions, offer] = await Promise.allSettled([
+      walletApiService.getTransactions(), walletApiService.getBolt12Offer(),
+    ])
+    return {
+      configs, info,
+      transactions: transactions.status === 'fulfilled' ? transactions.value : [],
+      offer: offer.status === 'fulfilled' ? ((offer.value as unknown as {payment_request?: string}).payment_request || '') : '',
+    }
+  },
+)

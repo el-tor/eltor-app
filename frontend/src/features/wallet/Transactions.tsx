@@ -3,17 +3,14 @@ import React, { useEffect, useState } from 'react'
 import { IconChevronDown, IconChevronRight, IconCopy, IconCheck } from '@tabler/icons-react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { useDispatch, useSelector } from '../../hooks'
-import { fetchTransactions } from './walletStore'
+import { useSelector } from '../../hooks'
 
 // Extend dayjs with relativeTime plugin
 dayjs.extend(relativeTime)
 
 export function Transactions({ h }: { h?: number | string }) {
   const { transactions, defaultLightningConfig, loading } = useSelector((state) => state.wallet)
-  const dispatch = useDispatch()
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false)
 
   const toggleRow = (paymentHash: string) => {
     const newExpandedRows = new Set(expandedRows)
@@ -41,21 +38,6 @@ export function Transactions({ h }: { h?: number | string }) {
     }
   }
 
-  useEffect(() => {
-    console.log('Transactions component mounted')
-    // Only fetch transactions if there's a default lightning config
-    // Delay slightly to let the page render first
-    if (defaultLightningConfig) {
-      setIsLoadingTransactions(true)
-      const timer = setTimeout(() => {
-        dispatch(fetchTransactions('')).finally(() => {
-          setIsLoadingTransactions(false)
-        })
-      }, 200) // Small delay after component mounts
-
-      return () => clearTimeout(timer)
-    }
-  }, [defaultLightningConfig])
 
   return (
     <ScrollArea
@@ -89,7 +71,7 @@ export function Transactions({ h }: { h?: number | string }) {
                 </Center>
               </Table.Td>
             </Table.Tr>
-          ) : isLoadingTransactions ? (
+          ) : loading && transactions.length === 0 ? (
             <Table.Tr>
               <Table.Td colSpan={3}>
                 <Center p="xl">

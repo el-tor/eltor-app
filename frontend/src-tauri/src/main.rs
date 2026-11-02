@@ -82,18 +82,17 @@ impl TauriState {
 
     async fn initialize_with_app_handle(&self, app_handle: &AppHandle) -> Result<(), String> {
         let path_config = create_tauri_path_config(Some(app_handle))?;
-        initialize_app_state_with_path_config(self.backend_state.clone(), path_config).await?;
-        self.initialize_phoenixd().await
+        initialize_app_state_with_path_config(self.backend_state.clone(), path_config).await
     }
 
-    async fn initialize_phoenixd(&self) -> Result<(), String> {
+    async fn initialize_phoenixd(&self) -> Result<bool, String> {
         let app_state = self.backend_state.read().await;
         if app_state.wallet_state.use_phoenixd_embedded {
             drop(app_state);
             initialize_phoenixd(self.backend_state.clone()).await
         } else {
             info!("🔗 Using external phoenixd instance");
-            Ok(())
+            Ok(false)
         }
     }
 }
@@ -159,6 +158,7 @@ async fn get_eltord_status_invoke(
         "running": status.running,
         "client_running": status.client_running,
         "relay_running": status.relay_running,
+        "foundation_client_status": status.foundation_client_status,
         "recent_logs": [] // No logs in status response, use streaming for logs
     }))
 }
@@ -888,27 +888,19 @@ async fn get_debug_info(app_handle: AppHandle) -> Result<serde_json::Value, Stri
 #[command]
 async fn start_phoenix_daemon(
     app_handle: AppHandle,
+    tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
-    info!("🔥 start_phoenix_daemon called");
-
-    let path_config = create_tauri_path_config(Some(&app_handle))?;
-
-    // Use the new start_phoenix_with_config function
-    match start_phoenix_with_config(&path_config).await {
-        Ok(response) => {
-            info!("✅ Phoenix daemon started successfully with config: {:?}", response);
-            Ok(serde_json::to_value(&response)
-                .map_err(|e| format!("Failed to serialize response: {}", e))?)
-        }
-        Err(e) => {
-            info!("❌ Failed to start Phoenix daemon: {}", e);
-            Err(format!("Failed to start Phoenix daemon: {}", e))
-        }
-    }
+    let app_state = tauri_state.backend_state.read().await.clone();
+    let response = start_phoenix_with_config(&app_state).await?;
+    let _ = app_handle.emit("phoenixd-ready", "Phoenix wallet ready");
+    let _ = app_handle.emit("lightning-ready", "Lightning node ready");
+    serde_json::to_value(response).map_err(|_| "Unable to serialize Phoenix response".into())
 }
+
 
 #[command]
 async fn stop_phoenix_daemon(
+    app_handle: AppHandle,
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
     info!("🛑 stop_phoenix_daemon called");
@@ -921,6 +913,7 @@ async fn stop_phoenix_daemon(
     match eltor_backend::stop_phoenixd(app_state).await {
         Ok(()) => {
             info!("✅ Phoenix daemon stopped successfully");
+            let _=app_handle.emit("phoenixd-stopped","Managed Phoenix wallet stopped");
             
             let response = serde_json::json!({
                 "success": true,
@@ -933,8 +926,8 @@ async fn stop_phoenix_daemon(
             if e.contains("No phoenixd process") || e.contains("not running") {
                 info!("ℹ️  Phoenix daemon was not running");
                 let response = serde_json::json!({
-                    "success": true,
-                    "message": "Phoenix daemon is not currently running",
+                    "success": false,
+                    "message": "No managed Phoenix process; an external wallet was not stopped",
                     "pid": null
                 });
                 Ok(response)
@@ -999,69 +992,11 @@ async fn update_relay_payment_rate(
 async fn detect_phoenix_config(
     tauri_state: State<'_, TauriState>,
 ) -> Result<serde_json::Value, String> {
-    info!("🔍 detect_phoenix_config called");
-
-    // Check if Phoenix process is running in our state
-    let backend_state = tauri_state.backend_state.read().await;
-    let phoenixd_process = backend_state.wallet_state.phoenixd_process.lock().unwrap();
-    let is_running = phoenixd_process.is_some();
-    drop(phoenixd_process);
-    drop(backend_state);
-
-    // Try to get existing Phoenix config from ~/.phoenix/phoenix.conf
-    let home_dir = dirs::home_dir().ok_or("Could not get home directory")?;
-    let phoenix_conf_path = home_dir.join(".phoenix").join("phoenix.conf");
-    
-    if phoenix_conf_path.exists() {
-        // Try to read the password from config
-        match std::fs::read_to_string(&phoenix_conf_path) {
-            Ok(conf_content) => {
-                let mut password = String::new();
-                for line in conf_content.lines() {
-                    let line = line.trim();
-                    if line.starts_with("http-password=") {
-                        if let Some(pwd) = line.strip_prefix("http-password=") {
-                            password = pwd.to_string();
-                            break;
-                        }
-                    }
-                }
-                
-                if !password.is_empty() {
-                    info!("✅ Found existing Phoenix configuration (running: {})", is_running);
-                    Ok(serde_json::json!({
-                        "success": true,
-                        "message": format!("Existing Phoenix configuration detected (running: {})", is_running),
-                        "downloaded": false,
-                        "pid": null,
-                        "url": "http://127.0.0.1:9740",
-                        "password": password,
-                        "is_running": is_running,
-                    }))
-                } else {
-                    Err("http-password not found in phoenix.conf".to_string())
-                }
-            }
-            Err(e) => {
-                Err(format!("Failed to read phoenix.conf: {}", e))
-            }
-        }
-    } else if is_running {
-        // Config doesn't exist but process is running
-        info!("⚠️  Phoenix is running but configuration not yet available");
-        Ok(serde_json::json!({
-            "success": true,
-            "message": "Phoenix is running but configuration not yet available",
-            "downloaded": false,
-            "pid": null,
-            "url": "http://127.0.0.1:9740",
-            "password": null,
-            "is_running": true,
-        }))
-    } else {
-        Err("Phoenix config file not found and Phoenix is not running".to_string())
-    }
+    let app_state = tauri_state.backend_state.read().await.clone();
+    let response = eltor_backend::routes::phoenix::detect_phoenix_with_config(&app_state).await?;
+    serde_json::to_value(response).map_err(|_| "Unable to serialize Phoenix status".into())
 }
+
 
 fn main() {
     // Load environment variables from root .env file
@@ -1158,29 +1093,17 @@ fn main() {
 
                 // Clean up any processes using our ports
                 info!("🧹 Starting port cleanup...");
-                if let Err(e) = ports::cleanup_ports_with_torrc("torrc").await {
+                if let Err(e) = ports::cleanup_tor_ports_only("torrc").await {
                     info!("⚠️  Port cleanup failed: {}", e);
                     info!("   Continuing with startup...");
                 }
 
-                let use_phoenixd_embedded = env::var("APP_ELTOR_USE_PHOENIXD_EMBEDDED")
-                    .unwrap_or_else(|_| "false".to_string())
-                    .parse::<bool>()
-                    .unwrap_or(false);
-
-                if use_phoenixd_embedded {
-                    match state_for_init.initialize_phoenixd().await {
-                        Ok(_) => {
-                            info!("✅ Phoenixd initialization completed successfully");
-                            let _ = app_handle.emit("phoenixd-ready", "Phoenixd wallet ready");
-                        }
-                        Err(e) => {
-                            info!("❌ Failed to initialize phoenixd: {}", e);
-                            let _ = app_handle.emit(
-                                "phoenixd-error",
-                                format!("Phoenixd initialization failed: {}", e),
-                            );
-                        }
+                match state_for_init.initialize_phoenixd().await {
+                    Ok(true) => { let _=app_handle.emit("phoenixd-ready","Phoenix wallet ready"); }
+                    Ok(false) => (),
+                    Err(_) => {
+                        info!("Phoenix startup did not reach readiness; wallet status can be refreshed");
+                        let _=app_handle.emit("phoenixd-error","Phoenix wallet is not ready");
                     }
                 }
 

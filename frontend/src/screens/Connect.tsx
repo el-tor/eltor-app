@@ -37,6 +37,7 @@ import {
 } from '@tabler/icons-react'
 import CopyableTextBox from '../components/CopyableTextBox'
 import { Wizard } from '../features/wizard/Wizard'
+import { selectNeedsWalletSetup } from '../features/wallet/walletStore'
 import { SocksProxyHelp } from '../components/SocksProxyHelp'
 
 export const Connect = () => {
@@ -47,8 +48,8 @@ export const Connect = () => {
   const navigate = useNavigate()
   const [opened, { toggle }] = useDisclosure(false)
   const { defaultWallet } = useSelector((state) => state.wallet)
-  const [openedWizard, { open: openWizard, close: closeWizard }] =
-    useDisclosure(false)
+  const needsWalletSetup = useSelector(selectNeedsWalletSetup)
+  const [wizardDismissed, setWizardDismissed] = useState(false)
   const [logsPlaying, setLogsPlaying] = useState(false)
 
   const {
@@ -69,6 +70,7 @@ export const Connect = () => {
   const [showSocksModal, setShowSocksModal] = useState(false)
   const {
     isRunning,
+    foundationStatus,
     loading: isLoadingActivate,
     isLoadingDeactivate,
     activate,
@@ -76,6 +78,17 @@ export const Connect = () => {
   } = useEltord({
     mode,
   })
+
+  const paidPathVerified = foundationStatus === 'last_verified_active'
+  const paidPathUnavailable = foundationStatus === 'closed' || foundationStatus === 'stopped'
+  const paidPathLabel = foundationStatus && {
+    not_configured: 'Not configured',
+    starting: 'Starting',
+    recovering: 'Verifying or recovering',
+    last_verified_active: 'Last verified active',
+    closed: 'Closed',
+    stopped: 'Stopped',
+  }[foundationStatus]
 
   // Use bootstrapping hook to monitor Tor connection progress
   const {
@@ -125,7 +138,7 @@ export const Connect = () => {
   return (
     <Stack>
       <Group w="100%">
-        {defaultWallet === 'none' && <Wizard close={closeWizard} />}
+        {needsWalletSetup && !wizardDismissed && <Wizard close={() => setWizardDismissed(true)} />}
 
         <Group>
           {/* {isTauri() && (
@@ -289,9 +302,18 @@ export const Connect = () => {
             <Group gap="xs">
               <Text>Client</Text>
               <Circle
-                color={isRunning && clientEnabled ? 'lightgreen' : '#FF6347'}
+                color={isRunning && clientEnabled
+                  ? foundationStatus && !paidPathVerified
+                    ? paidPathUnavailable ? '#FF6347' : '#F5A623'
+                    : 'lightgreen'
+                  : '#FF6347'}
               />
             </Group>
+            {clientEnabled && foundationStatus && (
+              <Text size="xs" c={paidPathUnavailable ? 'red' : paidPathVerified ? 'cyan' : 'yellow'}>
+                Paid path: {paidPathLabel}
+              </Text>
+            )}
             <Group gap="xs">
               <Text>Relay&nbsp;</Text>
               <Circle
@@ -338,7 +360,9 @@ export const Connect = () => {
                 w="500px"
                 title={
                   <Group gap="xs" wrap="nowrap">
-                    <Text>Connected</Text>
+                    <Text>{foundationStatus && !paidPathVerified
+                      ? paidPathUnavailable ? 'Paid path unavailable' : 'Transport ready'
+                      : 'Connected'}</Text>
                   </Group>
                 }
                 icon={<IconPlug />}

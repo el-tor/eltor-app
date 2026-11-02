@@ -142,8 +142,9 @@ async fn main() {
     // Start phoenixd if embedded mode is enabled
     if use_phoenixd_embedded {
         info!("🚀 Starting embedded phoenixd...");
-        match eltor_backend::wallet::start_phoenixd(state.clone()).await {
-            Ok(()) => info!("✅ Phoenixd started successfully"),
+        match eltor_backend::initialize_phoenixd(std::sync::Arc::new(tokio::sync::RwLock::new(state.clone()))).await {
+            Ok(true) => info!("✅ Phoenixd ready"),
+            Ok(false) => info!("No embedded Phoenix wallet configured"),
             Err(e) => {
                 info!("❌ Failed to start phoenixd: {}", e);
                 info!("   Continuing without embedded phoenixd...");

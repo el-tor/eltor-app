@@ -23,6 +23,7 @@ pub struct LogEntry {
 pub struct WalletState {
     pub use_phoenixd_embedded: bool,
     pub phoenixd_process: Arc<Mutex<Option<tokio::process::Child>>>,
+    pub phoenixd_lifecycle: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl WalletState {
@@ -30,6 +31,7 @@ impl WalletState {
         Self {
             use_phoenixd_embedded,
             phoenixd_process: Arc::new(Mutex::new(None)),
+            phoenixd_lifecycle: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }
@@ -108,6 +110,7 @@ pub struct EltordStatusResponse {
     pub running: bool,
     pub client_running: bool,
     pub relay_running: bool,
+    pub foundation_client_status: Option<eltor::FoundationClientStatus>,
     pub pid: Option<u32>,
     pub recent_logs: Vec<LogEntry>,
 }
