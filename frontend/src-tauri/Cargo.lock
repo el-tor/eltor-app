@@ -2239,9 +2239,11 @@ dependencies = [
 [[package]]
 name = "eltor"
 version = "0.0.2"
+source = "git+https://github.com/el-tor/eltord.git?rev=c18a793f992e5c98a0197d74a9b22ad151846314#c18a793f992e5c98a0197d74a9b22ad151846314"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
+ "bech32",
  "chrono",
  "clap",
  "ctrlc",
@@ -2252,6 +2254,8 @@ dependencies = [
  "lazy_static",
  "libc",
  "libtor",
+ "lightning 0.2.2",
+ "lightning-invoice 0.34.0",
  "lni",
  "log",
  "rand 0.8.5",
@@ -2265,6 +2269,7 @@ dependencies = [
  "tokio",
  "tokio-test",
  "tokio-tungstenite 0.15.0",
+ "uuid",
 ]
 
 [[package]]
@@ -4681,6 +4686,7 @@ dependencies = [
 [[package]]
 name = "libtor"
 version = "47.13.0+0.4.7.x"
+source = "git+https://github.com/el-tor/libeltor.git?rev=e4871002d5069fdb5a734198f91c5d7f9bdc4c91#e4871002d5069fdb5a734198f91c5d7f9bdc4c91"
 dependencies = [
  "futures-util",
  "libtor-derive",
@@ -4695,6 +4701,8 @@ dependencies = [
 [[package]]
 name = "libtor-derive"
 version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "177781b25e83853831c5af66320ceaf5e456e1b6d533426fcd9c7544b5543043"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4704,6 +4712,7 @@ dependencies = [
 [[package]]
 name = "libtor-src"
 version = "47.13.0+0.4.7.13"
+source = "git+https://github.com/el-tor/libeltor-sys?rev=51a7309db639ae64d6ec899ac09f0e08a1c4f5ad#51a7309db639ae64d6ec899ac09f0e08a1c4f5ad"
 dependencies = [
  "fs_extra",
 ]
@@ -4711,6 +4720,7 @@ dependencies = [
 [[package]]
 name = "libtor-sys"
 version = "47.13.0+0.4.7.x"
+source = "git+https://github.com/el-tor/libeltor-sys?rev=51a7309db639ae64d6ec899ac09f0e08a1c4f5ad#51a7309db639ae64d6ec899ac09f0e08a1c4f5ad"
 dependencies = [
  "autotools",
  "cc",
@@ -4880,6 +4890,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 [[package]]
 name = "lni"
 version = "0.1.0"
+source = "git+https://github.com/lightning-node-interface/lni.git?rev=f336a0a959765fffba03cd38ca2736e7af3f8089#f336a0a959765fffba03cd38ca2736e7af3f8089"
 dependencies = [
  "async-std",
  "async-trait",
