@@ -2239,7 +2239,7 @@ dependencies = [
 [[package]]
 name = "eltor"
 version = "0.0.2"
-source = "git+https://github.com/el-tor/eltord.git?rev=c18a793f992e5c98a0197d74a9b22ad151846314#c18a793f992e5c98a0197d74a9b22ad151846314"
+source = "git+https://github.com/el-tor/eltord.git?rev=f8a9fe238c6659550c93f4ee40f19915ab64765a#f8a9fe238c6659550c93f4ee40f19915ab64765a"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
